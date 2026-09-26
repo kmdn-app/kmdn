@@ -140,7 +140,7 @@ func TestManifestConversion(t *testing.T) {
 	if err != nil || c.ID != 55 || c.Slug != "kmdn-northwind" || c.WebhookSecret != "ws" {
 		t.Fatalf("%+v %v", c, err)
 	}
-	m := AppManifest("https://kmdn.example.com/", "kmdn")
+	m := AppManifest("https://kmdn.example.com/", "kmdn", "fh_1")
 	if m["redirect_url"] != "https://kmdn.example.com/api/v1/admin/forges/github/callback" {
 		t.Fatal(m["redirect_url"])
 	}
