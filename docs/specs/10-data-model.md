@@ -1,6 +1,6 @@
 # 10 · Data model
 
-IDs are prefixed ULIDs stored as text (`usr_01J…`, `rep_…`, `rev_…`) for readability in logs and URLs. Timestamps are UTC (`timestamptz` on Postgres, ISO-8601 text on SQLite via sqlc type overrides). Schema is kept portable: no Postgres-only types except in optional indexes; JSON columns are `jsonb` / `text` with JSON functions.
+IDs are prefixed ULIDs stored as text (`usr_01J…`, `rep_…`, `rev_…`) for readability in logs and URLs. Timestamps are stored as integer Unix milliseconds (`BIGINT`) in both engines. Schema is kept portable: no Postgres-only types except in optional indexes; JSON columns are `jsonb` / `text` with JSON functions.
 
 ## Identity and access
 

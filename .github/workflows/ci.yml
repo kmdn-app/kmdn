@@ -16,6 +16,15 @@ jobs:
   go:
     name: Go
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: kmdn
+          POSTGRES_DB: kmdn
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -26,8 +35,12 @@ jobs:
       - uses: golangci/golangci-lint-action@v8
         with:
           version: latest
-      - name: Test
+      - name: Test (SQLite)
         run: go test -race ./...
+      - name: Test (Postgres)
+        run: go test -race -count=1 ./internal/...
+        env:
+          KMDN_TEST_POSTGRES_URL: postgres://postgres:kmdn@localhost:5432/kmdn?sslmode=disable
 
   web:
     name: TypeScript
