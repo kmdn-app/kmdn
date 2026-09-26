@@ -1,0 +1,26 @@
+{
+  "name": "@kmdn/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "openapi-typescript ../../api/openapi.yaml -o src/schema.gen.ts",
+    "check-generated": "mkdir -p node_modules/.cache && openapi-typescript ../../api/openapi.yaml -o node_modules/.cache/schema.gen.ts && diff -q src/schema.gen.ts node_modules/.cache/schema.gen.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "pnpm run check-generated"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.17.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.2"
+  }
+}
