@@ -5,6 +5,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { applyTheme, storedTheme } from "./theme";
 import "./styles.css";
+import "./i18n";
 
 applyTheme(storedTheme());
 

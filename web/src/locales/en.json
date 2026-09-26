@@ -1,0 +1,80 @@
+{
+  "app": { "name": "kmdn", "tagline": "Collaborative markdown editing with a git backend." },
+  "signin": {
+    "title": "Sign in to {{instance}}",
+    "subtitle": "Use your work email. There are no passwords to remember.",
+    "email": "Work email",
+    "emailPlaceholder": "name@company.com",
+    "sendLink": "Email me a sign-in link",
+    "sending": "Sending…",
+    "passkey": "Sign in with passkey",
+    "orContinue": "or continue with",
+    "forgeNote": "GitHub and GitLab sign-in only work for accounts already linked to a profile.",
+    "checkTitle": "Check your email",
+    "checkBody": "If {{email}} has an account, we sent a sign-in link. It works once and expires in {{minutes}} minutes.",
+    "codeLabel": "Or enter the 6-digit code from the email",
+    "codeSubmit": "Sign in",
+    "useDifferent": "Use a different email",
+    "resend": "Send a new link",
+    "invalid": "This sign-in link or code is invalid or has expired. Request a new one.",
+    "rateLimited": "Too many attempts. Wait a few minutes and try again.",
+    "comingSoon": "Coming soon"
+  },
+  "verify": { "signingIn": "Signing you in…", "failed": "This sign-in link is invalid or has expired.", "back": "Back to sign in" },
+  "setup": {
+    "title": "Set up kmdn",
+    "step": "Step {{n}} of {{total}}",
+    "steps": { "admin": "Admin account", "email": "Email (SMTP)", "forge": "Forge connection", "ai": "AI provider", "done": "Done" },
+    "admin": {
+      "title": "Create the admin account",
+      "desc": "You'll manage users, repositories and settings. You sign in with email links, so use an address you can receive mail at.",
+      "name": "Your name",
+      "email": "Your email",
+      "instance": "Instance name",
+      "instanceHelp": "Shown on the sign-in page and in emails, e.g. Northwind Docs.",
+      "missingToken": "Open the setup link printed in the kmdn server log. It contains a one-time token.",
+      "submit": "Create admin account"
+    },
+    "email": {
+      "title": "Email delivery (SMTP)",
+      "desc": "Required. kmdn signs people in with one-time email links and sends invites. It never sends notification emails.",
+      "host": "Host", "port": "Port", "security": "Security", "username": "Username", "password": "Password",
+      "passwordKeep": "Leave empty to keep the saved password",
+      "from": "From address",
+      "fromHelp": "Use an address your mail provider is allowed to send from (SPF/DKIM), or sign-in links may land in spam.",
+      "locked": "SMTP is set in the kmdn config file or environment. Change it there.",
+      "test": "Send test email", "testTo": "Send a test to", "testOk": "Test email sent to {{to}}", "testFailed": "Test failed: {{error}}",
+      "save": "Save and continue"
+    },
+    "forge": { "title": "Connect GitHub or GitLab", "desc": "You can connect repositories from the admin console once kmdn supports forges in this build.", "skip": "Continue" },
+    "ai": { "title": "AI provider", "desc": "The assistant is optional. You can add a provider later in the admin console.", "skip": "Continue" },
+    "done": { "title": "kmdn is ready", "desc": "Next, connect a repository and invite your team.", "finish": "Open kmdn" },
+    "back": "Back"
+  },
+  "shell": {
+    "newRevision": "New revision",
+    "search": "Search",
+    "assistant": "Assistant",
+    "inbox": "Inbox",
+    "graph": "Link graph",
+    "revisions": "Revisions",
+    "files": "Files",
+    "published": "Published",
+    "toggleSidebar": "Toggle sidebar",
+    "togglePanel": "Toggle side panel",
+    "admin": "Admin console",
+    "profile": "Your account",
+    "theme": "Theme",
+    "themeSystem": "System", "themeLight": "Light", "themeDark": "Dark",
+    "signOut": "Sign out",
+    "panel": { "assistant": "Assistant", "comments": "Comments", "changes": "Changes", "history": "History", "links": "Links" },
+    "panelEmpty": "Nothing here yet."
+  },
+  "home": {
+    "noRepos": "No repositories yet",
+    "noReposAdmin": "Connect a GitHub or GitLab repository to start editing its markdown.",
+    "noReposMember": "Ask an admin to connect a repository or give you access to one.",
+    "connect": "Connect a repository"
+  },
+  "errors": { "generic": "Something went wrong. Try again.", "network": "Can't reach the kmdn server. Check your connection." }
+}
