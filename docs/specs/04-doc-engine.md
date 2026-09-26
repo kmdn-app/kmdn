@@ -3,7 +3,7 @@
 `packages/doc-engine` is the heart of kmdn. It is one TypeScript package that runs in two hosts:
 
 - **Browser**: inside the Tiptap editor, source mode, diff views.
-- **Go server**: bundled as `engine.js` (ES2020, no DOM, no Node APIs) and executed by an embedded JS runtime (goja or QuickJS-on-wazero, see spike in [14](14-roadmap.md)).
+- **Go server**: bundled as `internal/docengine/engine.js` (ES2020 IIFE, no DOM, no Node APIs, committed and checked in CI) and executed by [goja](https://github.com/dop251/goja) (spike S1 in [14](14-roadmap.md)). Interpreted JS is ~30× slower than V8, so the server parses only when needed and caches results by content hash.
 
 Same code on both sides means one parser, one serializer, one diff, byte-identical results.
 
@@ -40,7 +40,7 @@ Approach:
 1. **Parser**: `micromark` + `mdast-util-from-markdown` with GFM, frontmatter, math, footnotes extensions, producing mdast with positions. mdast → ProseMirror JSON with each top-level block carrying `src: {start, end}` into the original text and a content hash.
 2. **Source map kept outside the CRDT**: the original markdown bytes and per-block hashes live with the revision file state (server) and the client session. They are not collaborative data.
 3. **Block-level reuse serializer**: for each top-level block, if its ProseMirror content hash equals the hash computed at parse time, emit the original bytes verbatim (including its trailing blank lines). Otherwise serialize that block with style-preserving rules (use the recorded markers, the file's dominant list marker, indentation and line width conventions detected at parse time). Inter-block whitespace is preserved from the original where blocks are unchanged.
-4. **Nested granularity**: for long lists and tables, reuse is done at list-item / table-row level so editing one item doesn't reflow the list.
+4. **Nested granularity** (planned): for long lists and tables, reuse at list-item / table-row level so editing one item doesn't reflow the list. v1 of the engine reuses at top-level block granularity; ::: containers and GitHub alerts are kept as raw blocks.
 5. **Normalization only on changed content**: e.g. a changed table re-pads columns only if the original table was padded.
 6. **Line endings, final newline, BOM, trailing whitespace** of the file are detected and preserved.
 

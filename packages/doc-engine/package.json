@@ -11,11 +11,25 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "bundle": "esbuild src/host.ts --bundle --format=iife --target=es2020 --platform=neutral --main-fields=module,main --legal-comments=none --minify --outfile=../../internal/docengine/engine.js",
+    "check-bundle": "pnpm run bundle && git diff --exit-code -- ../../internal/docengine/engine.js"
   },
   "devDependencies": {
+    "@types/mdast": "^4.0.4",
     "@types/node": "^26.6.3",
+    "esbuild": "^0.28.2",
     "typescript": "~6.0.3",
     "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-frontmatter": "^2.0.1",
+    "mdast-util-gfm": "^3.1.0",
+    "mdast-util-math": "^3.0.0",
+    "mdast-util-to-markdown": "^2.1.2",
+    "micromark-extension-frontmatter": "^2.0.0",
+    "micromark-extension-gfm": "^3.0.0",
+    "micromark-extension-math": "^3.1.0"
   }
 }

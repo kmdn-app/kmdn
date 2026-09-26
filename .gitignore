@@ -5,7 +5,6 @@ web/dist/
 packages/*/dist/
 internal/web/dist/*
 !internal/web/dist/.gitkeep
-internal/docengine/engine.js
 coverage/
 *.test
 *.out

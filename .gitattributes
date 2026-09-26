@@ -1,0 +1,2 @@
+# Fidelity fixtures must keep their exact bytes (CRLF, BOM, trailing spaces).
+testdata/fidelity/** -text
