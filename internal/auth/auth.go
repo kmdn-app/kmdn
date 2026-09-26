@@ -151,26 +151,46 @@ func (s *Service) VerifyToken(ctx context.Context, token string) (users.User, er
 	return u, err
 }
 
-// VerifyCode checks the 6-digit code for the newest pending link of email.
+// VerifyCode checks the 6-digit code against the pending links of email
+// (usually one; several if the person asked again). A wrong code counts as an
+// attempt on every pending link, so asking for new links doesn't reset the limit.
 func (s *Service) VerifyCode(ctx context.Context, email, code string) (users.User, error) {
 	var u users.User
 	code = strings.TrimSpace(strings.ReplaceAll(code, " ", ""))
+	want := Hash(email + ":" + code)
 	var codeOK bool
 	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
-		var tokenHash, codeHash string
-		var exp int64
-		var attempts int
-		err := store.QueryRow(ctx, tx, `SELECT token_hash, code_hash, expires_at, attempts FROM magic_links
-			WHERE email = ? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1`, email).Scan(&tokenHash, &codeHash, &exp, &attempts)
-		if err != nil || store.FromMillis(exp).Before(s.clock()) || attempts >= MaxCodeAttempts {
+		rows, err := store.Query(ctx, tx, `SELECT token_hash, code_hash FROM magic_links
+			WHERE email = ? AND used_at IS NULL AND expires_at > ? AND attempts < ?`, email, store.Millis(s.clock()), MaxCodeAttempts)
+		if err != nil {
+			return err
+		}
+		var match string
+		var pending []string
+		for rows.Next() {
+			var tokenHash, codeHash string
+			if err := rows.Scan(&tokenHash, &codeHash); err != nil {
+				rows.Close()
+				return err
+			}
+			pending = append(pending, tokenHash)
+			if subtle.ConstantTimeCompare([]byte(want), []byte(codeHash)) == 1 {
+				match = tokenHash
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if len(pending) == 0 {
 			return ErrInvalidLink
 		}
-		if subtle.ConstantTimeCompare([]byte(Hash(email+":"+code)), []byte(codeHash)) != 1 {
-			_, err := store.Exec(ctx, tx, `UPDATE magic_links SET attempts = attempts + 1 WHERE token_hash = ?`, tokenHash)
+		if match == "" {
+			_, err := store.Exec(ctx, tx, `UPDATE magic_links SET attempts = attempts + 1 WHERE email = ? AND used_at IS NULL`, email)
 			return err
 		}
 		codeOK = true
-		if _, err := store.Exec(ctx, tx, `UPDATE magic_links SET used_at = ? WHERE token_hash = ?`, store.Millis(s.clock()), tokenHash); err != nil {
+		if _, err := store.Exec(ctx, tx, `UPDATE magic_links SET used_at = ? WHERE token_hash = ?`, store.Millis(s.clock()), match); err != nil {
 			return err
 		}
 		u, err = s.userForSignIn(ctx, tx, email)
