@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/kmdn-app/kmdn/internal/config"
+	"github.com/kmdn-app/kmdn/internal/store"
 )
 
 func TestInitWritesValidConfig(t *testing.T) {
@@ -50,7 +52,8 @@ func TestMigrateStatusAndUp(t *testing.T) {
 		t.Fatalf("status: %v %s", err, out.String())
 	}
 	out.Reset()
-	if err := run([]string{"migrate", "up"}, &out, &out); err != nil || !bytes.Contains(out.Bytes(), []byte("Applied 2")) {
+	all, _ := store.Migrations()
+	if err := run([]string{"migrate", "up"}, &out, &out); err != nil || !bytes.Contains(out.Bytes(), []byte(fmt.Sprintf("Applied %d", len(all)))) {
 		t.Fatalf("up: %v %s", err, out.String())
 	}
 }
