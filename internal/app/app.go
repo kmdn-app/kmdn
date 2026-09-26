@@ -20,6 +20,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/linking"
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/repos"
+	"github.com/kmdn-app/kmdn/internal/search"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/server"
 	"github.com/kmdn-app/kmdn/internal/setup"
@@ -97,6 +98,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		Adapters: &repos.Adapters{DB: db, Secrets: sec, HTTP: &http.Client{Timeout: 30 * time.Second}},
 	}
 	a.Repos.Register()
+	idx := &search.Indexer{Index: search.Index{DB: db}, Repos: a.Repos, Jobs: a.Jobs}
+	idx.Register()
+	idx.Routes(r)
 	a.Repos.Routes(r)
 	a.Repos.ForgeRoutes(r)
 	a.Server.Mount("/hooks", a.Repos.WebhookHandler())
