@@ -15,6 +15,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/app"
 	"github.com/kmdn-app/kmdn/internal/config"
+	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/telemetry"
@@ -35,6 +36,10 @@ Every config key can be set with an env var, e.g. KMDN_SERVER_BASE_URL.
 `
 
 func main() {
+	// git invokes the kmdn binary as GIT_ASKPASS to read mirror credentials.
+	if gitmirror.RunAskpass(os.Args[1:], os.Stdout) {
+		return
+	}
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "kmdn:", err)
 		os.Exit(1)
