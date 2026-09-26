@@ -165,7 +165,8 @@ func TestCodeFlowAttemptsAndExpiry(t *testing.T) {
 	if res, _ := c.do("POST", "/auth/magic-link/verify", `{"email":"tom@northwind.dev","code":"`+code+`"}`, false); res.StatusCode != 401 {
 		t.Fatalf("lockout failed: %d", res.StatusCode)
 	}
-	// New link, correct code works.
+	// Two new links in the same millisecond: the newest email's code works.
+	c.do("POST", "/auth/magic-link", `{"email":"tom@northwind.dev"}`, false)
 	c.do("POST", "/auth/magic-link", `{"email":"tom@northwind.dev"}`, false)
 	m, _ = h.mail.Last()
 	code = codeRe.FindStringSubmatch(m.Text)[1]
