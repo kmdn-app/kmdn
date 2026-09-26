@@ -13,6 +13,7 @@ require (
 )
 
 require (
+	github.com/bmatcuk/doublestar/v4 v4.10.2 // indirect
 	github.com/dlclark/regexp2/v2 v2.5.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect

@@ -14,6 +14,7 @@ info:
 servers:
   - url: /api/v1
 tags:
+  - name: repos
   - name: auth
   - name: me
   - name: setup
@@ -236,7 +237,291 @@ paths:
                   to: { type: string }
                   error: { type: string }
                   hint: { type: string }
+  /repos:
+    get:
+      tags: [repos]
+      operationId: listRepos
+      summary: Repositories the caller can see, with their role
+      responses:
+        "200":
+          description: Repositories
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RepoView" } }
+    post:
+      tags: [repos]
+      operationId: connectRepo
+      summary: Connect a repository (instance admins)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectRepoInput" }
+      responses:
+        "202":
+          description: Connected; the first sync runs as a job
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [repo, job_id]
+                properties:
+                  repo: { $ref: "#/components/schemas/RepoView" }
+                  job_id: { type: string }
+        "422": { $ref: "#/components/responses/Problem" }
+  /repos/by-slug/{owner}/{name}:
+    get:
+      tags: [repos]
+      operationId: getRepoBySlug
+      parameters:
+        - { name: owner, in: path, required: true, schema: { type: string } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Repository, content: { application/json: { schema: { $ref: "#/components/schemas/RepoView" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [repos]
+      operationId: getRepo
+      responses:
+        "200": { description: Repository, content: { application/json: { schema: { $ref: "#/components/schemas/RepoView" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [repos]
+      operationId: updateRepo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateRepoInput" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/RepoView" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [repos]
+      operationId: disconnectRepo
+      responses:
+        "204": { description: Disconnected (the forge repository is untouched) }
+  /repos/{repo}/refresh:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    post:
+      tags: [repos]
+      operationId: refreshRepo
+      responses:
+        "202": { description: Sync scheduled, content: { application/json: { schema: { type: object, properties: { job_id: { type: string } } } } } }
+  /repos/{repo}/tree:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [repos]
+      operationId: getRepoTree
+      summary: Files in the content scope at the published head
+      responses:
+        "200":
+          description: Tree
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [head_sha, root, items]
+                properties:
+                  head_sha: { type: string }
+                  root: { type: string }
+                  items: { type: array, items: { $ref: "#/components/schemas/TreeNode" } }
+  /repos/{repo}/files/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { $ref: "#/components/parameters/FilePath" }
+      - { name: sha, in: query, schema: { type: string }, description: Commit to read at (default published head) }
+    get:
+      tags: [repos]
+      operationId: getRepoFile
+      responses:
+        "200": { description: File, content: { application/json: { schema: { $ref: "#/components/schemas/RepoFile" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/history/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { $ref: "#/components/parameters/FilePath" }
+      - { name: limit, in: query, schema: { type: integer, maximum: 200 } }
+    get:
+      tags: [repos]
+      operationId: getFileHistory
+      summary: Published versions of a file (follows renames)
+      responses:
+        "200":
+          description: Commits, newest first
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Commit" } } } }
+  /repos/{repo}/blame/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { $ref: "#/components/parameters/FilePath" }
+    get:
+      tags: [repos]
+      operationId: getFileBlame
+      responses:
+        "200":
+          description: Per-line attribution
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/BlameLine" } } } }
+  /repos/{repo}/members:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [repos]
+      operationId: listRepoMembers
+      responses:
+        "200":
+          description: Grants
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Member" } } } }
+  /repos/{repo}/members/{type}/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { name: type, in: path, required: true, schema: { type: string, enum: [user, group] } }
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [repos]
+      operationId: setRepoMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [role], properties: { role: { $ref: "#/components/schemas/Role" } } }
+      responses:
+        "200":
+          description: Updated grants
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Member" } } } }
+    delete:
+      tags: [repos]
+      operationId: removeRepoMember
+      responses:
+        "204": { description: Removed }
+  /admin/forges:
+    get:
+      tags: [admin]
+      operationId: listForges
+      responses:
+        "200":
+          description: Forge hosts
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/ForgeHost" } } } }
+    post:
+      tags: [admin]
+      operationId: createForge
+      summary: Add a GitLab host or a plain git host (GitHub uses the manifest flow)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [gitlab, git] }
+                base_url: { type: string }
+                display_name: { type: string }
+                client_id: { type: string }
+                client_secret: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/ForgeHost" } } } }
+  /admin/forges/{id}:
+    delete:
+      tags: [admin]
+      operationId: deleteForge
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "409": { $ref: "#/components/responses/Problem" }
+  /admin/forges/github/manifest:
+    post:
+      tags: [admin]
+      operationId: githubManifest
+      summary: Start the GitHub App manifest flow
+      description: The browser then POSTs a form with field `manifest` to `action_url`; GitHub redirects back to /admin/forges/github/callback.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                base_url: { type: string, description: "GitHub web URL; empty for github.com" }
+                organization: { type: string }
+                name: { type: string }
+      responses:
+        "200":
+          description: Form target and manifest
+          content:
+            application/json:
+              schema: { type: object, required: [action_url, manifest], properties: { action_url: { type: string }, manifest: { type: string } } }
+  /admin/forges/github/callback:
+    get:
+      tags: [admin]
+      operationId: githubCallback
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "302": { description: Redirects to the App installation page }
+  /admin/forges/{id}/installations:
+    get:
+      tags: [admin]
+      operationId: listGitHubInstallations
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Installations of the App
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, install_url]
+                properties:
+                  items: { type: array, items: { type: object, properties: { external_id: { type: string }, account_login: { type: string } } } }
+                  install_url: { type: string }
+  /admin/forges/{id}/repositories:
+    get:
+      tags: [admin]
+      operationId: listInstallationRepos
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: installation, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Repositories the installation can access
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/ForgeRepoInfo" } } } }
 components:
+  parameters:
+    RepoID:
+      name: repo
+      in: path
+      required: true
+      schema: { type: string }
+    FilePath:
+      name: path
+      in: path
+      required: true
+      description: Repository-relative path; may contain slashes
+      schema: { type: string }
   securitySchemes:
     session:
       type: apiKey
@@ -249,6 +534,173 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    Role:
+      type: string
+      enum: [viewer, contributor, maintainer, admin, ""]
+    Protection:
+      type: object
+      properties:
+        protected: { type: boolean }
+        required_reviews: { type: integer }
+        required_checks: { type: integer }
+        detail: { type: string }
+        known: { type: boolean }
+    Scope:
+      type: object
+      required: [root, include, exclude]
+      properties:
+        root: { type: string }
+        include: { type: array, items: { type: string } }
+        exclude: { type: array, items: { type: string } }
+        from_file: { type: array, items: { type: string } }
+    RepoSettings:
+      type: object
+      properties:
+        allow_self_approval: { type: boolean }
+        assistant_enabled: { type: boolean }
+        assets:
+          type: object
+          properties:
+            path: { type: string }
+            max_size_mb: { type: integer }
+            convert_to_webp: { type: boolean }
+    RepoView:
+      type: object
+      required: [id, forge_host_id, forge_kind, owner, name, slug, display_name, target_branch, content_root, include, exclude, settings, protection, head_sha, health, health_detail, role, scope, created_at]
+      properties:
+        id: { type: string }
+        forge_host_id: { type: string }
+        forge_kind: { type: string, enum: [github, gitlab, git] }
+        external_id: { type: string }
+        owner: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        display_name: { type: string }
+        clone_url: { type: string }
+        web_url: { type: string }
+        default_branch: { type: string }
+        target_branch: { type: string }
+        content_root: { type: string }
+        include: { type: array, items: { type: string } }
+        exclude: { type: array, items: { type: string } }
+        settings: { $ref: "#/components/schemas/RepoSettings" }
+        protection: { $ref: "#/components/schemas/Protection" }
+        head_sha: { type: string }
+        health: { type: string, enum: [pending, ok, degraded, disconnected] }
+        health_detail: { type: string }
+        kmdn_yml: { type: object, additionalProperties: true }
+        last_fetch_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        role: { $ref: "#/components/schemas/Role" }
+        scope: { $ref: "#/components/schemas/Scope" }
+    ConnectRepoInput:
+      type: object
+      required: [forge_host_id]
+      additionalProperties: false
+      properties:
+        forge_host_id: { type: string }
+        owner: { type: string }
+        name: { type: string }
+        clone_url: { type: string, description: Plain git hosts only }
+        token: { type: string, description: GitLab access token or git token }
+        target_branch: { type: string }
+        content_root: { type: string }
+        include: { type: array, items: { type: string } }
+        exclude: { type: array, items: { type: string } }
+        display_name: { type: string }
+    UpdateRepoInput:
+      type: object
+      additionalProperties: false
+      properties:
+        display_name: { type: string }
+        target_branch: { type: string }
+        content_root: { type: string }
+        include: { type: array, items: { type: string } }
+        exclude: { type: array, items: { type: string } }
+        settings: { $ref: "#/components/schemas/RepoSettings" }
+    TreeNode:
+      type: object
+      required: [path, name, type]
+      properties:
+        path: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [file, dir] }
+        markdown: { type: boolean }
+        size: { type: integer }
+    RepoFile:
+      type: object
+      required: [path, commit_sha, content, markdown, size]
+      properties:
+        path: { type: string }
+        commit_sha: { type: string }
+        content: { type: string }
+        markdown: { type: boolean }
+        size: { type: integer }
+    Person:
+      type: object
+      required: [name, email]
+      properties:
+        name: { type: string }
+        email: { type: string }
+    Commit:
+      type: object
+      required: [sha, parents, author_name, author_email, date, title, body, co_authors, reviewed_by]
+      properties:
+        sha: { type: string }
+        parents: { type: array, items: { type: string } }
+        author_name: { type: string }
+        author_email: { type: string }
+        date: { type: string, format: date-time }
+        title: { type: string }
+        body: { type: string }
+        co_authors: { type: array, items: { $ref: "#/components/schemas/Person" } }
+        reviewed_by: { type: array, items: { $ref: "#/components/schemas/Person" } }
+        revision: { type: string }
+        path: { type: string }
+    BlameLine:
+      type: object
+      required: [line, sha, author, email, time]
+      properties:
+        line: { type: integer }
+        sha: { type: string }
+        author: { type: string }
+        email: { type: string }
+        time: { type: integer }
+    Member:
+      type: object
+      required: [type, id, name, role]
+      properties:
+        type: { type: string, enum: [user, group] }
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        members: { type: integer }
+    ForgeHost:
+      type: object
+      required: [id, kind, base_url, api_url, display_name, created_at, repos]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [github, gitlab, git] }
+        base_url: { type: string }
+        api_url: { type: string }
+        display_name: { type: string }
+        app_id: { type: string }
+        app_slug: { type: string }
+        client_id: { type: string }
+        created_at: { type: string, format: date-time }
+        repos: { type: integer }
+    ForgeRepoInfo:
+      type: object
+      properties:
+        external_id: { type: string }
+        owner: { type: string }
+        name: { type: string }
+        default_branch: { type: string }
+        private: { type: boolean }
+        clone_url: { type: string }
+        web_url: { type: string }
+        updated_at: { type: string }
     Problem:
       type: object
       required: [type, title, status, code]

@@ -73,8 +73,12 @@ func newApp(t *testing.T, mutate func(*config.Config)) (*App, *tc) {
 	t.Cleanup(func() { _ = a.Close() })
 	srv := httptest.NewServer(a.Server.Handler())
 	t.Cleanup(srv.Close)
+	return a, &tc{t: t, base: srv.URL, c: newClient()}
+}
+
+func newClient() *http.Client {
 	jar, _ := cookiejar.New(nil)
-	return a, &tc{t: t, base: srv.URL, c: &http.Client{Jar: jar}}
+	return &http.Client{Jar: jar}
 }
 
 func TestSetupWizardFlow(t *testing.T) {

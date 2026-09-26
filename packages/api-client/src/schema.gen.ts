@@ -186,10 +186,456 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Repositories the caller can see, with their role */
+        get: operations["listRepos"];
+        put?: never;
+        /** Connect a repository (instance admins) */
+        post: operations["connectRepo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/by-slug/{owner}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRepoBySlug"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        get: operations["getRepo"];
+        put?: never;
+        post?: never;
+        delete: operations["disconnectRepo"];
+        options?: never;
+        head?: never;
+        patch: operations["updateRepo"];
+        trace?: never;
+    };
+    "/repos/{repo}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refreshRepo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** Files in the content scope at the published head */
+        get: operations["getRepoTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/files/{path}": {
+        parameters: {
+            query?: {
+                /** @description Commit to read at (default published head) */
+                sha?: string;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        get: operations["getRepoFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/history/{path}": {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        /** Published versions of a file (follows renames) */
+        get: operations["getFileHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/blame/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        get: operations["getFileBlame"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        get: operations["listRepoMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/members/{type}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                type: "user" | "group";
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setRepoMember"];
+        post?: never;
+        delete: operations["removeRepoMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/forges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listForges"];
+        put?: never;
+        /** Add a GitLab host or a plain git host (GitHub uses the manifest flow) */
+        post: operations["createForge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/forges/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteForge"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/forges/github/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the GitHub App manifest flow
+         * @description The browser then POSTs a form with field `manifest` to `action_url`; GitHub redirects back to /admin/forges/github/callback.
+         */
+        post: operations["githubManifest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/forges/github/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["githubCallback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/forges/{id}/installations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listGitHubInstallations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/forges/{id}/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listInstallationRepos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        Role: "viewer" | "contributor" | "maintainer" | "admin" | "";
+        Protection: {
+            protected?: boolean;
+            required_reviews?: number;
+            required_checks?: number;
+            detail?: string;
+            known?: boolean;
+        };
+        Scope: {
+            root: string;
+            include: string[];
+            exclude: string[];
+            from_file?: string[];
+        };
+        RepoSettings: {
+            allow_self_approval?: boolean;
+            assistant_enabled?: boolean;
+            assets?: {
+                path?: string;
+                max_size_mb?: number;
+                convert_to_webp?: boolean;
+            };
+        };
+        RepoView: {
+            id: string;
+            forge_host_id: string;
+            /** @enum {string} */
+            forge_kind: "github" | "gitlab" | "git";
+            external_id?: string;
+            owner: string;
+            name: string;
+            slug: string;
+            display_name: string;
+            clone_url?: string;
+            web_url?: string;
+            default_branch?: string;
+            target_branch: string;
+            content_root: string;
+            include: string[];
+            exclude: string[];
+            settings: components["schemas"]["RepoSettings"];
+            protection: components["schemas"]["Protection"];
+            head_sha: string;
+            /** @enum {string} */
+            health: "pending" | "ok" | "degraded" | "disconnected";
+            health_detail: string;
+            kmdn_yml?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            last_fetch_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            role: components["schemas"]["Role"];
+            scope: components["schemas"]["Scope"];
+        };
+        ConnectRepoInput: {
+            forge_host_id: string;
+            owner?: string;
+            name?: string;
+            /** @description Plain git hosts only */
+            clone_url?: string;
+            /** @description GitLab access token or git token */
+            token?: string;
+            target_branch?: string;
+            content_root?: string;
+            include?: string[];
+            exclude?: string[];
+            display_name?: string;
+        };
+        UpdateRepoInput: {
+            display_name?: string;
+            target_branch?: string;
+            content_root?: string;
+            include?: string[];
+            exclude?: string[];
+            settings?: components["schemas"]["RepoSettings"];
+        };
+        TreeNode: {
+            path: string;
+            name: string;
+            /** @enum {string} */
+            type: "file" | "dir";
+            markdown?: boolean;
+            size?: number;
+        };
+        RepoFile: {
+            path: string;
+            commit_sha: string;
+            content: string;
+            markdown: boolean;
+            size: number;
+        };
+        Person: {
+            name: string;
+            email: string;
+        };
+        Commit: {
+            sha: string;
+            parents: string[];
+            author_name: string;
+            author_email: string;
+            /** Format: date-time */
+            date: string;
+            title: string;
+            body: string;
+            co_authors: components["schemas"]["Person"][];
+            reviewed_by: components["schemas"]["Person"][];
+            revision?: string;
+            path?: string;
+        };
+        BlameLine: {
+            line: number;
+            sha: string;
+            author: string;
+            email: string;
+            time: number;
+        };
+        Member: {
+            /** @enum {string} */
+            type: "user" | "group";
+            id: string;
+            name: string;
+            email?: string;
+            role: components["schemas"]["Role"];
+            members?: number;
+        };
+        ForgeHost: {
+            id: string;
+            /** @enum {string} */
+            kind: "github" | "gitlab" | "git";
+            base_url: string;
+            api_url: string;
+            display_name: string;
+            app_id?: string;
+            app_slug?: string;
+            client_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            repos: number;
+        };
+        ForgeRepoInfo: {
+            external_id?: string;
+            owner?: string;
+            name?: string;
+            default_branch?: string;
+            private?: boolean;
+            clone_url?: string;
+            web_url?: string;
+            updated_at?: string;
+        };
         Problem: {
             type: string;
             title: string;
@@ -274,7 +720,11 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        RepoID: string;
+        /** @description Repository-relative path; may contain slashes */
+        FilePath: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -602,6 +1052,542 @@ export interface operations {
                         to?: string;
                         error?: string;
                         hint?: string;
+                    };
+                };
+            };
+        };
+    };
+    listRepos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repositories */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RepoView"][];
+                    };
+                };
+            };
+        };
+    };
+    connectRepo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectRepoInput"];
+            };
+        };
+        responses: {
+            /** @description Connected; the first sync runs as a job */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        repo: components["schemas"]["RepoView"];
+                        job_id: string;
+                    };
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRepoBySlug: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                owner: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repository */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoView"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    getRepo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repository */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoView"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    disconnectRepo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected (the forge repository is untouched) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateRepo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRepoInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    refreshRepo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sync scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        job_id?: string;
+                    };
+                };
+            };
+        };
+    };
+    getRepoTree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tree */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        head_sha: string;
+                        root: string;
+                        items: components["schemas"]["TreeNode"][];
+                    };
+                };
+            };
+        };
+    };
+    getRepoFile: {
+        parameters: {
+            query?: {
+                /** @description Commit to read at (default published head) */
+                sha?: string;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description File */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoFile"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    getFileHistory: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Commits, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Commit"][];
+                    };
+                };
+            };
+        };
+    };
+    getFileBlame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-line attribution */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["BlameLine"][];
+                    };
+                };
+            };
+        };
+    };
+    listRepoMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Member"][];
+                    };
+                };
+            };
+        };
+    };
+    setRepoMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                type: "user" | "group";
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    role: components["schemas"]["Role"];
+                };
+            };
+        };
+        responses: {
+            /** @description Updated grants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Member"][];
+                    };
+                };
+            };
+        };
+    };
+    removeRepoMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                type: "user" | "group";
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listForges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Forge hosts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ForgeHost"][];
+                    };
+                };
+            };
+        };
+    };
+    createForge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    kind: "gitlab" | "git";
+                    base_url?: string;
+                    display_name?: string;
+                    client_id?: string;
+                    client_secret?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForgeHost"];
+                };
+            };
+        };
+    };
+    deleteForge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    githubManifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description GitHub web URL; empty for github.com */
+                    base_url?: string;
+                    organization?: string;
+                    name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Form target and manifest */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        action_url: string;
+                        manifest: string;
+                    };
+                };
+            };
+        };
+    };
+    githubCallback: {
+        parameters: {
+            query: {
+                code: string;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirects to the App installation page */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listGitHubInstallations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installations of the App */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            external_id?: string;
+                            account_login?: string;
+                        }[];
+                        install_url: string;
+                    };
+                };
+            };
+        };
+    };
+    listInstallationRepos: {
+        parameters: {
+            query: {
+                installation: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repositories the installation can access */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ForgeRepoInfo"][];
                     };
                 };
             };
