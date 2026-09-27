@@ -78,6 +78,7 @@ export function PageEditor({
   comments,
   consistency,
   suggesting = false,
+  readOnly = false,
 }: {
   provider: RoomProvider;
   user: EditorUser;
@@ -94,6 +95,8 @@ export function PageEditor({
   suggesting?: boolean;
   /** Passages with consistency findings, underlined. */
   consistency?: ConsistencyMark[];
+  /** Never editable here (phones), whatever the room allows. */
+  readOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const status = useRoomStatus(provider);
@@ -165,7 +168,7 @@ export function PageEditor({
       }
     }
   }
-  const editable = status?.mode === "rw" && status.synced;
+  const editable = !readOnly && status?.mode === "rw" && status.synced;
   useEffect(() => {
     if (editor && !editor.isDestroyed) setChangeBase(editor.view, base ?? null);
   }, [editor, base]);

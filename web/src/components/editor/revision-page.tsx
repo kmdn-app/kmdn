@@ -28,6 +28,7 @@ import { useThreads } from "@/lib/threads";
 import { SuggestionList } from "@/components/revision/suggestions-panel";
 import { UpdatesBanner } from "@/components/revision/updates";
 import { ConsistencyHover, useConsistencyMarks } from "@/components/consistency/findings";
+import { openPanel, useIsPhone } from "@/lib/media";
 
 /** Opens the page's room for as long as the view shows it. */
 function useRoom(revisionID: string | undefined, path: string) {
@@ -52,14 +53,17 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
   useRevisionEvents(repo, rev.data);
   const crumbs = path.split("/");
   const [editor, setEditor] = useState<Editor | null>(null);
-  const [mode, setMode] = useEditorMode();
+  const phone = useIsPhone();
+  const [storedMode, setMode] = useEditorMode();
+  // Phones read and review; editing (and source mode) needs a bigger screen.
+  const mode: EditorMode = phone ? "visual" : storedMode;
   const [view, setView] = useState<ReviewView>("result");
   const [suggesting, setSuggesting] = useSuggesting();
   const [pending, setPending] = useState<PendingComment | null>(null);
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const threadsQ = useThreads(rev.data?.id, path, "hot");
   const resolvedSet = useMemo(() => new Set((threadsQ.data ?? []).filter((x) => x.state === "resolved").map((x) => x.id)), [threadsQ.data]);
-  const comments = useMemo(() => ({ active: activeThread, hidden: resolvedSet, onClick: (id: string) => setActiveThread(id) }), [activeThread, resolvedSet]);
+  const comments = useMemo(() => ({ active: activeThread, hidden: resolvedSet, onClick: (id: string) => (setActiveThread(id), openPanel()) }), [activeThread, resolvedSet]);
   const files = useRevisionFiles(rev.data);
   const inRevision = !!files.data?.some((f) => f.path === path && f.op !== "delete");
   const onEditor = useCallback((e: Editor | null) => setEditor(e), []);
@@ -132,7 +136,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
             }
             actions={
               <>
-                {rev.data && <PresenceStack repo={repo} rev={rev.data} path={path} />}
+                {rev.data && !phone && <PresenceStack repo={repo} rev={rev.data} path={path} />}
                 {editor && view === "result" && mode === "visual" && rev.data?.state !== "published" && rev.data?.state !== "closed" && (
                   <Button
                     size="sm"
@@ -148,7 +152,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
                     <span className="@max-5xl:hidden">{t("comments.comment")}</span>
                   </Button>
                 )}
-                {editor && status?.mode === "rw" && view === "result" && mode === "visual" && (
+                {editor && !phone && status?.mode === "rw" && view === "result" && mode === "visual" && (
                   <Button
                     size="sm"
                     variant={suggesting ? "secondary" : "ghost"}
@@ -161,12 +165,12 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
                     <span className="@max-5xl:hidden">{t("suggestions.toggle")}</span>
                   </Button>
                 )}
-                {inRevision && <ViewToggle view={view} onChange={setView} />}
-                {status && !status.error && view === "result" && <ModeToggle mode={mode} onChange={setMode} />}
+                {inRevision && !phone && <ViewToggle view={view} onChange={setView} />}
+                {status && !status.error && view === "result" && !phone && <ModeToggle mode={mode} onChange={setMode} />}
                 {rev.data && <RevisionPill rev={rev.data} />}
-                {rev.data?.access.can_review && <ReviewActions repo={repo} rev={rev.data} compact />}
-                <SaveState status={status} />
-                <Button asChild size="sm" variant="outline">
+                {rev.data?.access.can_review && !phone && <ReviewActions repo={repo} rev={rev.data} compact />}
+                {!phone && <SaveState status={status} />}
+                <Button asChild size="sm" variant="outline" className="max-md:hidden">
                   <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: path }}>
                     {t("revision.done")}
                   </Link>
@@ -174,14 +178,26 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
               </>
             }
           />
-          {status?.mode === "rw" && editor && mode === "visual" && view === "result" && (
+          {!phone && status?.mode === "rw" && editor && mode === "visual" && view === "result" && (
             <div className="flex shrink-0 overflow-x-auto border-b px-3 py-1">
               <EditorToolbar editor={editor} upload={upload} />
             </div>
           )}
+          {phone && inRevision && (
+            <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
+              <span className="text-[12px] text-muted-foreground">{t("revision.phoneReadOnly")}</span>
+              <span className="flex-1" />
+              <ViewToggle view={view === "source" ? "changes" : view} onChange={setView} views={["result", "changes"]} />
+            </div>
+          )}
           <div className="min-h-0 flex-1 overflow-auto">
-            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} view={inRevision ? view : "result"} comments={comments} suggesting={suggesting && status.mode === "rw"} /> : <Loading />}
+            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} view={inRevision ? (phone && view === "source" ? "changes" : view) : "result"} comments={comments} suggesting={suggesting && status.mode === "rw" && !phone} readOnly={phone} /> : <Loading />}
           </div>
+          {phone && rev.data && (rev.data.access.can_review || rev.data.access.can_submit || rev.data.access.can_publish) && (
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-background px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] [&>*]:flex-1">
+              <ReviewActions repo={repo} rev={rev.data} />
+            </div>
+          )}
         </>
       )}
     </AppShell>
@@ -192,11 +208,11 @@ type EditorMode = "visual" | "source";
 type ReviewView = "result" | "changes" | "source";
 
 /** Result (the editor, with changes marked), Changes (rendered diff), Source diff. */
-function ViewToggle({ view, onChange }: { view: ReviewView; onChange: (v: ReviewView) => void }) {
+function ViewToggle({ view, onChange, views }: { view: ReviewView; onChange: (v: ReviewView) => void; views?: ReviewView[] }) {
   const { t } = useTranslation();
   return (
-    <div role="radiogroup" aria-label={t("diff.view")} className="inline-flex shrink-0 gap-0.5 rounded-md bg-muted p-0.5 @max-xl:hidden">
-      {(["result", "changes", "source"] as const).map((v) => (
+    <div role="radiogroup" aria-label={t("diff.view")} className={cn("inline-flex shrink-0 gap-0.5 rounded-md bg-muted p-0.5", !views && "@max-xl:hidden")}>
+      {(views ?? (["result", "changes", "source"] as const)).map((v) => (
         <button
           key={v}
           type="button"
@@ -317,6 +333,7 @@ function Body({
   view,
   comments,
   suggesting,
+  readOnly,
 }: {
   repo: RepoView;
   rev: RevisionView;
@@ -328,6 +345,7 @@ function Body({
   view: ReviewView;
   comments: { active: string | null; hidden: Set<string>; onClick: (id: string) => void };
   suggesting: boolean;
+  readOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
@@ -392,7 +410,7 @@ function Body({
           )
         ) : (
           <ConsistencyHover repo={repo} rev={rev} path={path} findings={consistency.findings}>
-            <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} base={baseDoc} comments={comments} consistency={consistency.marks} suggesting={suggesting} />
+            <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} base={baseDoc} comments={comments} consistency={consistency.marks} suggesting={suggesting} readOnly={readOnly} />
           </ConsistencyHover>
         ))
       )}

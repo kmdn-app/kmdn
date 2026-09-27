@@ -32,6 +32,7 @@ import { ReviewActions, ReviewersSection } from "@/components/revision/review-ac
 import { UpdatesBanner } from "@/components/revision/updates";
 import { ReviewSummary } from "@/components/revision/review-summary";
 import { RevisionConsistency } from "@/components/consistency/findings";
+import { useIsPhone } from "@/lib/media";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -243,6 +244,7 @@ function SectionTitle({ title, action }: { title: string; action?: React.ReactNo
 
 function Pages({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
   const { t } = useTranslation();
+  const phone = useIsPhone();
   const files = useRevisionFiles(rev);
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<RevisionFile | null>(null);
@@ -252,7 +254,8 @@ function Pages({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
     onSuccess: invalidate,
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
   });
-  const canEdit = rev.access.can_edit;
+  // Phones review; adding, renaming and deleting pages needs a bigger screen.
+  const canEdit = rev.access.can_edit && !phone;
   return (
     <section>
       <SectionTitle

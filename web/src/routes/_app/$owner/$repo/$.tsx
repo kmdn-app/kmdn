@@ -22,6 +22,7 @@ import { pageTitle, useCreateRevision } from "@/lib/revisions";
 import { RevisionPage } from "@/components/editor/revision-page";
 import { LinksPanel } from "@/components/links-panel";
 import { atLeast, fileHref, rawUrl, useBlame, useFile, useHistory, type BlameLine, type Commit, type RepoView } from "@/lib/repos";
+import { openPanel, useIsPhone } from "@/lib/media";
 import { useRepo } from "@/lib/use-repo";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +52,7 @@ function PublishedPage() {
   const { sha, view } = Route.useSearch();
   const create = useCreateRevision(repo);
   const canEdit = atLeast(repo.role, "contributor");
+  const phone = useIsPhone();
   const navigate = useNavigate({ from: Route.fullPath });
   const file = useFile(repo, path, sha);
   const history = useHistory(repo, path);
@@ -73,7 +75,7 @@ function PublishedPage() {
     () => (discussions.data ?? []).filter((d) => d.state === "open" && !d.outdated).map((d) => ({ id: d.id, anchor: d.anchor as QuoteAnchor })),
     [discussions.data],
   );
-  const onAnchorClick = useCallback((id: string) => setActive(id), []);
+  const onAnchorClick = useCallback((id: string) => (setActive(id), openPanel()), []);
   useQuoteHighlights(root, anchors, active, onAnchorClick, file.data?.content);
   // "Updated since your last visit": the previous read of this page.
   const lastRead = usePageRead(repo.id, path, discussable ? latest?.sha : undefined);
@@ -171,7 +173,7 @@ function PublishedPage() {
                     <span className="@max-4xl:hidden">{t("file.blame")}</span>
                   </Button>
                 )}
-                {canEdit && file.data?.markdown ? (
+                {phone ? null : canEdit && file.data?.markdown ? (
                   <Button
                     size="sm"
                     disabled={create.isPending}

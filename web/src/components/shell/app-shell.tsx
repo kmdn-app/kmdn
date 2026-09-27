@@ -8,6 +8,7 @@ import { CommandPaletteProvider } from "./command-palette";
 import type { RepoView } from "@/lib/repos";
 import { RightPanel, type PanelTabs } from "./right-panel";
 import { AssistantPanel } from "@/components/assistant/assistant-panel";
+import { isPhone, onOpenPanel } from "@/lib/media";
 
 const PANEL_KEY = "kmdn-panel-open";
 const SIDEBAR_KEY = "kmdn-sidebar-open";
@@ -45,7 +46,8 @@ export function AppShell({
   currentPath?: string;
   panel?: ReactNode | PanelTabs;
 }) {
-  const [panelOpen, setPanelOpen] = useState(() => stored(PANEL_KEY, false));
+  // Phones start with the panel (a bottom sheet) closed, whatever the desktop remembers.
+  const [panelOpen, setPanelOpen] = useState(() => !isPhone() && stored(PANEL_KEY, false));
   const [sidebarOpen, setSidebarOpen] = useState(() => stored(SIDEBAR_KEY, true));
   const [mobileNav, setMobileNav] = useState(false);
   // Pages outside a repository (account, admin) keep the last repository's sidebar.
@@ -54,11 +56,12 @@ export function AppShell({
 
   const togglePanel = () =>
     setPanelOpen((v) => {
-      persist(PANEL_KEY, !v);
+      if (!isPhone()) persist(PANEL_KEY, !v);
       return !v;
     });
+  useEffect(() => onOpenPanel(() => setPanelOpen(true)), []);
   const toggleSidebar = () => {
-    if (window.matchMedia("(max-width: 767px)").matches) {
+    if (isPhone()) {
       setMobileNav((v) => !v);
       return;
     }
@@ -97,6 +100,7 @@ export function AppShell({
       </div>
       {mobileNav && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} aria-hidden />}
       <main className="flex min-w-0 flex-1 flex-col">{children({ panelOpen, togglePanel, toggleSidebar })}</main>
+      {panelOpen && <div className="fixed inset-0 z-20 bg-black/40 md:hidden" onClick={togglePanel} aria-hidden />}
       {panelOpen && <RightPanel onClose={togglePanel}>{withAssistant(panel, ctxRepo, revision, currentPath)}</RightPanel>}
     </div>
     </CommandPaletteProvider>
