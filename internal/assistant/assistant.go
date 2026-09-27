@@ -28,8 +28,12 @@ import (
 var (
 	MaxToolCalls = 25
 	MaxRunTime   = 10 * time.Minute
-	// HistoryMessages bounds how much of a thread goes to the model.
-	HistoryMessages = 40
+	// HistoryTurns is how many of the latest people's messages the model's
+	// history starts from, and HistoryMessages caps its length.
+	HistoryTurns    = 8
+	HistoryMessages = 80
+	// MaxRunsPerKick bounds the runs a worker makes before it stops.
+	MaxRunsPerKick = 5
 )
 
 // Service runs the assistant.
@@ -48,6 +52,7 @@ type Service struct {
 
 	mu      sync.Mutex
 	running map[string]bool // thread ids with a worker
+	queued  map[string]bool // thread ids posted to while their worker ran
 	wg      sync.WaitGroup
 }
 
@@ -77,9 +82,10 @@ func (s *Service) Running(threadID string) bool {
 func (s *Service) kick(t Thread) {
 	s.mu.Lock()
 	if s.running == nil {
-		s.running = map[string]bool{}
+		s.running, s.queued = map[string]bool{}, map[string]bool{}
 	}
 	if s.running[t.ID] {
+		s.queued[t.ID] = true
 		s.mu.Unlock()
 		s.emit(t.ID, map[string]any{"kind": "queued"})
 		return
@@ -89,20 +95,56 @@ func (s *Service) kick(t Thread) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		defer func() {
-			s.mu.Lock()
-			delete(s.running, t.ID)
-			s.mu.Unlock()
-		}()
 		ctx := context.Background()
-		for i := 0; i < 5; i++ {
-			msgs, err := Messages(ctx, s.DB, t.ID)
-			if err != nil || len(msgs) == 0 || !msgs[len(msgs)-1].human() {
-				return
+		// The people's messages the runs so far had in front of them: one
+		// that isn't there arrived during a run and still needs an answer.
+		answered := map[string]bool{}
+		for runs := 0; ; {
+			s.mu.Lock()
+			delete(s.queued, t.ID)
+			s.mu.Unlock()
+			if runs < MaxRunsPerKick && s.answerNext(ctx, t, answered) {
+				runs++
+				continue
 			}
-			s.run(ctx, t, msgs)
+			s.mu.Lock()
+			if runs < MaxRunsPerKick && s.queued[t.ID] {
+				// A prompt landed after the last look: look again.
+				s.mu.Unlock()
+				continue
+			}
+			delete(s.running, t.ID)
+			delete(s.queued, t.ID)
+			s.mu.Unlock()
+			return
 		}
 	}()
+}
+
+// answerNext runs once if the thread has a person's message no run has
+// seen yet, answering the latest one. It reports whether it ran.
+func (s *Service) answerNext(ctx context.Context, t Thread, answered map[string]bool) bool {
+	msgs, err := Messages(ctx, s.DB, t.ID)
+	if err != nil {
+		return false
+	}
+	latest, fresh := -1, false
+	for i, m := range msgs {
+		if m.human() {
+			latest = i
+			fresh = fresh || !answered[m.ID]
+		}
+	}
+	if !fresh {
+		return false
+	}
+	for _, m := range msgs {
+		if m.human() {
+			answered[m.ID] = true
+		}
+	}
+	s.run(ctx, t, msgs, msgs[latest])
+	return true
 }
 
 // errorMessage records a failed run as an assistant reply.
@@ -111,10 +153,9 @@ func (s *Service) errorMessage(ctx context.Context, t Thread, runID, msg string)
 	s.emit(t.ID, map[string]any{"kind": "error", "message": msg})
 }
 
-// run answers the last message.
-func (s *Service) run(ctx context.Context, t Thread, msgs []Message) {
-	last := msgs[len(msgs)-1]
-	u, err := users.ByID(ctx, s.DB, last.AuthorID)
+// run answers prompt, the latest person's message in msgs.
+func (s *Service) run(ctx context.Context, t Thread, msgs []Message, prompt Message) {
+	u, err := users.ByID(ctx, s.DB, prompt.AuthorID)
 	if err != nil {
 		s.errorMessage(ctx, t, "", "I can't tell who asked.")
 		return
@@ -148,7 +189,7 @@ func (s *Service) run(ctx context.Context, t Thread, msgs []Message) {
 
 	tools := append([]llm.Tool{}, readTools...)
 	e := env{s: s, repo: repo, caller: revisions.Caller{User: u, Role: role}}
-	system := s.system(repo, u, role, last.Context)
+	system := s.system(repo, u, role, prompt.Context)
 	if t.RevisionID == "" {
 		tools = append(tools, proposeTool)
 		system[len(system)-1].Text += qaNote + "\n"
@@ -240,15 +281,10 @@ func truncate(s string, n int) string {
 }
 
 // conversation turns stored messages into the model's history: the most
-// recent ones, starting at a person's message, without tool results whose
-// call was cut off.
+// recent ones, starting at a person's message, in an order the providers
+// accept (see ordered).
 func conversation(msgs []Message, shared bool) []llm.Message {
-	if len(msgs) > HistoryMessages {
-		msgs = msgs[len(msgs)-HistoryMessages:]
-	}
-	for len(msgs) > 0 && !msgs[0].human() {
-		msgs = msgs[1:]
-	}
+	msgs = window(ordered(msgs))
 	out := make([]llm.Message, 0, len(msgs))
 	for _, m := range msgs {
 		content := m.Content
@@ -263,6 +299,71 @@ func conversation(msgs []Message, shared bool) []llm.Message {
 		out = append(out, llm.Message{Role: m.Role, Content: content})
 	}
 	return out
+}
+
+// ordered moves people's messages posted during a run (stored between the
+// run's first and last message, so maybe between a tool call and its
+// result) to right after that run, keeping their order, and puts the latest
+// person's message, the one being answered, last: no run after it saw it.
+// Storage (and the UI) stay chronological.
+func ordered(msgs []Message) []Message {
+	last := map[string]int{}
+	for i, m := range msgs {
+		if m.RunID != "" && !m.human() {
+			last[m.RunID] = i
+		}
+	}
+	out := make([]Message, 0, len(msgs))
+	var held []Message
+	end := -1 // index of the last message of the run(s) being copied
+	for i, m := range msgs {
+		if m.human() && i < end {
+			held = append(held, m)
+			continue
+		}
+		if !m.human() && m.RunID != "" && last[m.RunID] > end {
+			end = last[m.RunID]
+		}
+		out = append(out, m)
+		if i == end {
+			out = append(out, held...)
+			held = nil
+		}
+	}
+	out = append(out, held...)
+	for i := len(out) - 1; i >= 0; i-- {
+		if out[i].human() {
+			if i < len(out)-1 {
+				p := out[i]
+				out = append(out[:i:i], out[i+1:]...)
+				out = append(out, p)
+			}
+			break
+		}
+	}
+	return out
+}
+
+// window keeps the recent part of an ordered conversation: from the
+// HistoryTurns-th latest person's message, at most HistoryMessages messages,
+// starting at a person's message (never between a tool call and its result:
+// people's messages sit outside runs once ordered).
+func window(msgs []Message) []Message {
+	for i, turns := len(msgs)-1, 0; i >= 0; i-- {
+		if msgs[i].human() {
+			if turns++; turns == HistoryTurns {
+				msgs = msgs[i:]
+				break
+			}
+		}
+	}
+	if len(msgs) > HistoryMessages {
+		msgs = msgs[len(msgs)-HistoryMessages:]
+	}
+	for len(msgs) > 0 && !msgs[0].human() {
+		msgs = msgs[1:]
+	}
+	return msgs
 }
 
 // system is the system prompt: stable instructions and repo facts first
