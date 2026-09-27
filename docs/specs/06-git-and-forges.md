@@ -44,7 +44,7 @@ type ChangeRequester interface {
 - Initial clone: `git clone --bare --filter=blob:none` then fetch blobs for the content root on demand, keeping large non-content repos cheap. Only the target branch is fetched (`+refs/heads/<target>:refs/heads/<target>`), plus `refs/kmdn/*` for kmdn's own refs.
 - Update triggers: push webhook (primary), periodic fetch every 5 min as a safety net, manual "Refresh" in repo settings.
 - Credentials are provided per command through a `GIT_ASKPASS` helper reading from an in-memory pipe; never written to disk or remotes.
-- Reads: tree listing, blob reads (`git cat-file --batch` long-running process per repo), history (`git log --follow -- <path>`), blame (`git blame --porcelain`), diffs.
+- Reads: tree listing, blob reads (`git cat-file --batch` long-running process per repo), history (`git log --first-parent --follow -- <path>`: a page's published versions are the target branch's own commits, so each publish is one version while the commits saved on the revision branch stay in history and blame), blame (`git blame --porcelain`), diffs.
 - `git` CLI ≥ 2.40 required (for `merge-tree --write-tree`). `kmdn doctor` checks it.
 
 ## Revision branches

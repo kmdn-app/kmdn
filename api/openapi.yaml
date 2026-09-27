@@ -3124,7 +3124,7 @@ components:
         email: { type: string }
     CommitPreview:
       type: object
-      required: [title, body, co_authors, reviewers, assisted, message, target_branch, protected]
+      required: [title, body, co_authors, reviewers, assisted, message, target_branch, protected, required_reviews]
       properties:
         title: { type: string }
         body: { type: string }
@@ -3133,7 +3133,8 @@ components:
         assisted: { type: boolean }
         message: { type: string }
         target_branch: { type: string }
-        protected: { type: boolean }
+        protected: { type: boolean, description: "The target branch is protected; kmdn still merges the pull request through the forge" }
+        required_reviews: { type: integer, description: "Approvals the forge's protection requires, which kmdn can't give unless it may bypass the rule" }
         blocked: { type: string }
     SubmitInput:
       type: object

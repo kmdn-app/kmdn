@@ -3080,7 +3080,10 @@ export interface components {
             assisted: boolean;
             message: string;
             target_branch: string;
+            /** @description The target branch is protected; kmdn still merges the pull request through the forge */
             protected: boolean;
+            /** @description Approvals the forge's protection requires, which kmdn can't give unless it may bypass the rule */
+            required_reviews: number;
             blocked?: string;
         };
         SubmitInput: {

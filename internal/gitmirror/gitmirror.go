@@ -377,7 +377,11 @@ type Person struct {
 // An empty path lists branch history.
 func (m *Mirror) Log(ctx context.Context, rev, path string, n int) ([]Commit, error) {
 	// Each record: \x1e fields(\x1f-separated) \x1d, then --name-only lines.
-	args := []string{"log", fmt.Sprintf("-n%d", n), "--format=%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b%x1d", rev}
+	// --first-parent: a page's published versions are the target branch's
+	// own commits. Publishing merges a revision's branch, so the commits
+	// saved on it stay in history (and in blame) without each becoming a
+	// version of their own.
+	args := []string{"log", "--first-parent", fmt.Sprintf("-n%d", n), "--format=%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b%x1d", rev}
 	var cred *Credential
 	if path != "" {
 		args = append(args, "--follow", "--name-only", "--", path)

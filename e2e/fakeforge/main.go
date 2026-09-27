@@ -39,15 +39,16 @@ type hook struct {
 }
 
 type mergeRequest struct {
-	IID          int64  `json:"iid"`
-	Project      int64  `json:"project_id"`
-	SourceBranch string `json:"source_branch"`
-	TargetBranch string `json:"target_branch"`
-	Title        string `json:"title"`
-	Description  string `json:"description"`
-	WebURL       string `json:"web_url"`
-	State        string `json:"state"` // opened | merged | closed
-	Draft        bool   `json:"draft"`
+	IID            int64  `json:"iid"`
+	Project        int64  `json:"project_id"`
+	SourceBranch   string `json:"source_branch"`
+	TargetBranch   string `json:"target_branch"`
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	WebURL         string `json:"web_url"`
+	State          string `json:"state"` // opened | merged | closed
+	Draft          bool   `json:"draft"`
+	MergeCommitSHA string `json:"merge_commit_sha,omitempty"`
 }
 
 func isDraft(title string) bool { return strings.HasPrefix(strings.ToLower(title), "draft:") }
@@ -201,9 +202,9 @@ func (f *forge) api(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// mergeRequest serves GET and PUT (title) on one merge request.
+// mergeRequest serves GET and PUT (title) on one merge request, and PUT .../merge.
 func (f *forge) mergeRequest(w http.ResponseWriter, r *http.Request, pr *project, rest string) {
-	iid, _ := strconv.ParseInt(rest, 10, 64)
+	iid, _ := strconv.ParseInt(strings.TrimSuffix(rest, "/merge"), 10, 64)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var mr *mergeRequest
@@ -214,6 +215,10 @@ func (f *forge) mergeRequest(w http.ResponseWriter, r *http.Request, pr *project
 	}
 	if mr == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "404 Not Found"})
+		return
+	}
+	if merge, _ := strings.CutSuffix(rest, "/merge"); merge != rest && r.Method == http.MethodPut {
+		f.merge(w, r, pr, mr)
 		return
 	}
 	switch r.Method {
@@ -231,6 +236,68 @@ func (f *forge) mergeRequest(w http.ResponseWriter, r *http.Request, pr *project
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "405 Method Not Allowed"})
 	}
+}
+
+// merge merges a merge request into its target with a merge commit, like
+// GitLab's "Merge commit" method (f.mu is held).
+func (f *forge) merge(w http.ResponseWriter, r *http.Request, pr *project, mr *mergeRequest) {
+	var in struct {
+		Message      string `json:"merge_commit_message"`
+		SHA          string `json:"sha"`
+		Squash       bool   `json:"squash"`
+		RemoveSource bool   `json:"should_remove_source_branch"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	bare := f.bare(pr.Path)
+	switch {
+	case mr.State != "opened":
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "405 Method Not Allowed"})
+		return
+	case mr.Draft:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "405 Method Not Allowed"})
+		return
+	case in.Squash:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "fakeforge doesn't squash"})
+		return
+	}
+	src, err := f.git(bare, "rev-parse", "refs/heads/"+mr.SourceBranch)
+	if err != nil {
+		writeJSON(w, http.StatusNotAcceptable, map[string]string{"message": "Branch cannot be merged"})
+		return
+	}
+	if in.SHA != "" && in.SHA != src {
+		writeJSON(w, http.StatusConflict, map[string]string{"message": "SHA does not match HEAD of source branch"})
+		return
+	}
+	target, _ := f.git(bare, "rev-parse", "refs/heads/"+mr.TargetBranch)
+	tree, err := f.git(bare, "merge-tree", "--write-tree", target, src)
+	if err != nil {
+		writeJSON(w, http.StatusNotAcceptable, map[string]string{"message": "Branch cannot be merged"})
+		return
+	}
+	msg := in.Message
+	if msg == "" {
+		msg = "Merge branch '" + mr.SourceBranch + "' into '" + mr.TargetBranch + "'"
+	}
+	cmd := exec.Command("git", "commit-tree", strings.Fields(tree)[0], "-p", target, "-p", src, "-F", "-")
+	cmd.Dir = bare
+	cmd.Stdin = strings.NewReader(msg)
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=kmdn bot", "GIT_AUTHOR_EMAIL=bot@fakeforge.test", "GIT_COMMITTER_NAME=kmdn bot", "GIT_COMMITTER_EMAIL=bot@fakeforge.test", "GIT_CONFIG_GLOBAL=/dev/null")
+	out, err := cmd.Output()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		return
+	}
+	sha := strings.TrimSpace(string(out))
+	if _, err := f.git(bare, "update-ref", "refs/heads/"+mr.TargetBranch, sha, target); err != nil {
+		writeJSON(w, http.StatusConflict, map[string]string{"message": err.Error()})
+		return
+	}
+	if in.RemoveSource {
+		_, _ = f.git(bare, "update-ref", "-d", "refs/heads/"+mr.SourceBranch)
+	}
+	mr.State, mr.MergeCommitSHA = "merged", sha
+	writeJSON(w, http.StatusOK, mr)
 }
 
 // gitHTTP serves clone, fetch and push with basic auth (oauth2:<token>).
@@ -265,7 +332,7 @@ func (f *forge) state(w http.ResponseWriter, _ *http.Request) {
 				}
 			}
 		}
-		if l, err := f.git(f.bare(pr.Path), "log", "--format=%s%n%b%n--", "main"); err == nil {
+		if l, err := f.git(f.bare(pr.Path), "log", "--first-parent", "--format=%s%n%b%n--", "main"); err == nil {
 			ps.Log = strings.Split(l, "\n--\n")
 		}
 		out = append(out, ps)

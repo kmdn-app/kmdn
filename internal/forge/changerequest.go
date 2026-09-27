@@ -3,6 +3,7 @@ package forge
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -170,4 +171,121 @@ func (g *GitLab) SetDraft(ctx context.Context, repo Repo, cr ChangeRequest, draf
 		return nil
 	}
 	return g.do(ctx, http.MethodPut, p, map[string]any{"title": title}, nil)
+}
+
+// --- Merging
+
+// MergeChangeRequest merges the pull request with a merge commit. GitHub
+// refuses while required checks run; kmdn then enables auto-merge (method
+// MERGE) so GitHub merges when they pass.
+func (g *GitHubApp) MergeChangeRequest(ctx context.Context, repo Repo, cr ChangeRequest, in MergeInput) (MergeResult, error) {
+	var out struct {
+		SHA    string `json:"sha"`
+		Merged bool   `json:"merged"`
+	}
+	body := map[string]any{"merge_method": "merge", "commit_title": in.Title, "commit_message": in.Body}
+	if in.HeadSHA != "" {
+		body["sha"] = in.HeadSHA
+	}
+	err := g.asInstall(ctx, repo, http.MethodPut, g.pullsPath(repo)+"/"+url.PathEscape(cr.Ref)+"/merge", body, &out)
+	if err == nil {
+		return MergeResult{SHA: out.SHA}, nil
+	}
+	var ae *APIError
+	if !errors.As(err, &ae) {
+		return MergeResult{}, err
+	}
+	msg := strings.ToLower(ae.Message)
+	switch {
+	case ae.Status == http.StatusConflict, strings.Contains(msg, "base branch was modified"):
+		return MergeResult{}, fmt.Errorf("%w: %s", ErrHeadChanged, ae.Message)
+	case strings.Contains(msg, "merge commits are not allowed"):
+		return MergeResult{}, ErrMergeCommitsDisabled
+	case strings.Contains(msg, "approving review") || strings.Contains(msg, "review is required") || strings.Contains(msg, "changes requested"):
+		return MergeResult{}, fmt.Errorf("%w: %s", ErrApprovalsRequired, ae.Message)
+	case strings.Contains(msg, "status check") || strings.Contains(msg, "checks") || strings.Contains(msg, "expected"):
+		if err := g.enableAutoMerge(ctx, repo, cr, in); err != nil {
+			return MergeResult{}, fmt.Errorf("required checks are still running and auto-merge couldn't be enabled: %w", err)
+		}
+		return MergeResult{Queued: true}, nil
+	case ae.Status == http.StatusMethodNotAllowed:
+		return MergeResult{}, fmt.Errorf("%w: %s", ErrNotMergeable, ae.Message)
+	}
+	return MergeResult{}, err
+}
+
+func (g *GitHubApp) enableAutoMerge(ctx context.Context, repo Repo, cr ChangeRequest, in MergeInput) error {
+	node := cr.Node
+	if node == "" {
+		var pr ghPull
+		if err := g.asInstall(ctx, repo, http.MethodGet, g.pullsPath(repo)+"/"+url.PathEscape(cr.Ref), nil, &pr); err != nil {
+			return err
+		}
+		node = pr.NodeID
+	}
+	vars := map[string]any{"id": node, "headline": in.Title, "body": in.Body}
+	q := `mutation($id: ID!, $headline: String, $body: String) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: MERGE, commitHeadline: $headline, commitBody: $body}) { clientMutationId } }`
+	if in.HeadSHA != "" {
+		vars["head"] = in.HeadSHA
+		q = `mutation($id: ID!, $headline: String, $body: String, $head: GitObjectID) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: MERGE, commitHeadline: $headline, commitBody: $body, expectedHeadOid: $head}) { clientMutationId } }`
+	}
+	return g.graphql(ctx, repo, q, vars)
+}
+
+// MergeChangeRequest merges the merge request (squash off). While its
+// pipeline runs, GitLab refuses; kmdn then asks it to merge when the
+// pipeline succeeds.
+func (g *GitLab) MergeChangeRequest(ctx context.Context, repo Repo, cr ChangeRequest, in MergeInput) (MergeResult, error) {
+	p := g.mrPath(repo) + "/" + url.PathEscape(cr.Ref)
+	message := strings.TrimSpace(in.Title + "\n\n" + in.Body)
+	body := map[string]any{"merge_commit_message": message, "squash": false, "should_remove_source_branch": true}
+	if in.HeadSHA != "" {
+		body["sha"] = in.HeadSHA
+	}
+	var out struct {
+		State                     string `json:"state"`
+		MergeCommitSHA            string `json:"merge_commit_sha"`
+		MergeWhenPipelineSucceeds bool   `json:"merge_when_pipeline_succeeds"`
+	}
+	err := g.do(ctx, http.MethodPut, p+"/merge", body, &out)
+	if err == nil {
+		if out.State == "merged" {
+			return MergeResult{SHA: out.MergeCommitSHA}, nil
+		}
+		return MergeResult{Queued: out.MergeWhenPipelineSucceeds}, nil
+	}
+	var ae *APIError
+	if !errors.As(err, &ae) {
+		return MergeResult{}, err
+	}
+	switch ae.Status {
+	case http.StatusConflict:
+		return MergeResult{}, fmt.Errorf("%w: %s", ErrHeadChanged, ae.Message)
+	case http.StatusNotAcceptable:
+		return MergeResult{}, fmt.Errorf("%w: %s", ErrNotMergeable, ae.Message)
+	case http.StatusMethodNotAllowed, http.StatusUnprocessableEntity:
+	default:
+		return MergeResult{}, err
+	}
+	// Not mergeable yet: find out why.
+	var mr struct {
+		DetailedMergeStatus string `json:"detailed_merge_status"`
+	}
+	if err := g.do(ctx, http.MethodGet, p, nil, &mr); err != nil {
+		return MergeResult{}, err
+	}
+	switch mr.DetailedMergeStatus {
+	case "ci_must_pass", "ci_still_running", "checking", "unchecked":
+		body["merge_when_pipeline_succeeds"] = true
+		if err := g.do(ctx, http.MethodPut, p+"/merge", body, &out); err != nil {
+			return MergeResult{}, fmt.Errorf("the pipeline is still running and merging when it succeeds couldn't be set: %w", err)
+		}
+		if out.State == "merged" {
+			return MergeResult{SHA: out.MergeCommitSHA}, nil
+		}
+		return MergeResult{Queued: true}, nil
+	case "not_approved", "approvals_syncing":
+		return MergeResult{}, ErrApprovalsRequired
+	}
+	return MergeResult{}, fmt.Errorf("%w: %s", ErrNotMergeable, mr.DetailedMergeStatus)
 }

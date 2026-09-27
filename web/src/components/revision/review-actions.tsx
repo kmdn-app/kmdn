@@ -313,7 +313,7 @@ function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: Re
   const publish = useMutation({
     mutationFn: () => unwrap(api.POST("/revisions/{revision}/publish", { params: { path: { revision: rev.id } }, body: { title: title ?? p?.title ?? rev.title, body: body ?? p?.body ?? "" } })),
     onSuccess: () => {
-      toast.success(p?.protected ? t("publish.openingPR") : t("publish.publishing"));
+      toast.success(t("publish.publishing"));
       onDone();
       onClose();
     },
@@ -323,7 +323,7 @@ function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: Re
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{t("publish.title", { branch: repo.target_branch })}</DialogTitle>
-          <DialogDescription>{p?.protected ? t("publish.descProtected") : t("publish.desc")}</DialogDescription>
+          <DialogDescription>{t("publish.desc")}</DialogDescription>
         </DialogHeader>
         {!p ? (
           <Loader2 className="mx-auto animate-spin" />
@@ -353,9 +353,10 @@ function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: Re
               </div>
               {p.assisted && <div className="text-muted-foreground">{t("publish.assisted")}</div>}
               <div className="flex items-center gap-1.5 text-muted-foreground">
-                {p.protected && <GitPullRequest className="size-3.5" />}
-                {p.protected ? t("publish.viaPR", { branch: p.target_branch }) : t("publish.direct", { branch: p.target_branch })}
+                <GitPullRequest className="size-3.5" />
+                {t(repo.forge_kind === "git" ? "publish.mergeLocal" : "publish.viaPR", { branch: p.target_branch })}
               </div>
+              {p.protected && <div className="text-muted-foreground">{t("publish.protected", { branch: p.target_branch })}</div>}
             </div>
             {findings.length > 0 && (
               <div className="grid gap-1.5 rounded-lg border px-3 py-2 text-[13px]">
@@ -372,6 +373,12 @@ function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: Re
                 </ul>
               </div>
             )}
+            {p.required_reviews > 0 && (
+              <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-[13px]">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+                {t("publish.requiredReviews", { count: p.required_reviews })}
+              </p>
+            )}
             {p.blocked && (
               <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-[13px]">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
@@ -385,7 +392,7 @@ function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: Re
               </Button>
               <Button type="submit" disabled={!!p.blocked || publish.isPending || !(title ?? p.title).trim()}>
                 {publish.isPending && <Loader2 className="animate-spin" />}
-                {p.protected ? t("publish.openPR") : t("publish.action")}
+                {t("publish.action")}
               </Button>
             </DialogFooter>
           </form>

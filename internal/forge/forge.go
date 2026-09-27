@@ -109,7 +109,32 @@ type ChangeRequester interface {
 	FindChangeRequest(ctx context.Context, repo Repo, head string) (ChangeRequest, bool, error)
 	// SetDraft turns the change request into a draft, or marks it ready for review.
 	SetDraft(ctx context.Context, repo Repo, cr ChangeRequest, draft bool) error
+	// MergeChangeRequest merges with a merge commit (never squash or
+	// rebase). When required checks are still running it turns on
+	// auto-merge instead and returns Queued.
+	MergeChangeRequest(ctx context.Context, repo Repo, cr ChangeRequest, in MergeInput) (MergeResult, error)
 }
+
+// MergeInput is the merge commit's message, pinned to the head kmdn pushed.
+type MergeInput struct {
+	Title, Body string
+	HeadSHA     string
+}
+
+// MergeResult is a merged change request (SHA of the merge commit), or one
+// the forge will merge once its checks pass (Queued).
+type MergeResult struct {
+	SHA    string
+	Queued bool
+}
+
+// Reasons a forge refuses to merge that kmdn can't fix by retrying.
+var (
+	ErrMergeCommitsDisabled = errors.New("forge: the repository doesn't allow merge commits")
+	ErrApprovalsRequired    = errors.New("forge: branch protection requires approvals on the forge")
+	ErrNotMergeable         = errors.New("forge: the pull request can't be merged")
+	ErrHeadChanged          = errors.New("forge: the pull request's branch changed")
+)
 
 // Install is a GitHub App installation.
 type Install struct {
