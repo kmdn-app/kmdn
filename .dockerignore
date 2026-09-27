@@ -1,0 +1,13 @@
+.git
+**/node_modules
+bin
+dist
+web/dist
+internal/web/dist/*
+!internal/web/dist/.gitkeep
+data
+*.db
+*.db-*
+kmdn.yaml
+.env
+docs/mockups

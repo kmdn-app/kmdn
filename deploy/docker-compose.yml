@@ -1,0 +1,53 @@
+# kmdn with Docker Compose (docs/specs/13-operations.md#distribution).
+#
+#   cp kmdn.env.example .env      # then set KMDN_SECRET_KEY and the base URL
+#   docker compose up -d                          # kmdn with SQLite
+#   docker compose --profile postgres up -d       # + Postgres (set KMDN_DB_URL in .env)
+#   docker compose --profile caddy up -d          # + Caddy for TLS (set KMDN_DOMAIN in .env)
+#
+# Back up with: docker compose exec kmdn kmdn backup -out /data/backup.tar.zst
+services:
+  kmdn:
+    image: ghcr.io/kmdn-app/kmdn:${KMDN_VERSION:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Caddy (and other proxies on this network) may set X-Forwarded-For.
+      KMDN_SERVER_TRUSTED_PROXIES: ${KMDN_SERVER_TRUSTED_PROXIES:-172.16.0.0/12,10.0.0.0/8}
+    volumes:
+      - kmdn-data:/data
+    ports:
+      - "${KMDN_PORT:-8080}:8080"
+
+  postgres:
+    image: postgres:17-alpine
+    profiles: [postgres]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kmdn
+      POSTGRES_USER: kmdn
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kmdn"]
+      interval: 5s
+      retries: 10
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: [caddy]
+    restart: unless-stopped
+    environment:
+      KMDN_DOMAIN: ${KMDN_DOMAIN:?set KMDN_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+volumes:
+  kmdn-data:
+  postgres-data:
+  caddy-data:

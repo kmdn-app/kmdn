@@ -6,7 +6,7 @@ LDFLAGS := -s -w -X github.com/kmdn-app/kmdn/internal/version.Version=$(VERSION)
 	-X github.com/kmdn-app/kmdn/internal/version.Commit=$(COMMIT) \
 	-X github.com/kmdn-app/kmdn/internal/version.Date=$(DATE)
 
-.PHONY: help install web build test test-go test-ts lint lint-go lint-ts generate dev dev-server dev-web clean
+.PHONY: help install web build docker test test-go test-ts lint lint-go lint-ts generate dev dev-server dev-web clean
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*## "}{printf "  %-12s %s\n",$$1,$$2}'
@@ -21,6 +21,9 @@ web: ## Build the SPA and copy it into the Go embed dir
 
 build: web ## Build bin/kmdn with the SPA embedded
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/kmdn ./cmd/kmdn
+
+docker: ## Build the kmdn:dev image from source
+	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) -t kmdn:dev .
 
 test: test-go test-ts ## Run all tests
 
