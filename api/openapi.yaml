@@ -724,6 +724,74 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } } } }
+  /admin/agent-keys:
+    get:
+      tags: [admin]
+      operationId: listAgentKeys
+      summary: Agent keys for the MCP server, newest first, with 14 days of usage
+      responses:
+        "200":
+          description: Keys
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, endpoint]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/AgentKey" } }
+                  endpoint: { type: string, description: "The MCP endpoint URL" }
+    post:
+      tags: [admin]
+      operationId: createAgentKey
+      summary: Create an agent key (the token is returned once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                all_repos: { type: boolean, description: "Every repo, including ones connected later" }
+                repo_ids: { type: array, items: { type: string } }
+                expires_in_days: { type: integer, enum: [0, 30, 90, 365], description: "0 never expires; default 90" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, token, config]
+                properties:
+                  key: { $ref: "#/components/schemas/AgentKey" }
+                  token: { type: string, description: "kmdn_ak_… (shown once)" }
+                  config: { type: string, description: "A ready-to-paste MCP client configuration" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /admin/agent-keys/{id}/revoke:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [admin]
+      operationId: revokeAgentKey
+      responses:
+        "204": { description: Revoked }
+        "409": { $ref: "#/components/responses/Problem" }
+  /admin/agent-keys/{id}/calls:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [admin]
+      operationId: listAgentKeyCalls
+      summary: The key's latest 50 MCP calls (from the audit log)
+      responses:
+        "200":
+          description: Calls
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } } } }
   /admin/invites:
     post:
       tags: [admin]
@@ -3155,6 +3223,24 @@ components:
       properties:
         name: { type: string, maxLength: 80 }
         description: { type: string }
+    AgentKey:
+      type: object
+      required: [id, name, description, all_repos, repo_ids, created_at, status, usage]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        all_repos: { type: boolean }
+        repo_ids: { type: array, items: { type: string } }
+        created_by: { type: string }
+        created_by_name: { type: string }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time }
+        last_used_ip: { type: string }
+        status: { type: string, enum: [active, revoked, expired] }
+        usage: { type: array, items: { type: integer }, description: "Calls per UTC day, the last 14 days, oldest first" }
     AuditEntry:
       type: object
       required: [id, at, actor_type, action]

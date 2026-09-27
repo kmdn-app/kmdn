@@ -29,6 +29,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/links"
 	"github.com/kmdn-app/kmdn/internal/llm"
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/mcp"
 	"github.com/kmdn-app/kmdn/internal/notify"
 	"github.com/kmdn-app/kmdn/internal/publish"
 	"github.com/kmdn-app/kmdn/internal/realtime"
@@ -72,6 +73,7 @@ type App struct {
 	Assistant   *assistant.Service
 	Summaries   *summaries.Service
 	Consistency *consistency.Service
+	MCP         *mcp.Service
 	Invites     *invites.Service
 }
 
@@ -240,6 +242,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}
 	a.Server.Mount("/ws", a.AuthH.Middleware(a.Realtime))
 	a.Server.Mount("/hooks", a.Repos.WebhookHandler())
+	a.MCP = &mcp.Service{DB: db, Repos: a.Repos, Search: &idx.Index, Links: a.Links, Engine: eng, BaseURL: a.Repos.BaseURL, Log: log}
+	a.MCP.Routes(r)
+	a.Server.Mount("/mcp", a.MCP.Handler(a.AuthH.TrustedProxies))
 	(&admin.People{DB: db, Auth: a.Auth}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL}
 	a.Invites.Routes(r)

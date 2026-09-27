@@ -733,6 +733,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/agent-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agent keys for the MCP server, newest first, with 14 days of usage */
+        get: operations["listAgentKeys"];
+        put?: never;
+        /** Create an agent key (the token is returned once) */
+        post: operations["createAgentKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/agent-keys/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revokeAgentKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/agent-keys/{id}/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** The key's latest 50 MCP calls (from the audit log) */
+        get: operations["listAgentKeyCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/invites": {
         parameters: {
             query?: never;
@@ -3077,6 +3132,28 @@ export interface components {
             name: string;
             description?: string;
         };
+        AgentKey: {
+            id: string;
+            name: string;
+            description: string;
+            all_repos: boolean;
+            repo_ids: string[];
+            created_by?: string;
+            created_by_name?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at?: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            /** Format: date-time */
+            last_used_at?: string;
+            last_used_ip?: string;
+            /** @enum {string} */
+            status: "active" | "revoked" | "expired";
+            /** @description Calls per UTC day, the last 14 days, oldest first */
+            usage: number[];
+        };
         AuditEntry: {
             id: string;
             /** Format: date-time */
@@ -4639,6 +4716,117 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Latest 200 audit entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AuditEntry"][];
+                    };
+                };
+            };
+        };
+    };
+    listAgentKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Keys */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AgentKey"][];
+                        /** @description The MCP endpoint URL */
+                        endpoint: string;
+                    };
+                };
+            };
+        };
+    };
+    createAgentKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    description?: string;
+                    /** @description Every repo, including ones connected later */
+                    all_repos?: boolean;
+                    repo_ids?: string[];
+                    /**
+                     * @description 0 never expires; default 90
+                     * @enum {integer}
+                     */
+                    expires_in_days?: 0 | 30 | 90 | 365;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        key: components["schemas"]["AgentKey"];
+                        /** @description kmdn_ak_… (shown once) */
+                        token: string;
+                        /** @description A ready-to-paste MCP client configuration */
+                        config: string;
+                    };
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    revokeAgentKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    listAgentKeyCalls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calls */
             200: {
                 headers: {
                     [name: string]: unknown;

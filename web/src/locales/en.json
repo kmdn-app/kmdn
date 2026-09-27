@@ -365,7 +365,8 @@
     "forgeError": "Setting up the forge failed ({{code}}). Try again.",
     "time": "Time",
     "action": "Action",
-    "target": "Target"
+    "target": "Target",
+    "agentKeys": "Agent keys"
   },
   "editor": {
     "label": "Page content",
@@ -1035,5 +1036,44 @@
     "passagesCompared_one": "{{count}} passage compared",
     "passagesCompared_other": "{{count}} passages compared",
     "statusLabel": "Status"
+  },
+  "agentKeys": {
+    "title": "Agent keys",
+    "desc": "Keys for external agents (Claude Code, support bots…) to search and read published docs over MCP. Read-only; each key sees the repositories you pick. Endpoint:",
+    "create": "Create agent key",
+    "createDesc": "The key is shown once. Agents send it as a bearer token.",
+    "name": "Name",
+    "namePlaceholder": "Support bot",
+    "description": "Description (optional)",
+    "scope": "Repositories",
+    "allRepos": "All repositories",
+    "expires": "Expires",
+    "never": "Never expires",
+    "days_one": "In {{count}} day",
+    "days_other": "In {{count}} days",
+    "createdTitle": "{{name}} is ready",
+    "onceWarning": "Copy the key now: it won't be shown again. Anyone with it can read these repositories' published docs.",
+    "token": "Key",
+    "copy": "Copy",
+    "config": "Client configuration",
+    "copyConfig": "Copy configuration",
+    "done": "Done",
+    "none": "No agent keys yet. Create one to let an external agent read published docs.",
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked",
+      "expired": "Expired"
+    },
+    "createdBy": "Created by {{name}}",
+    "expiresOn": "Expires",
+    "lastUsed": "Last used",
+    "neverUsed": "Never used",
+    "usage_one": "{{count}} call in the last 14 days",
+    "usage_other": "{{count}} calls in the last 14 days",
+    "calls": "Calls",
+    "noCalls": "No calls yet.",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke {{name}}?",
+    "revokeDesc": "Agents using this key lose access right away. This can't be undone; create a new key if you need one."
   }
 }
