@@ -18,8 +18,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { errorMessage } from "@/lib/api";
 import { atLeast, type RepoView } from "@/lib/repos";
-import { useCreateRevision, useRevisions, type RevisionState, type RevisionView } from "@/lib/revisions";
+import { useCreateRevision, useRevisions, type RevisionEvent, type RevisionState, type RevisionView } from "@/lib/revisions";
 import { cn } from "@/lib/utils";
+import { Time } from "@/components/time";
 
 export const STATE_DOT: Record<RevisionState, string> = {
   editing: "bg-sky-500",
@@ -50,6 +51,38 @@ export function StatePill({ rev, className }: { rev: RevisionView; className?: s
         <span className="inline-flex h-6 items-center rounded-full bg-destructive/10 px-2 text-[0.75rem] font-medium whitespace-nowrap text-destructive">{t("revision.conflict")}</span>
       )}
     </span>
+  );
+}
+
+/**
+ * One line of a revision's Activity. kmdn's own events (the branch, the pull
+ * request, review and publish state) have no actor: their text is a sentence.
+ */
+export function ActivityItem({ event: e }: { event: RevisionEvent }) {
+  const { t } = useTranslation();
+  const data = e.data as { path?: string; from_path?: string; branch?: string };
+  const system = e.actor_type === "system";
+  // A published event without an actor is the forge merging the pull request.
+  const kind = system && e.kind === "published" ? "published_merged" : e.kind;
+  const text = t(`revision.events.${kind}`, {
+    defaultValue: e.kind,
+    path: data.path ?? "",
+    from: data.from_path ?? "",
+    branch: data.branch ?? "",
+  });
+  return (
+    <li className="relative text-[0.84375rem]">
+      <span className="absolute top-2 -left-[1.4375rem] size-1.5 rounded-full bg-border ring-4 ring-background" />
+      {!system && (
+        <>
+          <span className="font-medium">{e.actor_name || t("revision.someone")}</span>{" "}
+        </>
+      )}
+      {text}{" "}
+      <span className="text-muted-foreground">
+        · <Time iso={e.created_at} />
+      </span>
+    </li>
   );
 }
 

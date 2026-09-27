@@ -9,6 +9,7 @@ export type RevisionView = components["schemas"]["RevisionView"];
 export type RevisionFile = components["schemas"]["RevisionFile"];
 export type RevisionTreeNode = components["schemas"]["RevisionTreeNode"];
 export type RevisionState = components["schemas"]["RevisionState"];
+export type RevisionEvent = components["schemas"]["RevisionEvent"];
 
 export const revisionByNumberQuery = (repo: RepoView, n: number) =>
   queryOptions({

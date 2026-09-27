@@ -583,6 +583,7 @@
       "reviewer_removed": "removed a reviewer",
       "publishing": "turned on auto-merge: the forge merges once its checks pass",
       "published": "published it",
+      "published_merged": "Published: the pull request was merged",
       "publish_blocked": "Publishing stopped",
       "change_request_closed": "The pull request was closed without merging",
       "branch_created": "Started the branch {{branch}}",
