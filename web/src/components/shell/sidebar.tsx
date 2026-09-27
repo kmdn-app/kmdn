@@ -23,6 +23,7 @@ import { useTheme } from "@/lib/theme";
 import type { ThemeChoice } from "@/theme";
 import { FileTree, OP_MARK } from "./file-tree";
 import { NewRevisionDialog, RevisionPicker, StateDot, StatePill } from "@/components/revision/revision-ui";
+import { ApprovalSummary } from "@/components/revision/review-actions";
 import { usePresence, useRevisionFiles, useRevisions, useRevisionTree, type RevisionView } from "@/lib/revisions";
 import { cn } from "@/lib/utils";
 import { usePalette } from "./command-palette";
@@ -169,6 +170,7 @@ function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; r
         className="mt-1 block rounded-lg border bg-background p-2.5 hover:bg-accent"
       >
         <StatePill rev={rev} />
+        <ApprovalSummary rev={rev} className="mt-1 block" />
         <div className="mt-1.5 text-[12px] text-muted-foreground">{t("revision.overview")} →</div>
       </Link>
       <Section title={t("revision.changed")}>

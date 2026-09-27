@@ -1287,6 +1287,118 @@ paths:
       responses:
         "200": { description: Source map (doc engine format), content: { application/json: { schema: { type: object, additionalProperties: true } } } }
         "204": { description: The page has no document yet }
+  /revisions/{revision}/submit:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [revisions]
+      operationId: submitRevision
+      summary: Send for review (at least one reviewer)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SubmitInput" } } }
+      responses:
+        "200": { description: Revision, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionView" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/withdraw:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [revisions]
+      operationId: withdrawRevision
+      summary: Back to Editing (approvals dismissed)
+      responses:
+        "200": { description: Revision, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionView" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/approve:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [revisions]
+      operationId: approveRevision
+      summary: Approve the current content (assigned reviewers)
+      responses:
+        "200": { description: Revision, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionView" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/request-changes:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [revisions]
+      operationId: requestChanges
+      summary: Back to Editing with a note
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { note: { type: string } } } } }
+      responses:
+        "200": { description: Revision, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionView" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/reviewers:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: listReviewers
+      responses:
+        "200":
+          description: Reviewers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Reviewer" } }
+  /revisions/{revision}/reviewers/{user}:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { name: user, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [revisions]
+      operationId: addReviewer
+      responses:
+        "200":
+          description: Reviewers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Reviewer" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [revisions]
+      operationId: removeReviewer
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/reviewer-suggestions:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: reviewerSuggestions
+      summary: Maintainers who can review, suggested ones first
+      responses:
+        "200":
+          description: Candidates
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/ReviewerCandidate" } }
 components:
   parameters:
     RepoID:
@@ -1317,6 +1429,30 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    SubmitInput:
+      type: object
+      required: [reviewers]
+      properties:
+        reviewers: { type: array, items: { type: string } }
+        title: { type: string }
+        description: { type: string }
+    Reviewer:
+      type: object
+      required: [user_id, name, email, state]
+      properties:
+        user_id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        state: { type: string, enum: [pending, approved, changes_requested] }
+        approved_at: { type: string, format: date-time }
+    ReviewerCandidate:
+      type: object
+      required: [user_id, name, email, suggested]
+      properties:
+        user_id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        suggested: { type: boolean }
     PresenceUser:
       type: object
       required: [id, name, paths, editing]
@@ -1443,11 +1579,16 @@ components:
         closed_at: { type: string, format: date-time }
     RevisionAccess:
       type: object
-      required: [member, can_edit, can_manage]
+      required: [member, reviewer, can_edit, can_manage, can_submit, can_review, can_withdraw, can_publish]
       properties:
         member: { type: boolean }
+        reviewer: { type: boolean }
         can_edit: { type: boolean }
         can_manage: { type: boolean }
+        can_submit: { type: boolean }
+        can_review: { type: boolean }
+        can_withdraw: { type: boolean }
+        can_publish: { type: boolean }
         reason: { type: string, description: "Why editing is off: viewer, not_member, or the revision state" }
     RevisionMember:
       type: object
@@ -1462,10 +1603,11 @@ components:
       allOf:
         - $ref: "#/components/schemas/Revision"
         - type: object
-          required: [access, members, file_count]
+          required: [access, members, reviewers, file_count]
           properties:
             access: { $ref: "#/components/schemas/RevisionAccess" }
             members: { type: array, items: { $ref: "#/components/schemas/RevisionMember" } }
+            reviewers: { type: array, items: { $ref: "#/components/schemas/Reviewer" } }
             file_count: { type: integer }
     RevisionCreate:
       type: object

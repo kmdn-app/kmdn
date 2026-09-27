@@ -18,7 +18,6 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
-  Send,
   Trash2,
   UserPlus,
   X,
@@ -29,6 +28,7 @@ import { OP_MARK } from "@/components/shell/file-tree";
 import { Avatar } from "@/components/avatar";
 import { Time } from "@/components/time";
 import { StatePill } from "@/components/revision/revision-ui";
+import { ReviewActions, ReviewersSection } from "@/components/revision/review-actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -36,7 +36,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, errorMessage, unwrap } from "@/lib/api";
 import type { RepoView } from "@/lib/repos";
 import { useRevision, useRevisionEvents, useRevisionFiles, type RevisionFile, type RevisionView } from "@/lib/revisions";
@@ -82,6 +81,7 @@ function Overview() {
                   <Header repo={repo} rev={r} />
                   <Pages repo={repo} rev={r} />
                   <Checks repo={repo} rev={r} />
+                  <ReviewersSection repo={repo} rev={r} />
                   <People repo={repo} rev={r} />
                   <Checkpoints repo={repo} rev={r} />
                   <Activity rev={r} />
@@ -106,7 +106,7 @@ function Actions({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
     onSuccess: invalidate,
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
   });
-  if (!rev.access.can_manage) return null;
+  if (!rev.access.can_manage) return rev.access.can_review ? <ReviewActions repo={repo} rev={rev} /> : null;
   return rev.state === "closed" ? (
     <Button size="sm" variant="outline" onClick={() => act.mutate("reopen")} disabled={act.isPending}>
       <ArchiveRestore />
@@ -118,17 +118,7 @@ function Actions({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
         <Archive />
         <span className="max-md:hidden">{t("revision.close")}</span>
       </Button>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span>
-            <Button size="sm" disabled>
-              <Send />
-              {t("revision.submit")}
-            </Button>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>{t("revision.reviewSoon")}</TooltipContent>
-      </Tooltip>
+      <ReviewActions repo={repo} rev={rev} />
     </>
   );
 }
