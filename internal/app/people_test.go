@@ -220,3 +220,61 @@ func TestSignInWithGitHubMatchesVerifiedEmail(t *testing.T) {
 		t.Fatalf("commit email: %d", code)
 	}
 }
+
+// GitLab OAuth applications are registered by hand before kmdn knows the
+// host's id, so GitLab uses one fixed redirect URI, shown in Admin → Forges.
+func TestSignInWithGitLabFixedCallback(t *testing.T) {
+	a, admin := newApp(t, nil)
+	ctx := context.Background()
+	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya Chen", true)
+	c := &tc{t: t, base: "", c: newClient()}
+	srv := httptest.NewServer(a.Server.Handler())
+	defer srv.Close()
+	want := strings.TrimRight(a.Repos.BaseURL, "/") + "/api/v1/auth/oauth/callback"
+	fake := http.NewServeMux()
+	fake.HandleFunc("POST /oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		if r.Form.Get("code") != "good" || r.Form.Get("client_secret") != "gls" || r.Form.Get("redirect_uri") != want || r.Form.Get("grant_type") != "authorization_code" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"access_token":"glo_x"}`))
+	})
+	fake.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"id":42,"username":"maya","name":"Maya Chen","email":"maya@northwind.dev","confirmed_at":"2026-01-01T00:00:00Z"}`))
+	})
+	gl := httptest.NewServer(fake)
+	defer gl.Close()
+
+	signIn(t, a, admin, maya)
+	if _, v := admin.do("GET", "/admin/forges", nil); v["gitlab_callback_url"] != want {
+		t.Fatalf("callback url: %v", v)
+	}
+	code, h := admin.do("POST", "/admin/forges", map[string]any{"kind": "gitlab", "base_url": gl.URL, "client_id": "glid", "client_secret": "gls"})
+	if code != 201 {
+		t.Fatalf("add gitlab: %d %v", code, h)
+	}
+	c.base = srv.URL
+	c.c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	res, err := c.c.Get(srv.URL + "/api/v1/auth/oauth/" + h["id"].(string) + "/start?redirect=/northwind")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	loc, _ := url.Parse(res.Header.Get("Location"))
+	if !strings.HasPrefix(loc.String(), gl.URL+"/oauth/authorize") || loc.Query().Get("redirect_uri") != want || loc.Query().Get("scope") != "read_user" {
+		t.Fatalf("start redirect: %s", loc)
+	}
+	res, err = c.c.Get(srv.URL + "/api/v1/auth/oauth/callback?code=good&state=" + loc.Query().Get("state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.Header.Get("Location") != "/northwind" {
+		t.Fatalf("callback redirect: %s", res.Header.Get("Location"))
+	}
+	if code, me := c.do("GET", "/me", nil); code != 200 || me["id"] != maya.ID {
+		t.Fatalf("signed in as: %d %v", code, me)
+	}
+}

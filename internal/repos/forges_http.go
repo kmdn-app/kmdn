@@ -42,7 +42,13 @@ func (s *Service) listHosts(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
-	api.JSON(w, http.StatusOK, map[string]any{"items": hs})
+	api.JSON(w, http.StatusOK, map[string]any{"items": hs, "gitlab_callback_url": GitLabCallbackURL(s.BaseURL)})
+}
+
+// GitLabCallbackURL is the redirect URI to register in a GitLab OAuth
+// application (sign-in and account linking), the same for every GitLab host.
+func GitLabCallbackURL(baseURL string) string {
+	return strings.TrimRight(baseURL, "/") + "/api/v1/auth/oauth/callback"
 }
 
 func (s *Service) createHost(w http.ResponseWriter, r *http.Request) {

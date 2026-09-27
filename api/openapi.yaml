@@ -563,7 +563,12 @@ paths:
           description: Forge hosts
           content:
             application/json:
-              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/ForgeHost" } } } }
+              schema:
+                type: object
+                required: [items, gitlab_callback_url]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/ForgeHost" } }
+                  gitlab_callback_url: { type: string, description: "Redirect URI to register in a GitLab OAuth application (the same for every GitLab host)" }
     post:
       tags: [admin]
       operationId: createForge
@@ -1061,6 +1066,17 @@ paths:
       security: []
       parameters:
         - { name: host, in: path, required: true, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Back to kmdn, signed in or linked (errors in query string) }
+  /auth/oauth/callback:
+    get:
+      tags: [auth]
+      operationId: oauthCallbackGitLab
+      summary: GitLab's OAuth callback, one URL for every GitLab host (the state names the host)
+      security: []
+      parameters:
         - { name: code, in: query, schema: { type: string } }
         - { name: state, in: query, schema: { type: string } }
       responses:

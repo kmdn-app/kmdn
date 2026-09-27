@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Check, ChevronDown, Copy, KeyRound, Loader2, Plus } from "lucide-react";
+import { ChevronDown, KeyRound, Loader2, Plus } from "lucide-react";
 import type { components } from "@kmdn/api-client";
+import { CopyButton } from "@/components/copy-button";
 import { Card, Panel } from "@/components/settings-layout";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
@@ -29,27 +30,6 @@ function Sparkline({ values, label }: { values: number[]; label: string }) {
         return <rect key={i} x={i * 5} y={20 - h} width={3.5} height={h} rx={0.75} className={v === 0 ? "fill-muted-foreground/25" : "fill-current"} />;
       })}
     </svg>
-  );
-}
-
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const { t } = useTranslation();
-  const [done, setDone] = useState(false);
-  return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      onClick={() =>
-        void navigator.clipboard.writeText(text).then(
-          () => (setDone(true), setTimeout(() => setDone(false), 1500)),
-          () => toast.error(t("errors.generic")),
-        )
-      }
-    >
-      {done ? <Check /> : <Copy />}
-      {label}
-    </Button>
   );
 }
 

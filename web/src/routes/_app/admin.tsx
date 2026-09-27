@@ -7,6 +7,7 @@ import { Activity, CheckCircle2, GitBranch, Grid2x2, KeyRound, Loader2, Mail, Pl
 import type { components, paths } from "@kmdn/api-client";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
+import { CopyButton } from "@/components/copy-button";
 import { Card, Panel, SettingsLayout } from "@/components/settings-layout";
 import { Avatar } from "@/components/avatar";
 import { Time } from "@/components/time";
@@ -472,6 +473,7 @@ function AddGitLabDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [form, setForm] = useState({ base_url: "https://gitlab.com", client_id: "", client_secret: "" });
+  const callback = useQuery({ queryKey: ["forges", "gitlab-callback"], queryFn: async () => (await unwrap(api.GET("/admin/forges"))).gitlab_callback_url, enabled: open });
   const add = useMutation({
     mutationFn: () => unwrap(api.POST("/admin/forges", { body: { kind: "gitlab", ...form } })),
     onSuccess: () => {
@@ -491,6 +493,19 @@ function AddGitLabDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             <Label htmlFor="gl-url">GitLab URL</Label>
             <Input id="gl-url" value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
           </div>
+          <div className="grid gap-1.5 border-t pt-3">
+            <div className="text-[13.5px] font-medium">{t("admin.gitlabOAuth")}</div>
+            <p className="text-[12.5px] text-muted-foreground">{t("admin.gitlabOAuthHint")}</p>
+          </div>
+          {callback.data && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="gl-callback">{t("admin.gitlabCallback")}</Label>
+              <div className="flex gap-2">
+                <Input id="gl-callback" readOnly value={callback.data} className="font-mono text-[12.5px]" onFocus={(e) => e.currentTarget.select()} />
+                <CopyButton text={callback.data} label={t("admin.copy")} />
+              </div>
+            </div>
+          )}
           <div className="grid gap-1.5">
             <Label htmlFor="gl-id">{t("admin.oauthClientId")}</Label>
             <Input id="gl-id" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })} />

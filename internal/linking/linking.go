@@ -88,6 +88,7 @@ func (s *Service) Routes(r chi.Router) {
 	r.Get("/auth/oauth/providers", s.providers)
 	r.Get("/auth/oauth/{host}/start", s.start)
 	r.Get("/auth/oauth/{host}/callback", s.callback)
+	r.Get("/auth/oauth/callback", s.callback) // GitLab: one URL for every host, the state says which
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Require)
 		r.Get("/me/linked-accounts", s.listLinked)
@@ -137,8 +138,15 @@ type pending struct {
 	Created  time.Time `json:"created"`
 }
 
-func (s *Service) redirectURI(hostID string) string {
-	return strings.TrimRight(s.BaseURL, "/") + "/api/v1/auth/oauth/" + hostID + "/callback"
+// redirectURI is where the forge sends people back. GitHub Apps register a
+// URL per host when they're created (the manifest flow); a GitLab OAuth
+// application is registered by hand before kmdn knows the host's id, so
+// GitLab uses one fixed URL (repos.GitLabCallbackURL) and the state names the host.
+func (s *Service) redirectURI(h repos.HostRecord) string {
+	if h.Kind == forge.KindGitLab {
+		return repos.GitLabCallbackURL(s.BaseURL)
+	}
+	return strings.TrimRight(s.BaseURL, "/") + "/api/v1/auth/oauth/" + h.ID + "/callback"
 }
 
 func safeRedirect(p string) string {
@@ -172,7 +180,7 @@ func (s *Service) start(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: stateCookie, Value: state, Path: "/api/v1/auth/oauth/", HttpOnly: true, Secure: s.AuthH.Secure, SameSite: http.SameSiteLaxMode, MaxAge: 600})
 	var authURL string
-	q := url.Values{"client_id": {h.ClientID}, "redirect_uri": {s.redirectURI(h.ID)}, "state": {state}}
+	q := url.Values{"client_id": {h.ClientID}, "redirect_uri": {s.redirectURI(h)}, "state": {state}}
 	switch h.Kind {
 	case forge.KindGitHub:
 		authURL = strings.TrimRight(h.BaseURL, "/") + "/login/oauth/authorize?" + q.Encode()
@@ -222,7 +230,7 @@ func (s *Service) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = settings.Delete(ctx, s.DB, key)
-	if st.HostID != chi.URLParam(r, "host") {
+	if host := chi.URLParam(r, "host"); host != "" && st.HostID != host {
 		fail(w, r, st, "expired")
 		return
 	}
@@ -312,7 +320,7 @@ func (s *Service) exchange(ctx context.Context, h repos.HostRecord, code string)
 	if err != nil {
 		return Profile{}, err
 	}
-	form := url.Values{"client_id": {h.ClientID}, "client_secret": {string(secret)}, "code": {code}, "redirect_uri": {s.redirectURI(h.ID)}}
+	form := url.Values{"client_id": {h.ClientID}, "client_secret": {string(secret)}, "code": {code}, "redirect_uri": {s.redirectURI(h)}}
 	tokenURL := strings.TrimRight(h.BaseURL, "/") + "/login/oauth/access_token"
 	if h.Kind == forge.KindGitLab {
 		form.Set("grant_type", "authorization_code")
