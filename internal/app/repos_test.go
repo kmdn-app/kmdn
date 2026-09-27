@@ -85,7 +85,7 @@ func TestConnectPlainGitRepoAndRead(t *testing.T) {
 		t.Fatalf("hosts: %d %v", code, hosts)
 	}
 	hostID := items[0].(map[string]any)["id"].(string)
-	code, body := admin.do("POST", "/repos", map[string]any{"forge_host_id": hostID, "clone_url": "file://" + remote, "content_root": "docs/"})
+	code, body := admin.do("POST", "/orgs/default/repos", map[string]any{"forge_host_id": hostID, "clone_url": "file://" + remote, "content_root": "docs/"})
 	if code != 202 {
 		t.Fatalf("connect: %d %v", code, body)
 	}
@@ -166,14 +166,14 @@ func TestConnectPlainGitRepoAndRead(t *testing.T) {
 	if code, body := admin.do("PUT", "/repos/"+repoID+"/members/user/"+tom.ID, map[string]string{"role": "contributor"}); code != 200 {
 		t.Fatalf("grant: %d %v", code, body)
 	}
-	code, list := tc2.do("GET", "/repos", nil)
+	code, list := tc2.do("GET", "/orgs/default/repos", nil)
 	if code != 200 || len(list["items"].([]any)) != 1 || list["items"].([]any)[0].(map[string]any)["role"] != "contributor" {
 		t.Fatalf("tom's repos: %v", list)
 	}
 	if code, _ := tc2.do("PATCH", "/repos/"+repoID, map[string]any{"display_name": "Nope"}); code != 403 {
 		t.Fatalf("contributor changed settings: %d", code)
 	}
-	if code, _ := tc2.do("POST", "/repos", map[string]any{"forge_host_id": hostID, "clone_url": "file://" + remote}); code != 403 {
+	if code, _ := tc2.do("POST", "/orgs/default/repos", map[string]any{"forge_host_id": hostID, "clone_url": "file://" + remote}); code != 403 {
 		t.Fatalf("contributor connected a repo: %d", code)
 	}
 
@@ -251,7 +251,7 @@ func TestConnectGitLabRefusedToken(t *testing.T) {
 	if code != 201 {
 		t.Fatalf("add gitlab: %d %v", code, h)
 	}
-	code, body := admin.do("POST", "/repos", map[string]any{"forge_host_id": h["id"], "owner": "advocacy", "name": "dispatch-kb", "token": "glpat-elsewhere"})
+	code, body := admin.do("POST", "/orgs/default/repos", map[string]any{"forge_host_id": h["id"], "owner": "advocacy", "name": "dispatch-kb", "token": "glpat-elsewhere"})
 	host := strings.TrimPrefix(gl.URL, "http://")
 	if msg := toJSON(body); code != 422 || !strings.Contains(msg, "token") || !strings.Contains(msg, host+" refused this token (401)") {
 		t.Fatalf("connect: %d %s", code, msg)

@@ -16,6 +16,8 @@ import (
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/groups"
+	"github.com/kmdn-app/kmdn/internal/orghttp"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
@@ -27,13 +29,17 @@ type RepoView struct {
 	Scope Scope       `json:"scope"`
 }
 
+// OrgRoutes registers an org's repository collection (under /orgs/{org}).
+func (s *Service) OrgRoutes(r chi.Router) {
+	r.Get("/repos", s.list)
+	r.With(orghttp.RequireAdmin).Post("/repos", s.connect)
+	r.Get("/repos/by-slug/{owner}/{name}", s.bySlug)
+}
+
 // Routes registers repository endpoints.
 func (s *Service) Routes(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Require)
-		r.Get("/repos", s.list)
-		r.With(auth.RequireAdmin).Post("/repos", s.connect)
-		r.Get("/repos/by-slug/{owner}/{name}", s.bySlug)
 		r.Route("/repos/{repo}", func(r chi.Router) {
 			r.Get("/", s.get)
 			r.Patch("/", s.update)
@@ -84,12 +90,12 @@ func view(r Repo, role access.Role) RepoView { return RepoView{Repo: r, Role: ro
 
 func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
-	idsList, err := access.RepoIDs(r.Context(), s.DB, p.User)
+	idsList, err := access.RepoIDs(r.Context(), s.DB, p.User, orghttp.Current(r).ID)
 	if err != nil {
 		api.Error(w, r, err)
 		return
 	}
-	list, err := List(r.Context(), s.DB, idsList, p.User.IsInstanceAdmin)
+	list, err := List(r.Context(), s.DB, idsList, false)
 	if err != nil {
 		api.Error(w, r, err)
 		return
@@ -113,6 +119,7 @@ func (s *Service) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := auth.FromContext(r.Context())
+	in.OrgID = orghttp.Current(r).ID
 	repo, jobID, err := s.Connect(r.Context(), p, in)
 	if err != nil {
 		var inv *ErrInvalid
@@ -127,7 +134,7 @@ func (s *Service) connect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) bySlug(w http.ResponseWriter, r *http.Request) {
-	repo, err := BySlug(r.Context(), s.DB, chi.URLParam(r, "owner"), chi.URLParam(r, "name"))
+	repo, err := BySlug(r.Context(), s.DB, orghttp.Current(r).ID, chi.URLParam(r, "owner"), chi.URLParam(r, "name"))
 	if err != nil {
 		api.Error(w, r, api.ErrNotFound)
 		return
@@ -415,13 +422,21 @@ func (s *Service) putMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	switch ptype {
 	case access.UserPrincipal:
-		if _, err := users.ByID(ctx, s.DB, pid); err != nil {
-			api.Error(w, r, api.Invalid("id", "No such user."))
+		// Only members of the repo's org can be granted a role on it.
+		u, err := users.ByID(ctx, s.DB, pid)
+		if err == nil {
+			var in bool
+			if in, err = orgs.Belongs(ctx, s.DB, repo.OrgID, u); err == nil && !in {
+				err = store.ErrNotFound
+			}
+		}
+		if err != nil {
+			api.Error(w, r, api.Invalid("id", "No such person in this organization."))
 			return
 		}
 	case access.GroupPrincipal:
-		if _, err := groups.Get(ctx, s.DB, pid); err != nil {
-			api.Error(w, r, api.Invalid("id", "No such group."))
+		if g, err := groups.Get(ctx, s.DB, pid); err != nil || g.OrgID != repo.OrgID {
+			api.Error(w, r, api.Invalid("id", "No such group in this organization."))
 			return
 		}
 	default:

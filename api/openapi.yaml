@@ -14,6 +14,7 @@ info:
 servers:
   - url: /api/v1
 tags:
+  - name: orgs
   - name: repos
   - name: people
   - name: auth
@@ -316,8 +317,111 @@ paths:
                   to: { type: string }
                   error: { type: string }
                   hint: { type: string }
-  /repos:
+  /orgs:
     get:
+      tags: [orgs]
+      operationId: listOrgs
+      summary: The organizations the caller belongs to, with their role
+      responses:
+        "200":
+          description: Organizations
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/OrgView" } } } }
+    post:
+      tags: [orgs]
+      operationId: createOrg
+      summary: Create an organization (multi mode; who may is orgs.allow_create); the caller becomes its owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrgInput" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/OrgView" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /orgs/{org}:
+    get:
+      tags: [orgs]
+      operationId: getOrg
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      responses:
+        "200": { description: Organization, content: { application/json: { schema: { $ref: "#/components/schemas/OrgView" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [orgs]
+      operationId: updateOrg
+      summary: Rename the org (admins) or change its address (owners)
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                slug: { type: string }
+      responses:
+        "200": { description: Organization, content: { application/json: { schema: { $ref: "#/components/schemas/OrgView" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /orgs/{org}/members:
+    get:
+      tags: [orgs]
+      operationId: listOrgMembers
+      summary: The org's members with their roles (org admins)
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/OrgMember" } } } }
+  /orgs/{org}/members/{user}:
+    patch:
+      tags: [orgs]
+      operationId: updateOrgMember
+      summary: Change a member's role or deactivate them in this org (admins; owners for owners)
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+        - { name: user, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string, enum: [member, admin, owner] }
+                status: { type: string, enum: [active, deactivated] }
+      responses:
+        "200": { description: Changed, content: { application/json: { schema: { type: object } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [orgs]
+      operationId: removeOrgMember
+      summary: Remove a member (admins), or leave the org (yourself)
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+        - { name: user, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Removed, content: { application/json: { schema: { type: object } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /orgs/{org}/repos:
+    get:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [repos]
       operationId: listRepos
       summary: Repositories the caller can see, with their role
@@ -332,9 +436,11 @@ paths:
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/RepoView" } }
     post:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [repos]
       operationId: connectRepo
-      summary: Connect a repository (instance admins)
+      summary: Connect a repository (org admins)
       requestBody:
         required: true
         content:
@@ -352,11 +458,12 @@ paths:
                   repo: { $ref: "#/components/schemas/RepoView" }
                   job_id: { type: string }
         "422": { $ref: "#/components/responses/Problem" }
-  /repos/by-slug/{owner}/{name}:
+  /orgs/{org}/repos/by-slug/{owner}/{name}:
     get:
       tags: [repos]
       operationId: getRepoBySlug
       parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
         - { name: owner, in: path, required: true, schema: { type: string } }
         - { name: name, in: path, required: true, schema: { type: string } }
       responses:
@@ -659,12 +766,13 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/ForgeRepoInfo" } } } }
-  /users:
+  /orgs/{org}/users:
     get:
       tags: [people]
       operationId: searchUsers
-      summary: Find active users by name or email (member pickers)
+      summary: Find the org's active members by name or email (member pickers)
       parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
         - { name: q, in: query, schema: { type: string } }
       responses:
         "200":
@@ -672,8 +780,10 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/UserRef" } } } }
-  /groups:
+  /orgs/{org}/groups:
     get:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [people]
       operationId: listGroupsPublic
       summary: Groups (for granting repository roles)
@@ -723,8 +833,10 @@ paths:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         "204": { description: Sessions revoked }
-  /admin/groups:
+  /orgs/{org}/admin/groups:
     get:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: listGroups
       responses:
@@ -734,6 +846,8 @@ paths:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Group" } } } }
     post:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: createGroup
       requestBody:
@@ -744,10 +858,12 @@ paths:
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Group" } } } }
         "422": { $ref: "#/components/responses/Problem" }
-  /admin/groups/{id}:
+  /orgs/{org}/admin/groups/{id}:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
     patch:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: updateGroup
       requestBody:
@@ -758,15 +874,18 @@ paths:
       responses:
         "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Group" } } } }
     delete:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: deleteGroup
       responses:
         "204": { description: Deleted (its repository grants are removed too) }
-  /admin/groups/{id}/members:
+  /orgs/{org}/admin/groups/{id}/members:
     get:
       tags: [admin]
       operationId: listGroupMembers
       parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         "200":
@@ -774,11 +893,13 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } } } }
-  /admin/groups/{id}/members/{user}:
+  /orgs/{org}/admin/groups/{id}/members/{user}:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
       - { name: user, in: path, required: true, schema: { type: string } }
     put:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: addGroupMember
       responses:
@@ -788,6 +909,8 @@ paths:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } } } }
     delete:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: removeGroupMember
       responses:
@@ -818,12 +941,60 @@ paths:
                   next_cursor: { type: string }
                   actions: { type: array, items: { type: string }, description: "Every action recorded (first page only)" }
         "422": { $ref: "#/components/responses/Problem" }
+  /orgs/{org}/admin/audit:
+    get:
+      tags: [admin]
+      operationId: listAuditOrg
+      summary: Audit log entries, newest first, 100 at a time
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+        - { $ref: "#/components/parameters/AuditActorType" }
+        - { $ref: "#/components/parameters/AuditActorID" }
+        - { $ref: "#/components/parameters/AuditAction" }
+        - { $ref: "#/components/parameters/AuditRepo" }
+        - { $ref: "#/components/parameters/AuditFrom" }
+        - { $ref: "#/components/parameters/AuditTo" }
+        - { name: cursor, in: query, schema: { type: string }, description: "next_cursor from the previous page" }
+      responses:
+        "200":
+          description: Entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+                  next_cursor: { type: string }
+                  actions: { type: array, items: { type: string }, description: "Every action recorded (first page only)" }
+        "422": { $ref: "#/components/responses/Problem" }
   /admin/audit/export:
     get:
       tags: [admin]
       operationId: exportAudit
       summary: Every matching entry as a CSV or NDJSON download
       parameters:
+        - { name: format, in: query, required: true, schema: { type: string, enum: [csv, ndjson] } }
+        - { $ref: "#/components/parameters/AuditActorType" }
+        - { $ref: "#/components/parameters/AuditActorID" }
+        - { $ref: "#/components/parameters/AuditAction" }
+        - { $ref: "#/components/parameters/AuditRepo" }
+        - { $ref: "#/components/parameters/AuditFrom" }
+        - { $ref: "#/components/parameters/AuditTo" }
+      responses:
+        "200":
+          description: The export
+          content:
+            text/csv: { schema: { type: string } }
+            application/x-ndjson: { schema: { type: string } }
+        "422": { $ref: "#/components/responses/Problem" }
+  /orgs/{org}/admin/audit/export:
+    get:
+      tags: [admin]
+      operationId: exportAuditOrg
+      summary: Every matching entry as a CSV or NDJSON download
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
         - { name: format, in: query, required: true, schema: { type: string, enum: [csv, ndjson] } }
         - { $ref: "#/components/parameters/AuditActorType" }
         - { $ref: "#/components/parameters/AuditActorID" }
@@ -2641,6 +2812,12 @@ paths:
         "204": { description: Removed }
 components:
   parameters:
+    OrgSlug:
+      name: org
+      in: path
+      required: true
+      description: The organization's slug
+      schema: { type: string }
     RepoID:
       name: repo
       in: path
@@ -3441,11 +3618,44 @@ components:
           properties:
             repos: { type: integer }
             sessions: { type: integer }
-    Group:
+    Org:
       type: object
-      required: [id, name, description, members, created_at]
+      required: [id, slug, name, status, created_at]
       properties:
         id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [active, suspended, deleting] }
+        created_at: { type: string, format: date-time }
+    OrgView:
+      allOf:
+        - { $ref: "#/components/schemas/Org" }
+        - type: object
+          required: [role]
+          properties:
+            role: { type: string, enum: [member, admin, owner, ""], description: "Empty for an instance admin outside the org" }
+    OrgInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        slug: { type: string, description: "Made from the name when empty" }
+    OrgMember:
+      type: object
+      required: [id, name, email, role, status, joined_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [member, admin, owner] }
+        status: { type: string, enum: [active, deactivated] }
+        joined_at: { type: integer, description: Unix milliseconds }
+    Group:
+      type: object
+      required: [id, org_id, name, description, members, created_at]
+      properties:
+        id: { type: string }
+        org_id: { type: string }
         name: { type: string }
         description: { type: string }
         members: { type: integer }
@@ -3578,9 +3788,10 @@ components:
             convert_to_webp: { type: boolean }
     RepoView:
       type: object
-      required: [id, forge_host_id, forge_kind, owner, name, slug, display_name, target_branch, content_root, include, exclude, settings, protection, head_sha, health, health_detail, role, scope, created_at]
+      required: [id, org_id, forge_host_id, forge_kind, owner, name, slug, display_name, target_branch, content_root, include, exclude, settings, protection, head_sha, health, health_detail, role, scope, created_at]
       properties:
         id: { type: string }
+        org_id: { type: string }
         forge_host_id: { type: string }
         forge_kind: { type: string, enum: [github, gitlab, git] }
         external_id: { type: string }

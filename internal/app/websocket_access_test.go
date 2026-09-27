@@ -12,6 +12,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/groups"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -68,7 +69,7 @@ func TestWebSocketRechecksLiveAccess(t *testing.T) {
 			}
 			var groupID string
 			if change == "group" {
-				g, err := groups.Create(ctx, a.DB, "Editors", "")
+				g, err := groups.Create(ctx, a.DB, orgs.DefaultID, "Editors", "")
 				if err != nil {
 					t.Fatal(err)
 				}

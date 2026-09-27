@@ -97,7 +97,7 @@ export default async function setup() {
   await admin.call("POST", "/setup/admin", { token, name: ADMIN.name, email: ADMIN.email, instance_name: "Acme Docs" });
   await admin.call("POST", "/setup/complete");
   const host = await admin.call("POST", "/admin/forges", { kind: "gitlab", base_url: FORGE_URL, display_name: "Acme GitLab" });
-  const connected = await admin.call("POST", "/repos", { forge_host_id: host.id, owner: "acme", name: "handbook", token: FORGE_TOKEN, content_root: "docs/" });
+  const connected = await admin.call("POST", "/orgs/default/repos", { forge_host_id: host.id, owner: "acme", name: "handbook", token: FORGE_TOKEN, content_root: "docs/" });
   const repoID = connected.repo.id as string;
   for (let i = 0; i < 100; i++) {
     const r = await admin.call("GET", `/repos/${repoID}`);

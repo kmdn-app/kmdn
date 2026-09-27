@@ -288,7 +288,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/repos": {
+    "/orgs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The organizations the caller belongs to, with their role */
+        get: operations["listOrgs"];
+        put?: never;
+        /** Create an organization (multi mode; who may is orgs.allow_create); the caller becomes its owner */
+        post: operations["createOrg"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getOrg"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename the org (admins) or change its address (owners) */
+        patch: operations["updateOrg"];
+        trace?: never;
+    };
+    "/orgs/{org}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The org's members with their roles (org admins) */
+        get: operations["listOrgMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/members/{user}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a member (admins), or leave the org (yourself) */
+        delete: operations["removeOrgMember"];
+        options?: never;
+        head?: never;
+        /** Change a member's role or deactivate them in this org (admins; owners for owners) */
+        patch: operations["updateOrgMember"];
+        trace?: never;
+    };
+    "/orgs/{org}/repos": {
         parameters: {
             query?: never;
             header?: never;
@@ -298,7 +368,7 @@ export interface paths {
         /** Repositories the caller can see, with their role */
         get: operations["listRepos"];
         put?: never;
-        /** Connect a repository (instance admins) */
+        /** Connect a repository (org admins) */
         post: operations["connectRepo"];
         delete?: never;
         options?: never;
@@ -306,7 +376,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/repos/by-slug/{owner}/{name}": {
+    "/orgs/{org}/repos/by-slug/{owner}/{name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -668,14 +738,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/users": {
+    "/orgs/{org}/users": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Find active users by name or email (member pickers) */
+        /** Find the org's active members by name or email (member pickers) */
         get: operations["searchUsers"];
         put?: never;
         post?: never;
@@ -685,7 +755,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/groups": {
+    "/orgs/{org}/groups": {
         parameters: {
             query?: never;
             header?: never;
@@ -750,7 +820,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/groups": {
+    "/orgs/{org}/admin/groups": {
         parameters: {
             query?: never;
             header?: never;
@@ -766,7 +836,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/groups/{id}": {
+    "/orgs/{org}/admin/groups/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -784,7 +854,7 @@ export interface paths {
         patch: operations["updateGroup"];
         trace?: never;
     };
-    "/admin/groups/{id}/members": {
+    "/orgs/{org}/admin/groups/{id}/members": {
         parameters: {
             query?: never;
             header?: never;
@@ -800,7 +870,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/groups/{id}/members/{user}": {
+    "/orgs/{org}/admin/groups/{id}/members/{user}": {
         parameters: {
             query?: never;
             header?: never;
@@ -836,6 +906,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit log entries, newest first, 100 at a time */
+        get: operations["listAuditOrg"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/audit/export": {
         parameters: {
             query?: never;
@@ -845,6 +932,23 @@ export interface paths {
         };
         /** Every matching entry as a CSV or NDJSON download */
         get: operations["exportAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/admin/audit/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every matching entry as a CSV or NDJSON download */
+        get: operations["exportAuditOrg"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3365,8 +3469,41 @@ export interface components {
             repos: number;
             sessions: number;
         };
+        Org: {
+            id: string;
+            slug: string;
+            name: string;
+            /** @enum {string} */
+            status: "active" | "suspended" | "deleting";
+            /** Format: date-time */
+            created_at: string;
+        };
+        OrgView: components["schemas"]["Org"] & {
+            /**
+             * @description Empty for an instance admin outside the org
+             * @enum {string}
+             */
+            role: "member" | "admin" | "owner" | "";
+        };
+        OrgInput: {
+            name: string;
+            /** @description Made from the name when empty */
+            slug?: string;
+        };
+        OrgMember: {
+            id: string;
+            name: string;
+            email: string;
+            /** @enum {string} */
+            role: "member" | "admin" | "owner";
+            /** @enum {string} */
+            status: "active" | "deactivated";
+            /** @description Unix milliseconds */
+            joined_at: number;
+        };
         Group: {
             id: string;
+            org_id: string;
             name: string;
             description: string;
             members: number;
@@ -3500,6 +3637,7 @@ export interface components {
         };
         RepoView: {
             id: string;
+            org_id: string;
             forge_host_id: string;
             /** @enum {string} */
             forge_kind: "github" | "gitlab" | "git";
@@ -3726,6 +3864,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description The organization's slug */
+        OrgSlug: string;
         RepoID: string;
         AuditActorType: "user" | "system" | "agent_key" | "assistant";
         AuditActorID: string;
@@ -4247,11 +4387,208 @@ export interface operations {
             };
         };
     };
-    listRepos: {
+    listOrgs: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Organizations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["OrgView"][];
+                    };
+                };
+            };
+        };
+    };
+    createOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Organization */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgView"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    slug?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Organization */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listOrgMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["OrgMember"][];
+                    };
+                };
+            };
+        };
+    };
+    removeOrgMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateOrgMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    role?: "member" | "admin" | "owner";
+                    /** @enum {string} */
+                    status?: "active" | "deactivated";
+                };
+            };
+        };
+        responses: {
+            /** @description Changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listRepos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -4273,7 +4610,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody: {
@@ -4302,6 +4642,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
                 owner: string;
                 name: string;
             };
@@ -4902,7 +5244,10 @@ export interface operations {
                 q?: string;
             };
             header?: never;
-            path?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -4924,7 +5269,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -5023,7 +5371,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -5045,7 +5396,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody: {
@@ -5072,6 +5426,8 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
             };
             cookie?: never;
         };
@@ -5092,6 +5448,8 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
             };
             cookie?: never;
         };
@@ -5117,6 +5475,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
                 id: string;
             };
             cookie?: never;
@@ -5143,6 +5503,8 @@ export interface operations {
             path: {
                 id: string;
                 user: string;
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
             };
             cookie?: never;
         };
@@ -5168,6 +5530,8 @@ export interface operations {
             path: {
                 id: string;
                 user: string;
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
             };
             cookie?: never;
         };
@@ -5220,6 +5584,47 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    listAuditOrg: {
+        parameters: {
+            query?: {
+                actor_type?: components["parameters"]["AuditActorType"];
+                actor_id?: components["parameters"]["AuditActorID"];
+                /** @description An action, or a family ending in a dot (revision.) */
+                action?: components["parameters"]["AuditAction"];
+                repo?: components["parameters"]["AuditRepo"];
+                /** @description From this UTC day (inclusive) */
+                from?: components["parameters"]["AuditFrom"];
+                /** @description Up to this UTC day (inclusive) */
+                to?: components["parameters"]["AuditTo"];
+                /** @description next_cursor from the previous page */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AuditEntry"][];
+                        next_cursor?: string;
+                        /** @description Every action recorded (first page only) */
+                        actions?: string[];
+                    };
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
     exportAudit: {
         parameters: {
             query: {
@@ -5236,6 +5641,42 @@ export interface operations {
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The export */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                    "application/x-ndjson": string;
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    exportAuditOrg: {
+        parameters: {
+            query: {
+                format: "csv" | "ndjson";
+                actor_type?: components["parameters"]["AuditActorType"];
+                actor_id?: components["parameters"]["AuditActorID"];
+                /** @description An action, or a family ending in a dot (revision.) */
+                action?: components["parameters"]["AuditAction"];
+                repo?: components["parameters"]["AuditRepo"];
+                /** @description From this UTC day (inclusive) */
+                from?: components["parameters"]["AuditFrom"];
+                /** @description Up to this UTC day (inclusive) */
+                to?: components["parameters"]["AuditTo"];
+            };
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody?: never;

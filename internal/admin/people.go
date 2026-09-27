@@ -17,26 +17,39 @@ import (
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/groups"
+	"github.com/kmdn-app/kmdn/internal/orghttp"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
-// People handles /admin/users, /admin/groups, /admin/audit and the user
-// directory used by member pickers.
+// People handles the instance's accounts (/admin/users), the audit log, and
+// each org's directory (member pickers), groups and audit log.
 type People struct {
 	DB   *store.DB
 	Auth *auth.Service
 	Log  *slog.Logger
 }
 
+// Routes registers the instance console's people and audit endpoints.
 func (h *People) Routes(r chi.Router) {
-	r.With(auth.Require).Get("/users", h.directory)
-	r.With(auth.Require).Get("/groups", h.listGroups)
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireAdmin)
 		r.Get("/admin/users", h.listUsers)
 		r.Patch("/admin/users/{id}", h.updateUser)
 		r.Post("/admin/users/{id}/revoke-sessions", h.revokeSessions)
+		r.Get("/admin/audit", h.auditLog)
+		r.Get("/admin/audit/export", h.auditExport)
+	})
+}
+
+// OrgRoutes registers an org's directory, groups and audit log (under
+// /orgs/{org}).
+func (h *People) OrgRoutes(r chi.Router) {
+	r.Get("/users", h.directory)
+	r.Get("/groups", h.listGroups)
+	r.Group(func(r chi.Router) {
+		r.Use(orghttp.RequireAdmin)
 		r.Get("/admin/groups", h.listGroups)
 		r.Post("/admin/groups", h.createGroup)
 		r.Patch("/admin/groups/{id}", h.updateGroup)
@@ -107,14 +120,21 @@ func (h *People) listUsers(w http.ResponseWriter, r *http.Request) {
 	api.JSON(w, http.StatusOK, map[string]any{"items": list})
 }
 
-// directory lets signed-in people find users by name or email (member pickers, @mentions).
+// directory lets an org's members find each other by name or email (member
+// pickers, @mentions).
 func (h *People) directory(w http.ResponseWriter, r *http.Request) {
+	members, margs, err := orgs.MemberClause(r.Context(), h.DB, orghttp.Current(r).ID, "u.id")
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
 	where, args := searchWhere(r.URL.Query().Get("q"))
 	if where == "" {
-		where = "WHERE u.status = 'active'"
+		where = "WHERE u.status = 'active' AND " + members
 	} else {
-		where = "WHERE (" + strings.TrimPrefix(where, "WHERE ") + ") AND u.status = 'active'"
+		where = "WHERE (" + strings.TrimPrefix(where, "WHERE ") + ") AND u.status = 'active' AND " + members
 	}
+	args = append(args, margs...)
 	list, err := h.queryUsers(r, where, args...)
 	if err != nil {
 		api.Error(w, r, err)
@@ -222,7 +242,7 @@ func (h *People) revokeSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *People) listGroups(w http.ResponseWriter, r *http.Request) {
-	list, err := groups.List(r.Context(), h.DB)
+	list, err := groups.List(r.Context(), h.DB, orghttp.Current(r).ID)
 	if err != nil {
 		api.Error(w, r, err)
 		return
@@ -253,7 +273,7 @@ func (h *People) createGroup(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
-	g, err := groups.Create(r.Context(), h.DB, b.Name, b.Description)
+	g, err := groups.Create(r.Context(), h.DB, orghttp.Current(r).ID, b.Name, b.Description)
 	if store.IsUniqueViolation(err) {
 		api.Error(w, r, api.Invalid("name", "A group with this name already exists."))
 		return
@@ -263,7 +283,7 @@ func (h *People) createGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := auth.FromContext(r.Context())
-	_ = audit.Write(r.Context(), h.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, Action: "group.created", TargetType: "group", TargetID: g.ID})
+	_ = audit.Write(r.Context(), h.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: g.OrgID, Action: "group.created", TargetType: "group", TargetID: g.ID})
 	api.JSON(w, http.StatusCreated, g)
 }
 
@@ -278,8 +298,7 @@ func (h *People) updateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
-	if _, err := groups.Get(r.Context(), h.DB, id); err != nil {
-		api.Error(w, r, api.ErrNotFound)
+	if _, ok := h.group(w, r); !ok {
 		return
 	}
 	if err := groups.Update(r.Context(), h.DB, id, b.Name, b.Description); err != nil {
@@ -295,24 +314,40 @@ func (h *People) updateGroup(w http.ResponseWriter, r *http.Request) {
 	api.JSON(w, http.StatusOK, g)
 }
 
-// audit records an admin's action.
+// audit records an admin's action (in the org of the request, if any).
 func (h *People) audit(r *http.Request, action, targetType, targetID string, data map[string]any) {
 	p, _ := auth.FromContext(r.Context())
-	_ = audit.Write(r.Context(), h.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, Action: action, TargetType: targetType, TargetID: targetID, Data: data})
+	c, _ := orgs.FromContext(r.Context())
+	_ = audit.Write(r.Context(), h.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: c.Org.ID, Action: action, TargetType: targetType, TargetID: targetID, Data: data})
+}
+
+// group loads the {id} group of the path; groups of other orgs are 404.
+func (h *People) group(w http.ResponseWriter, r *http.Request) (groups.Group, bool) {
+	g, err := groups.Get(r.Context(), h.DB, chi.URLParam(r, "id"))
+	if err != nil || g.OrgID != orghttp.Current(r).ID {
+		api.Error(w, r, api.ErrNotFound)
+		return g, false
+	}
+	return g, true
 }
 
 func (h *People) deleteGroup(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if err := groups.Delete(r.Context(), h.DB, id); err != nil {
+	g, ok := h.group(w, r)
+	if !ok {
+		return
+	}
+	if err := groups.Delete(r.Context(), h.DB, g.ID); err != nil {
 		api.Error(w, r, err)
 		return
 	}
-	p, _ := auth.FromContext(r.Context())
-	_ = audit.Write(r.Context(), h.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, Action: "group.deleted", TargetType: "group", TargetID: id})
+	h.audit(r, "group.deleted", "group", g.ID, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *People) groupMembers(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.group(w, r); !ok {
+		return
+	}
 	ids, err := groups.MemberIDs(r.Context(), h.DB, chi.URLParam(r, "id"))
 	if err != nil {
 		api.Error(w, r, err)
@@ -329,12 +364,18 @@ func (h *People) groupMembers(w http.ResponseWriter, r *http.Request) {
 
 func (h *People) addGroupMember(w http.ResponseWriter, r *http.Request) {
 	gid, uid := chi.URLParam(r, "id"), chi.URLParam(r, "user")
-	if _, err := groups.Get(r.Context(), h.DB, gid); err != nil {
-		api.Error(w, r, api.ErrNotFound)
+	g, ok := h.group(w, r)
+	if !ok {
 		return
 	}
-	if _, err := users.ByID(r.Context(), h.DB, uid); err != nil {
-		api.Error(w, r, api.Invalid("user", "No such user."))
+	// Only the org's members can join its groups.
+	u, err := users.ByID(r.Context(), h.DB, uid)
+	in := false
+	if err == nil {
+		in, err = orgs.Belongs(r.Context(), h.DB, g.OrgID, u)
+	}
+	if err != nil || !in {
+		api.Error(w, r, api.Invalid("user", "No such person in this organization."))
 		return
 	}
 	if err := groups.AddMember(r.Context(), h.DB, gid, uid); err != nil {
@@ -346,6 +387,9 @@ func (h *People) addGroupMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *People) removeGroupMember(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.group(w, r); !ok {
+		return
+	}
 	if err := groups.RemoveMember(r.Context(), h.DB, chi.URLParam(r, "id"), chi.URLParam(r, "user")); err != nil {
 		api.Error(w, r, err)
 		return
@@ -360,6 +404,10 @@ func (h *People) removeGroupMember(w http.ResponseWriter, r *http.Request) {
 func auditFilter(r *http.Request) (audit.Filter, error) {
 	q := r.URL.Query()
 	f := audit.Filter{ActorType: q.Get("actor_type"), ActorID: q.Get("actor_id"), Action: q.Get("action"), RepoID: q.Get("repo")}
+	// Under /orgs/{org}, only that org's entries.
+	if c, ok := orgs.FromContext(r.Context()); ok {
+		f.OrgID = c.Org.ID
+	}
 	for _, d := range []struct {
 		key string
 		to  *time.Time
@@ -402,7 +450,7 @@ func (h *People) auditLog(w http.ResponseWriter, r *http.Request) {
 		out["next_cursor"] = strconv.FormatInt(store.Millis(last.At), 10) + "_" + last.ID
 	}
 	if r.URL.Query().Get("cursor") == "" {
-		actions, err := audit.Actions(r.Context(), h.DB)
+		actions, err := audit.Actions(r.Context(), h.DB, f.OrgID)
 		if err != nil {
 			api.Error(w, r, err)
 			return

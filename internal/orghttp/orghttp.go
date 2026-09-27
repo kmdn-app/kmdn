@@ -1,0 +1,466 @@
+// Package orghttp serves organizations over HTTP and resolves the org of
+// org-scoped routes (/api/v1/orgs/{org}/…, docs/specs/16-organizations.md).
+package orghttp
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/kmdn-app/kmdn/internal/api"
+	"github.com/kmdn-app/kmdn/internal/audit"
+	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/orgs"
+	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/users"
+)
+
+// Service handles /orgs.
+type Service struct {
+	DB *store.DB
+	// AllowCreate is config orgs.allow_create: "admins" or "anyone".
+	AllowCreate string
+	Log         *slog.Logger
+}
+
+// View is an org as the API returns it, with the caller's role.
+type View struct {
+	orgs.Org
+	Role string `json:"role"`
+}
+
+var (
+	errSingle   = api.Err(http.StatusConflict, "orgs_single_mode", "This instance has a single organization. Set orgs.mode to multi to create more.")
+	errNoCreate = api.Err(http.StatusForbidden, "orgs_create_forbidden", "Only instance admins can create organizations here.")
+	errSlug     = api.Err(http.StatusConflict, "org_slug_taken", "Another organization already uses this address. Choose another.")
+	errOwner    = api.Err(http.StatusConflict, "org_last_owner", "An organization needs at least one owner. Make someone else an owner first.")
+)
+
+// Routes registers /orgs and /orgs/{org}, and mounts each scoped
+// function's routes under /orgs/{org} behind Resolve.
+func (s *Service) Routes(r chi.Router, scoped ...func(chi.Router)) {
+	r.Group(func(r chi.Router) {
+		r.Use(auth.Require)
+		r.Get("/orgs", s.list)
+		r.Post("/orgs", s.create)
+		r.Route("/orgs/{org}", func(r chi.Router) {
+			r.Use(s.Resolve)
+			r.Get("/", s.get)
+			r.With(RequireAdmin).Patch("/", s.update)
+			r.With(RequireAdmin).Get("/members", s.members)
+			r.With(RequireAdmin).Patch("/members/{user}", s.updateMember)
+			r.Delete("/members/{user}", s.removeMember)
+			for _, fn := range scoped {
+				fn(r)
+			}
+		})
+	})
+}
+
+// Resolve loads the {org} of the path and the caller's role in it. People
+// outside the org get 404, so slugs can't be probed; instance admins reach
+// any org.
+func (s *Service) Resolve(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, _ := auth.FromContext(r.Context())
+		o, err := orgs.BySlug(r.Context(), s.DB, chi.URLParam(r, "org"))
+		if errors.Is(err, store.ErrNotFound) || (err == nil && o.Status == orgs.Deleting) {
+			api.Error(w, r, api.ErrNotFound)
+			return
+		}
+		if err != nil {
+			api.Error(w, r, err)
+			return
+		}
+		role, err := orgs.Role(r.Context(), s.DB, o.ID, p.User)
+		if err != nil {
+			api.Error(w, r, err)
+			return
+		}
+		if role == "" && !p.User.IsInstanceAdmin {
+			api.Error(w, r, api.ErrNotFound)
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(orgs.WithCurrent(r.Context(), orgs.Current{Org: o, Role: role})))
+	})
+}
+
+// RequireAdmin rejects callers who don't administer the resolved org.
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, ok := orgs.FromContext(r.Context())
+		p, _ := auth.FromContext(r.Context())
+		if !ok || !c.Admin(p.User.IsInstanceAdmin) {
+			api.Error(w, r, api.ErrForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Current returns the resolved org; handlers mounted under /orgs/{org}
+// always have one.
+func Current(r *http.Request) orgs.Org {
+	c, _ := orgs.FromContext(r.Context())
+	return c.Org
+}
+
+func (s *Service) list(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	list, err := orgs.ForUser(r.Context(), s.DB, p.User)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	out := make([]View, 0, len(list))
+	for _, o := range list {
+		role, err := orgs.Role(r.Context(), s.DB, o.ID, p.User)
+		if err != nil {
+			api.Error(w, r, err)
+			return
+		}
+		out = append(out, View{o, role})
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
+func (s *Service) create(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, _ := auth.FromContext(ctx)
+	var in struct {
+		Name string `json:"name"`
+		Slug string `json:"slug"`
+	}
+	if err := api.Decode(r, &in); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	mode, err := orgs.Mode(ctx, s.DB)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	switch {
+	case mode == orgs.Single:
+		api.Error(w, r, errSingle)
+		return
+	case s.AllowCreate != "anyone" && !p.User.IsInstanceAdmin:
+		api.Error(w, r, errNoCreate)
+		return
+	}
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" || len(in.Name) > 100 {
+		api.Error(w, r, api.Invalid("name", "Give the organization a name (up to 100 characters)."))
+		return
+	}
+	var o orgs.Org
+	err = s.DB.InTx(ctx, func(tx *store.Tx) error {
+		if in.Slug != "" {
+			o, err = orgs.Create(ctx, tx, in.Slug, in.Name, p.User.ID)
+		} else {
+			o, err = createFree(ctx, tx, in.Name, p.User.ID)
+		}
+		if err != nil {
+			return err
+		}
+		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: o.ID, Action: "org.created", TargetType: "org", TargetID: o.ID,
+			Data: map[string]any{"slug": o.Slug}})
+	})
+	if !s.slugError(w, r, err) {
+		return
+	}
+	api.JSON(w, http.StatusCreated, View{o, orgs.Owner})
+}
+
+// createFree creates an org with a slug made from its name, adding -2, -3…
+// until one is free.
+func createFree(ctx context.Context, q store.Querier, name, owner string) (orgs.Org, error) {
+	base := orgs.Slugify(name)
+	for i := 1; i <= 100; i++ {
+		slug := base
+		if i > 1 {
+			suffix := fmt.Sprintf("-%d", i)
+			slug = strings.TrimSuffix(base[:min(len(base), 39-len(suffix))], "-") + suffix
+		}
+		o, err := orgs.Create(ctx, q, slug, name, owner)
+		if !errors.Is(err, orgs.ErrSlugTaken) {
+			return o, err
+		}
+	}
+	return orgs.Org{}, orgs.ErrSlugTaken
+}
+
+// slugError writes slug problems and other errors; it reports whether err
+// was nil.
+func (s *Service) slugError(w http.ResponseWriter, r *http.Request, err error) bool {
+	var bad *orgs.ErrSlug
+	switch {
+	case err == nil:
+		return true
+	case errors.As(err, &bad):
+		api.Error(w, r, api.Invalid("slug", bad.Reason))
+	case errors.Is(err, orgs.ErrSlugTaken):
+		api.Error(w, r, errSlug)
+	default:
+		api.Error(w, r, err)
+	}
+	return false
+}
+
+func (s *Service) get(w http.ResponseWriter, r *http.Request) {
+	c, _ := orgs.FromContext(r.Context())
+	api.JSON(w, http.StatusOK, View{c.Org, c.Role})
+}
+
+func (s *Service) update(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, _ := auth.FromContext(ctx)
+	c, _ := orgs.FromContext(ctx)
+	var in struct {
+		Name *string `json:"name"`
+		Slug *string `json:"slug"`
+	}
+	if err := api.Decode(r, &in); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	if in.Slug != nil && *in.Slug != c.Org.Slug && c.Role != orgs.Owner && !p.User.IsInstanceAdmin {
+		api.Error(w, r, api.Err(http.StatusForbidden, "org_owner_only", "Only owners can change the organization's address."))
+		return
+	}
+	if in.Name != nil && (strings.TrimSpace(*in.Name) == "" || len(*in.Name) > 100) {
+		api.Error(w, r, api.Invalid("name", "Give the organization a name (up to 100 characters)."))
+		return
+	}
+	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
+		if in.Name != nil {
+			if err := orgs.Rename(ctx, tx, c.Org.ID, *in.Name); err != nil {
+				return err
+			}
+		}
+		if in.Slug != nil && *in.Slug != c.Org.Slug {
+			if err := orgs.SetSlug(ctx, tx, c.Org.ID, *in.Slug); err != nil {
+				return err
+			}
+		}
+		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: c.Org.ID, Action: "org.updated", TargetType: "org", TargetID: c.Org.ID,
+			Data: map[string]any{"name": in.Name, "slug": in.Slug}})
+	})
+	if !s.slugError(w, r, err) {
+		return
+	}
+	o, err := orgs.ByID(ctx, s.DB, c.Org.ID)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusOK, View{o, c.Role})
+}
+
+// MemberView is a member in the org console.
+type MemberView struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`
+	Status   string `json:"status"`
+	JoinedAt int64  `json:"joined_at"`
+}
+
+// members lists the org's members. In single mode that is every account,
+// with the roles the membership rows give (members otherwise).
+func (s *Service) members(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	c, _ := orgs.FromContext(ctx)
+	where, args, err := orgs.MemberClause(ctx, s.DB, c.Org.ID, "u.id")
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	rows, err := store.Query(ctx, s.DB, `SELECT u.id, u.name, u.email, u.is_instance_admin, u.status, u.created_at, COALESCE(m.role, ''), COALESCE(m.status, ''), COALESCE(m.joined_at, 0)
+		FROM users u LEFT JOIN org_members m ON m.org_id = ? AND m.user_id = u.id
+		WHERE `+where+` ORDER BY u.name LIMIT 1000`, append([]any{c.Org.ID}, args...)...)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	defer rows.Close()
+	mode, err := orgs.Mode(ctx, s.DB)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	single := mode == orgs.Single
+	out := []MemberView{}
+	for rows.Next() {
+		var v MemberView
+		var admin bool
+		var created int64
+		var status string
+		if err := rows.Scan(&v.ID, &v.Name, &v.Email, &admin, &v.Status, &created, &v.Role, &status, &v.JoinedAt); err != nil {
+			api.Error(w, r, err)
+			return
+		}
+		if status == orgs.Deactivated {
+			v.Status = orgs.Deactivated
+		}
+		if v.Role == "" {
+			v.Role, v.JoinedAt = orgs.Member, created
+		}
+		if single && admin {
+			v.Role = orgs.Owner
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
+func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, _ := auth.FromContext(ctx)
+	c, _ := orgs.FromContext(ctx)
+	var in struct {
+		Role   *string `json:"role"`
+		Status *string `json:"status"`
+	}
+	if err := api.Decode(r, &in); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	target, current, ok := s.member(w, r, c)
+	if !ok {
+		return
+	}
+	if in.Role != nil && !orgs.ValidRole(*in.Role) {
+		api.Error(w, r, api.Invalid("role", "Use member, admin or owner."))
+		return
+	}
+	if in.Status != nil && *in.Status != orgs.Active && *in.Status != orgs.Deactivated {
+		api.Error(w, r, api.Invalid("status", "Use active or deactivated."))
+		return
+	}
+	isOwner := c.Role == orgs.Owner || p.User.IsInstanceAdmin
+	if (in.Role != nil && (*in.Role == orgs.Owner || current == orgs.Owner)) && !isOwner {
+		api.Error(w, r, api.Err(http.StatusForbidden, "org_owner_only", "Only owners can add or remove owners."))
+		return
+	}
+	losesOwner := current == orgs.Owner && ((in.Role != nil && *in.Role != orgs.Owner) || (in.Status != nil && *in.Status == orgs.Deactivated))
+	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
+		if losesOwner {
+			if err := lastOwner(ctx, tx, c.Org.ID); err != nil {
+				return err
+			}
+		}
+		role := current
+		if in.Role != nil {
+			role = *in.Role
+		}
+		if err := orgs.AddMember(ctx, tx, c.Org.ID, target.ID, role, p.User.ID); err != nil {
+			return err
+		}
+		if in.Status != nil && *in.Status == orgs.Deactivated {
+			if err := orgs.SetMemberStatus(ctx, tx, c.Org.ID, target.ID, orgs.Deactivated); err != nil {
+				return err
+			}
+		}
+		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: c.Org.ID, Action: "org.member_changed", TargetType: "user", TargetID: target.ID,
+			Data: map[string]any{"role": in.Role, "status": in.Status}})
+	})
+	if errors.Is(err, errOwner) {
+		api.Error(w, r, errOwner)
+		return
+	}
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// removeMember takes someone out of the org: org admins remove others,
+// anyone may leave.
+func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, _ := auth.FromContext(ctx)
+	c, _ := orgs.FromContext(ctx)
+	target, current, ok := s.member(w, r, c)
+	if !ok {
+		return
+	}
+	if target.ID != p.User.ID && !c.Admin(p.User.IsInstanceAdmin) {
+		api.Error(w, r, api.ErrForbidden)
+		return
+	}
+	if current == orgs.Owner && c.Role != orgs.Owner && !p.User.IsInstanceAdmin {
+		api.Error(w, r, api.Err(http.StatusForbidden, "org_owner_only", "Only owners can remove an owner."))
+		return
+	}
+	if c.Org.ID == orgs.DefaultID {
+		if mode, err := orgs.Mode(ctx, s.DB); err != nil || mode == orgs.Single {
+			api.Error(w, r, api.Err(http.StatusConflict, "orgs_single_mode", "Everyone belongs to this organization; deactivate the account instead."))
+			return
+		}
+	}
+	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
+		if current == orgs.Owner {
+			if err := lastOwner(ctx, tx, c.Org.ID); err != nil {
+				return err
+			}
+		}
+		if err := orgs.RemoveMember(ctx, tx, c.Org.ID, target.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
+		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: c.Org.ID, Action: "org.member_removed", TargetType: "user", TargetID: target.ID})
+	})
+	if errors.Is(err, errOwner) {
+		api.Error(w, r, errOwner)
+		return
+	}
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// member loads the {user} of the path and their current role; people
+// outside the org are 404.
+func (s *Service) member(w http.ResponseWriter, r *http.Request, c orgs.Current) (users.User, string, bool) {
+	u, err := users.ByID(r.Context(), s.DB, chi.URLParam(r, "user"))
+	if err != nil {
+		api.Error(w, r, api.ErrNotFound)
+		return u, "", false
+	}
+	role, err := orgs.Role(r.Context(), s.DB, c.Org.ID, u)
+	if err != nil {
+		api.Error(w, r, err)
+		return u, "", false
+	}
+	if role == "" {
+		api.Error(w, r, api.ErrNotFound)
+		return u, "", false
+	}
+	return u, role, true
+}
+
+// lastOwner fails when the org has a single owner left (called before that
+// owner is demoted, deactivated or removed).
+func lastOwner(ctx context.Context, q store.Querier, orgID string) error {
+	n, err := orgs.CountOwners(ctx, q, orgID)
+	if err != nil {
+		return err
+	}
+	if n <= 1 {
+		return errOwner
+	}
+	return nil
+}

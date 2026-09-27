@@ -12,7 +12,7 @@ import { lastRepo } from "@/lib/last-repo";
 /** Home: open the last (or first) repository, or explain what's missing. */
 export const Route = createFileRoute("/_app/")({
   beforeLoad: async ({ context }) => {
-    const repos = await context.queryClient.ensureQueryData(reposQuery);
+    const repos = await context.queryClient.ensureQueryData(reposQuery());
     const last = lastRepo();
     const pick = repos.find((r) => r.id === last) ?? repos[0];
     if (pick) throw redirect({ to: "/$owner/$repo", params: { owner: pick.owner, repo: pick.name } });

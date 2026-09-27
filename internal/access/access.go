@@ -1,7 +1,10 @@
 // Package access resolves per-repo roles. Roles are kmdn-managed only
 // (docs/specs/09-auth-permissions.md#roles-per-repo): a user's effective role
-// is the highest of their direct grant and the grants of their groups;
-// instance admins are Admin everywhere.
+// is the highest of their direct grant and the grants of their groups.
+// Roles only count inside the repo's organization
+// (docs/specs/16-organizations.md#roles): people outside it have none, org
+// admins and owners are Admin on its repos, and instance admins are Admin
+// everywhere.
 package access
 
 import (
@@ -11,6 +14,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
@@ -61,6 +65,19 @@ func Effective(ctx context.Context, q store.Querier, u users.User, repoID string
 	if u.Status != users.Active {
 		return None, nil
 	}
+	var orgID string
+	if err := store.QueryRow(ctx, q, `SELECT org_id FROM repos WHERE id = ?`, repoID).Scan(&orgID); errors.Is(err, sql.ErrNoRows) {
+		return None, nil
+	} else if err != nil {
+		return None, err
+	}
+	orgRole, err := orgs.Role(ctx, q, orgID, u)
+	if err != nil || orgRole == "" {
+		return None, err
+	}
+	if orgs.AtLeast(orgRole, orgs.Admin) {
+		return Admin, nil
+	}
 	rows, err := store.Query(ctx, q, `SELECT role FROM repo_members WHERE repo_id = ? AND (
 		(principal_type = 'user' AND principal_id = ?) OR
 		(principal_type = 'group' AND principal_id IN (SELECT group_id FROM group_members WHERE user_id = ?)))`, repoID, u.ID, u.ID)
@@ -79,13 +96,27 @@ func Effective(ctx context.Context, q store.Querier, u users.User, repoID string
 	return best, rows.Err()
 }
 
-// RepoIDs returns the repos u can see (any role). Instance admins see all.
-func RepoIDs(ctx context.Context, q store.Querier, u users.User) ([]string, error) {
-	query := `SELECT DISTINCT repo_id FROM repo_members WHERE (principal_type = 'user' AND principal_id = ?) OR
-		(principal_type = 'group' AND principal_id IN (SELECT group_id FROM group_members WHERE user_id = ?))`
-	args := []any{u.ID, u.ID}
-	if u.IsInstanceAdmin {
-		query, args = `SELECT id FROM repos`, nil
+// RepoIDs returns the repos of orgID that u can see (any role): all of
+// them for instance admins and org admins, the granted ones for members,
+// none outside the org.
+func RepoIDs(ctx context.Context, q store.Querier, u users.User, orgID string) ([]string, error) {
+	if u.Status != users.Active {
+		return nil, nil
+	}
+	all := u.IsInstanceAdmin
+	if !all {
+		role, err := orgs.Role(ctx, q, orgID, u)
+		if err != nil || role == "" {
+			return nil, err
+		}
+		all = orgs.AtLeast(role, orgs.Admin)
+	}
+	query := `SELECT DISTINCT m.repo_id FROM repo_members m JOIN repos r ON r.id = m.repo_id WHERE r.org_id = ? AND (
+		(m.principal_type = 'user' AND m.principal_id = ?) OR
+		(m.principal_type = 'group' AND m.principal_id IN (SELECT group_id FROM group_members WHERE user_id = ?)))`
+	args := []any{orgID, u.ID, u.ID}
+	if all {
+		query, args = `SELECT id FROM repos WHERE org_id = ?`, []any{orgID}
 	}
 	rows, err := store.Query(ctx, q, query, args...)
 	if err != nil {

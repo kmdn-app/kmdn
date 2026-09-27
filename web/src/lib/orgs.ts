@@ -1,0 +1,50 @@
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import type { components } from "@kmdn/api-client";
+import { api, unwrap } from "@/lib/api";
+
+export type OrgView = components["schemas"]["OrgView"];
+
+export const orgsQuery = queryOptions({
+  queryKey: ["orgs"],
+  queryFn: async () => (await unwrap(api.GET("/orgs"))).items,
+  staleTime: 60_000,
+});
+
+const KEY = "kmdn-org";
+let current = "";
+
+/** The org the app works in: the one remembered in this browser, else the first. */
+export function pickOrg(orgs: OrgView[]): OrgView | undefined {
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  return orgs.find((o) => o.slug === stored) ?? orgs[0];
+}
+
+/** Makes slug the current org (set by the signed-in layout before any page loads). */
+export function setCurrentOrg(slug: string) {
+  current = slug;
+  try {
+    localStorage.setItem(KEY, slug);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** The current org's slug, for API paths under /orgs/{org}. */
+export function currentOrg(): string {
+  return current;
+}
+
+export function useOrgs() {
+  return useQuery(orgsQuery);
+}
+
+/** The current org, once the list has loaded. */
+export function useCurrentOrg(): OrgView | undefined {
+  const { data } = useOrgs();
+  return data?.find((o) => o.slug === current) ?? (data ? pickOrg(data) : undefined);
+}

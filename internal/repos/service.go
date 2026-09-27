@@ -76,6 +76,8 @@ func (s *Service) Mirror(r Repo) *gitmirror.Mirror {
 
 // ConnectInput describes a repository to connect.
 type ConnectInput struct {
+	// OrgID is the org the repo joins, from the request path.
+	OrgID        string   `json:"-"`
 	ForgeHostID  string   `json:"forge_host_id"`
 	Owner        string   `json:"owner"`
 	Name         string   `json:"name"`
@@ -196,10 +198,10 @@ func (s *Service) Connect(ctx context.Context, by auth.Principal, in ConnectInpu
 		if exc == nil {
 			exc = []string{}
 		}
-		_, err = store.Exec(ctx, tx, `INSERT INTO repos (id, forge_host_id, install_id, external_id, owner, name, display_name, clone_url, web_url, default_branch, target_branch,
+		_, err = store.Exec(ctx, tx, `INSERT INTO repos (id, org_id, forge_host_id, install_id, external_id, owner, name, display_name, clone_url, web_url, default_branch, target_branch,
 			content_root, include_globs, exclude_globs, token_ref, webhook_secret_ref, created_by, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			id, h.ID, installID, fr.ExternalID, fr.Owner, fr.Name, display, fr.CloneURL, info.WebURL, info.DefaultBranch, target,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, in.OrgID, h.ID, installID, fr.ExternalID, fr.Owner, fr.Name, display, fr.CloneURL, info.WebURL, info.DefaultBranch, target,
 			NormalizeRoot(in.ContentRoot), mustJSON(inc), mustJSON(exc), tokenRef, hookRef, by.User.ID, store.Millis(time.Now()))
 		if err != nil {
 			if store.IsUniqueViolation(err) {

@@ -22,14 +22,17 @@ const (
 
 // Entry is one audit event. Never put secret values in Data.
 type Entry struct {
-	ActorType  string         `json:"actor_type"`
-	ActorID    string         `json:"actor_id,omitempty"`
-	IP         string         `json:"ip,omitempty"`
-	Action     string         `json:"action"` // e.g. "auth.sign_in", "user.invited"
-	TargetType string         `json:"target_type,omitempty"`
-	TargetID   string         `json:"target_id,omitempty"`
-	RepoID     string         `json:"repo_id,omitempty"`
-	Data       map[string]any `json:"data,omitempty"`
+	ActorType  string `json:"actor_type"`
+	ActorID    string `json:"actor_id,omitempty"`
+	IP         string `json:"ip,omitempty"`
+	Action     string `json:"action"` // e.g. "auth.sign_in", "user.invited"
+	TargetType string `json:"target_type,omitempty"`
+	TargetID   string `json:"target_id,omitempty"`
+	RepoID     string `json:"repo_id,omitempty"`
+	// OrgID is the org the event belongs to; when empty, the repo's org, or
+	// none for instance events.
+	OrgID string         `json:"org_id,omitempty"`
+	Data  map[string]any `json:"data,omitempty"`
 }
 
 // Record is a stored entry.
@@ -56,10 +59,10 @@ func Write(ctx context.Context, q store.Querier, e Entry) error {
 		}
 		data = string(b)
 	}
-	_, err := store.Exec(ctx, q, `INSERT INTO audit_log (id, at, actor_type, actor_id, ip, action, target_type, target_id, repo_id, data)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	_, err := store.Exec(ctx, q, `INSERT INTO audit_log (id, at, actor_type, actor_id, ip, action, target_type, target_id, repo_id, data, org_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, (SELECT org_id FROM repos WHERE id = ?)))`,
 		ids.New(ids.Audit), store.Millis(time.Now()), e.ActorType, nullable(e.ActorID), e.IP, e.Action,
-		nullable(e.TargetType), nullable(e.TargetID), nullable(e.RepoID), data)
+		nullable(e.TargetType), nullable(e.TargetID), nullable(e.RepoID), data, nullable(e.OrgID), e.RepoID)
 	return err
 }
 
@@ -106,8 +109,10 @@ type Filter struct {
 	// Action matches exactly, or a family with a trailing "." ("revision.").
 	Action string
 	RepoID string
-	From   time.Time // inclusive
-	To     time.Time // exclusive
+	// OrgID keeps one org's entries (empty: every entry, for instance admins).
+	OrgID string
+	From  time.Time // inclusive
+	To    time.Time // exclusive
 	// Before continues a listing after this entry (newest first).
 	Before *Record
 	Limit  int
@@ -139,6 +144,9 @@ func Query(ctx context.Context, q store.Querier, f Filter) ([]Named, error) {
 	}
 	if f.RepoID != "" {
 		where, args = append(where, "a.repo_id = ?"), append(args, f.RepoID)
+	}
+	if f.OrgID != "" {
+		where, args = append(where, "a.org_id = ?"), append(args, f.OrgID)
 	}
 	if !f.From.IsZero() {
 		where, args = append(where, "a.at >= ?"), append(args, store.Millis(f.From))
@@ -182,8 +190,13 @@ func Query(ctx context.Context, q store.Querier, f Filter) ([]Named, error) {
 }
 
 // Actions lists the distinct actions recorded (the filter's choices).
-func Actions(ctx context.Context, q store.Querier) ([]string, error) {
-	rows, err := store.Query(ctx, q, `SELECT DISTINCT action FROM audit_log ORDER BY action`)
+// An empty orgID lists the actions of every org and of the instance.
+func Actions(ctx context.Context, q store.Querier, orgID string) ([]string, error) {
+	query, args := `SELECT DISTINCT action FROM audit_log ORDER BY action`, []any(nil)
+	if orgID != "" {
+		query, args = `SELECT DISTINCT action FROM audit_log WHERE org_id = ? ORDER BY action`, []any{orgID}
+	}
+	rows, err := store.Query(ctx, q, query, args...)
 	if err != nil {
 		return nil, err
 	}

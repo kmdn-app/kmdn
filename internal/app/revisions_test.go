@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kmdn-app/kmdn/internal/access"
+	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -21,6 +22,12 @@ func connectLocal(t *testing.T, a *App, admin *tc, files map[string]string) stri
 // connectLocalRemote also returns the remote's directory.
 func connectLocalRemote(t *testing.T, a *App, admin *tc, files map[string]string) (string, string) {
 	t.Helper()
+	return connectLocalIn(t, a, admin, "default", files)
+}
+
+// connectLocalIn connects a new local repository to the org with that slug.
+func connectLocalIn(t *testing.T, a *App, admin *tc, org string, files map[string]string) (string, string) {
+	t.Helper()
 	ctx := context.Background()
 	remote := t.TempDir()
 	gitIn(t, remote, "init", "--quiet", "-b", "main")
@@ -32,9 +39,11 @@ func connectLocalRemote(t *testing.T, a *App, admin *tc, files map[string]string
 	}
 	gitIn(t, remote, "add", "-A")
 	gitIn(t, remote, "commit", "--quiet", "-m", "Initial")
-	_, hosts := admin.do("GET", "/admin/forges", nil)
-	hostID := hosts["items"].([]any)[0].(map[string]any)["id"].(string)
-	code, body := admin.do("POST", "/repos", map[string]any{"forge_host_id": hostID, "clone_url": "file://" + remote, "content_root": "docs/"})
+	host, err := repos.EnsureGitHost(ctx, a.DB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, body := admin.do("POST", "/orgs/"+org+"/repos", map[string]any{"forge_host_id": host.ID, "clone_url": "file://" + remote, "content_root": "docs/"})
 	if code != 202 {
 		t.Fatalf("connect: %d %v", code, body)
 	}

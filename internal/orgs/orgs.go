@@ -287,6 +287,15 @@ func Role(ctx context.Context, q store.Querier, orgID string, u users.User) (str
 	return role.String, nil
 }
 
+// Belongs reports whether u is in the org whatever the account's own
+// status (a deactivated account can still be granted roles, which count
+// again once it's reactivated).
+func Belongs(ctx context.Context, q store.Querier, orgID string, u users.User) (bool, error) {
+	u.Status = users.Active
+	role, err := Role(ctx, q, orgID, u)
+	return role != "", err
+}
+
 // AddMember adds userID to the org with role, or reactivates and updates an
 // existing membership.
 func AddMember(ctx context.Context, q store.Querier, orgID, userID, role, invitedBy string) error {
@@ -345,12 +354,37 @@ func Members(ctx context.Context, q store.Querier, orgID string) ([]Membership, 
 }
 
 // CountOwners returns the number of active owners, so the last one can't
-// leave or be demoted.
+// leave or be demoted. In single mode, instance admins are owners of the
+// default org too.
 func CountOwners(ctx context.Context, q store.Querier, orgID string) (int, error) {
+	mode, err := Mode(ctx, q)
+	if err != nil {
+		return 0, err
+	}
+	admins := mode == Single && orgID == DefaultID
 	var n int
-	err := store.QueryRow(ctx, q, `SELECT COUNT(*) FROM org_members m JOIN users u ON u.id = m.user_id
-		WHERE m.org_id = ? AND m.role = ? AND m.status = ? AND u.status = ?`, orgID, Owner, Active, users.Active).Scan(&n)
+	err = store.QueryRow(ctx, q, `SELECT COUNT(*) FROM users u LEFT JOIN org_members m ON m.org_id = ? AND m.user_id = u.id
+		WHERE u.status = ? AND COALESCE(m.status, '') <> ? AND (m.role = ? OR (? AND u.is_instance_admin = ?))`,
+		orgID, users.Active, Deactivated, Owner, admins, true).Scan(&n)
 	return n, err
+}
+
+// MemberClause returns a WHERE condition on the user id column col that
+// keeps the org's active members: every active account without a
+// deactivated membership for the default org in single mode, the active
+// membership rows otherwise.
+func MemberClause(ctx context.Context, q store.Querier, orgID, col string) (string, []any, error) {
+	mode, err := Mode(ctx, q)
+	if err != nil {
+		return "", nil, err
+	}
+	if mode == Single {
+		if orgID != DefaultID {
+			return "1 = 0", nil, nil
+		}
+		return col + ` NOT IN (SELECT user_id FROM org_members WHERE org_id = ? AND status = ?)`, []any{orgID, Deactivated}, nil
+	}
+	return col + ` IN (SELECT user_id FROM org_members WHERE org_id = ? AND status = ?)`, []any{orgID, Active}, nil
 }
 
 // Rename changes an org's display name.

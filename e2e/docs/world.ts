@@ -80,7 +80,7 @@ export async function connectHandbook(maya: Client): Promise<{ repoID: string; h
     display_name: "Northwind GitLab",
   });
   const [owner, name] = REPO.split("/");
-  const connected = await maya.call("POST", "/repos", {
+  const connected = await maya.call("POST", "/orgs/default/repos", {
     forge_host_id: host.id,
     owner,
     name,

@@ -50,9 +50,9 @@ func TestAuditLog(t *testing.T) {
 	}
 	tomC.do("POST", "/revisions/"+revID+"/approve", nil)
 	// Admin changes: groups and webhooks.
-	_, g := admin.do("POST", "/admin/groups", map[string]string{"name": "Docs team"})
-	admin.do("PUT", "/admin/groups/"+g["id"].(string)+"/members/"+sam.ID, nil)
-	admin.do("DELETE", "/admin/groups/"+g["id"].(string)+"/members/"+sam.ID, nil)
+	_, g := admin.do("POST", "/orgs/default/admin/groups", map[string]string{"name": "Docs team"})
+	admin.do("PUT", "/orgs/default/admin/groups/"+g["id"].(string)+"/members/"+sam.ID, nil)
+	admin.do("DELETE", "/orgs/default/admin/groups/"+g["id"].(string)+"/members/"+sam.ID, nil)
 	a.Hooks.AllowPrivate = true
 	if code, h := admin.do("POST", "/repos/"+repoID+"/hooks", map[string]any{"kind": "generic", "url": "https://hooks.northwind.dev/kmdn/secret-path", "events": []string{"revision.published"}}); code != 201 {
 		t.Fatalf("hook: %d %v", code, h)

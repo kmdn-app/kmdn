@@ -32,6 +32,8 @@ import (
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/mcp"
 	"github.com/kmdn-app/kmdn/internal/notify"
+	"github.com/kmdn-app/kmdn/internal/orghttp"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/publish"
 	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/repos"
@@ -78,6 +80,7 @@ type App struct {
 	Summaries   *summaries.Service
 	Consistency *consistency.Service
 	MCP         *mcp.Service
+	Orgs        *orghttp.Service
 
 	stopTracing func(context.Context) error
 	Invites     *invites.Service
@@ -96,6 +99,10 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}
 	if n > 0 {
 		log.Info("applied migrations", "count", n, "dialect", db.Dialect.String())
+	}
+	if err := orgs.SetMode(ctx, db, cfg.Orgs.Mode); err != nil {
+		db.Close()
+		return nil, err
 	}
 	kek, err := cfg.SecretKeyBytes()
 	if err != nil {
@@ -259,7 +266,10 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.MCP = &mcp.Service{DB: db, Repos: a.Repos, Search: &idx.Index, Links: a.Links, Engine: eng, BaseURL: a.Repos.BaseURL, Log: log}
 	a.MCP.Routes(r)
 	a.Server.Mount("/mcp", a.MCP.Handler(a.AuthH.TrustedProxies))
-	(&admin.People{DB: db, Auth: a.Auth, Log: log}).Routes(r)
+	people := &admin.People{DB: db, Auth: a.Auth, Log: log}
+	people.Routes(r)
+	a.Orgs = &orghttp.Service{DB: db, AllowCreate: cfg.Orgs.AllowCreate, Log: log}
+	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes)
 	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL}
 	a.Invites.Routes(r)
