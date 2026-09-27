@@ -568,6 +568,81 @@ paths:
         - { name: state, in: query, schema: { type: string } }
       responses:
         "302": { description: Redirect to GitHub or the forges page }
+  /orgs/{org}/admin/domains:
+    get:
+      tags: [orgs]
+      operationId: listOrgDomains
+      summary: Email domains the org claims (org admins)
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      responses:
+        "200":
+          description: Domains
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/OrgDomain" } } } }
+    post:
+      tags: [orgs]
+      operationId: addOrgDomain
+      summary: Claim an email domain; people there join the org on their own once it's verified
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [domain], properties: { domain: { type: string } } }
+      responses:
+        "201": { description: Claimed, content: { application/json: { schema: { $ref: "#/components/schemas/OrgDomain" } } } }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /orgs/{org}/admin/domains/{domain}:
+    delete:
+      tags: [orgs]
+      operationId: removeOrgDomain
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+        - { name: domain, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Removed }
+        "404": { $ref: "#/components/responses/Problem" }
+  /admin/orgs:
+    get:
+      tags: [admin]
+      operationId: listAllOrgs
+      summary: Every organization on the instance (instance admins)
+      responses:
+        "200":
+          description: Organizations
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Org" } } } }
+  /admin/orgs/{org}:
+    patch:
+      tags: [admin]
+      operationId: updateOrgStatus
+      summary: Suspend or resume an organization (instance admins)
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [status], properties: { status: { type: string, enum: [active, suspended] } } }
+      responses:
+        "200": { description: Organization, content: { application/json: { schema: { $ref: "#/components/schemas/Org" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /admin/orgs/{org}/domains/{domain}/verify:
+    post:
+      tags: [admin]
+      operationId: verifyOrgDomain
+      summary: Mark an org's domain verified (instance admins)
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+        - { name: domain, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Verified }
+        "404": { $ref: "#/components/responses/Problem" }
   /orgs/{org}/repos:
     get:
       parameters:
@@ -3813,6 +3888,14 @@ components:
       properties:
         settings: { $ref: "#/components/schemas/OrgSettings" }
         locked: { type: array, items: { type: string }, description: "Fields managed by the deployment" }
+    OrgDomain:
+      type: object
+      required: [domain, org_id, created_at]
+      properties:
+        domain: { type: string }
+        org_id: { type: string }
+        verified_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
     OrgMember:
       type: object
       required: [id, name, email, role, status, joined_at]

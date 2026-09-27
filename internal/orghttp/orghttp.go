@@ -52,6 +52,12 @@ func (s *Service) Routes(r chi.Router, scoped ...func(chi.Router)) {
 		r.Use(auth.Require)
 		r.Get("/orgs", s.list)
 		r.Post("/orgs", s.create)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireAdmin)
+			r.Get("/admin/orgs", s.instanceList)
+			r.Patch("/admin/orgs/{org}", s.instanceUpdate)
+			r.Post("/admin/orgs/{org}/domains/{domain}/verify", s.verifyDomain)
+		})
 		r.Route("/orgs/{org}", func(r chi.Router) {
 			r.Use(s.Resolve)
 			r.Get("/", s.get)
@@ -61,6 +67,9 @@ func (s *Service) Routes(r chi.Router, scoped ...func(chi.Router)) {
 			r.Delete("/members/{user}", s.removeMember)
 			r.With(RequireAdmin).Get("/admin/settings", s.getSettings)
 			r.With(RequireAdmin).Patch("/admin/settings", s.updateSettings)
+			r.With(RequireAdmin).Get("/admin/domains", s.listDomains)
+			r.With(RequireAdmin).Post("/admin/domains", s.addDomain)
+			r.With(RequireAdmin).Delete("/admin/domains/{domain}", s.removeDomain)
 			for _, fn := range scoped {
 				fn(r)
 			}
@@ -314,6 +323,131 @@ func (s *Service) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	_, locked, _ := s.Settings.Get(ctx, org.ID)
 	api.JSON(w, http.StatusOK, map[string]any{"settings": st, "locked": locked})
+}
+
+func (s *Service) listDomains(w http.ResponseWriter, r *http.Request) {
+	list, err := orgs.Domains(r.Context(), s.DB, Current(r).ID)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"items": list})
+}
+
+// addDomain claims an email domain for the org. People with addresses there
+// join the org on their own once the deployment verifies it.
+func (s *Service) addDomain(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, _ := auth.FromContext(ctx)
+	var in struct {
+		Domain string `json:"domain"`
+	}
+	if err := api.Decode(r, &in); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	org := Current(r)
+	var d orgs.Domain
+	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
+		var err error
+		if d, err = orgs.AddDomain(ctx, tx, org.ID, in.Domain); err != nil {
+			return err
+		}
+		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: org.ID, Action: "org.domain_added", TargetType: "org", TargetID: org.ID, Data: map[string]any{"domain": d.Domain}})
+	})
+	switch {
+	case errors.Is(err, orgs.ErrDomain):
+		api.Error(w, r, api.Invalid("domain", "Enter an email domain, e.g. northwind.dev."))
+	case errors.Is(err, orgs.ErrDomainTaken):
+		api.Error(w, r, api.Err(http.StatusConflict, "domain_taken", "Another organization has verified this domain."))
+	case err != nil:
+		api.Error(w, r, err)
+	default:
+		api.JSON(w, http.StatusCreated, d)
+	}
+}
+
+func (s *Service) removeDomain(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, _ := auth.FromContext(ctx)
+	org, domain := Current(r), chi.URLParam(r, "domain")
+	if err := orgs.RemoveDomain(ctx, s.DB, org.ID, domain); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			api.Error(w, r, api.ErrNotFound)
+			return
+		}
+		api.Error(w, r, err)
+		return
+	}
+	_ = audit.Write(ctx, s.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: org.ID, Action: "org.domain_removed", TargetType: "org", TargetID: org.ID, Data: map[string]any{"domain": domain}})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// instanceList lists every org (instance console).
+func (s *Service) instanceList(w http.ResponseWriter, r *http.Request) {
+	list, err := orgs.List(r.Context(), s.DB)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"items": list})
+}
+
+// instanceUpdate suspends or resumes an org (instance console).
+func (s *Service) instanceUpdate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, _ := auth.FromContext(ctx)
+	o, err := orgs.BySlug(ctx, s.DB, chi.URLParam(r, "org"))
+	if err != nil {
+		api.Error(w, r, api.ErrNotFound)
+		return
+	}
+	var in struct {
+		Status string `json:"status"`
+	}
+	if err := api.Decode(r, &in); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	if in.Status != orgs.Active && in.Status != orgs.Suspended {
+		api.Error(w, r, api.Invalid("status", "Use active or suspended."))
+		return
+	}
+	err = s.DB.InTx(ctx, func(tx *store.Tx) error {
+		if err := orgs.SetStatus(ctx, tx, o.ID, in.Status); err != nil {
+			return err
+		}
+		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: o.ID, Action: "org.status_changed", TargetType: "org", TargetID: o.ID, Data: map[string]any{"status": in.Status}})
+	})
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	o.Status = in.Status
+	api.JSON(w, http.StatusOK, o)
+}
+
+// verifyDomain marks an org's domain verified (instance admins; a hosted
+// service verifies by DNS instead).
+func (s *Service) verifyDomain(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, _ := auth.FromContext(ctx)
+	o, err := orgs.BySlug(ctx, s.DB, chi.URLParam(r, "org"))
+	if err != nil {
+		api.Error(w, r, api.ErrNotFound)
+		return
+	}
+	domain := chi.URLParam(r, "domain")
+	if err := orgs.VerifyDomain(ctx, s.DB, o.ID, domain); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			api.Error(w, r, api.ErrNotFound)
+			return
+		}
+		api.Error(w, r, err)
+		return
+	}
+	_ = audit.Write(ctx, s.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: o.ID, Action: "org.domain_verified", TargetType: "org", TargetID: o.ID, Data: map[string]any{"domain": domain}})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // MemberView is a member in the org console.

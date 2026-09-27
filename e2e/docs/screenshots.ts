@@ -150,7 +150,7 @@ async function run(b: Browser) {
     await shot(m, "admin-add-gitlab");
     await m.keyboard.press("Escape");
   });
-  const { repoID } = await connectHandbook(maya);
+  const { repoID, org } = await connectHandbook(maya);
   const people = await invitePeople(maya, repoID);
   const c = (who: Person) => people[who];
 
@@ -177,18 +177,18 @@ async function run(b: Browser) {
   });
 
   await scene("admin-groups", async () => {
-    const g = await maya.call("POST", "/orgs/default/admin/groups", {
+    const g = await maya.call("POST", `/orgs/${org}/admin/groups`, {
       name: "People team",
       description: "HR and people operations",
     });
     for (const who of ["tom", "maya"] as Person[]) {
       const me = await c(who).call("GET", "/me");
-      await maya.call("PUT", `/orgs/default/admin/groups/${g.id}/members/${me.user?.id ?? me.id}`);
+      await maya.call("PUT", `/orgs/${org}/admin/groups/${g.id}/members/${me.user?.id ?? me.id}`);
     }
     await maya.call("PUT", `/repos/${repoID}/members/group/${g.id}`, {
       role: "contributor",
     });
-    await maya.call("POST", "/orgs/default/admin/groups", {
+    await maya.call("POST", `/orgs/${org}/admin/groups`, {
       name: "Platform",
       description: "Engineering on-call and deploys",
     });
