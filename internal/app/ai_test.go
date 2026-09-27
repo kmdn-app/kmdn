@@ -60,7 +60,7 @@ func TestAIProviderAdmin(t *testing.T) {
 	samC := &tc{t: t, base: admin.base, c: newClient()}
 	signIn(t, a, samC, sam)
 
-	if _, st := samC.do("GET", "/assistant/status", nil); st["enabled"] != false {
+	if _, st := samC.do("GET", "/orgs/default/assistant/status", nil); st["enabled"] != false {
 		t.Fatalf("status before setup: %v", st)
 	}
 	if code, _ := samC.do("GET", "/admin/ai", nil); code != 403 {
@@ -81,7 +81,7 @@ func TestAIProviderAdmin(t *testing.T) {
 	if strings.Contains(fmt.Sprint(v), "sk-ant-test") {
 		t.Fatal("the key came back")
 	}
-	if _, st := samC.do("GET", "/assistant/status", nil); st["enabled"] != true {
+	if _, st := samC.do("GET", "/orgs/default/assistant/status", nil); st["enabled"] != true {
 		t.Fatalf("status after setup: %v", st)
 	}
 	// Leaving the key out keeps it.
@@ -129,7 +129,7 @@ func TestAIProviderFromConfig(t *testing.T) {
 	ctx := context.Background()
 	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
 	signIn(t, a, admin, maya)
-	if _, st := admin.do("GET", "/assistant/status", nil); st["enabled"] != true {
+	if _, st := admin.do("GET", "/orgs/default/assistant/status", nil); st["enabled"] != true {
 		t.Fatalf("status before the startup check: %v", st)
 	}
 	a.LLM.CheckEnv(ctx)
@@ -152,7 +152,7 @@ func TestAIProviderFromConfig(t *testing.T) {
 	// A key the provider refuses turns the assistant off at startup.
 	a.LLM.Env.APIKey = "sk-wrong"
 	a.LLM.CheckEnv(ctx)
-	if _, st := admin.do("GET", "/assistant/status", nil); st["enabled"] != false {
+	if _, st := admin.do("GET", "/orgs/default/assistant/status", nil); st["enabled"] != false {
 		t.Fatalf("status with a refused key: %v", st)
 	}
 }

@@ -89,7 +89,7 @@ func (s *Service) Register() {
 
 // RequestReview queues a summary (at submit, or on request).
 func (s *Service) RequestReview(ctx context.Context, revID, by string) {
-	if !s.LLM.Enabled(ctx) {
+	if rev, err := revisions.Get(ctx, s.DB, revID); err != nil || !s.LLM.EnabledForRepo(ctx, rev.RepoID) {
 		return
 	}
 	if _, err := s.Jobs.Enqueue(ctx, s.DB, JobReview, map[string]string{"revision_id": revID, "by": by}, jobs.EnqueueOptions{Key: JobReview + ":" + revID, MaxAttempts: 2}); err != nil {
@@ -295,7 +295,7 @@ func (s *Service) WriteReview(ctx context.Context, revID, by string) error {
 
 // RequestChanges queues change summaries for a published revision.
 func (s *Service) RequestChanges(ctx context.Context, rev revisions.Revision) {
-	if !s.LLM.Enabled(ctx) || rev.PublishedSHA == "" {
+	if !s.LLM.EnabledForRepo(ctx, rev.RepoID) || rev.PublishedSHA == "" {
 		return
 	}
 	if _, err := s.Jobs.Enqueue(ctx, s.DB, JobChanges, map[string]string{"revision_id": rev.ID}, jobs.EnqueueOptions{Key: JobChanges + ":" + rev.ID, MaxAttempts: 2}); err != nil {

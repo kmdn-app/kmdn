@@ -4,6 +4,7 @@ package orghttp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -23,6 +24,9 @@ import (
 // Service handles /orgs.
 type Service struct {
 	DB *store.DB
+	// Settings reads and writes org settings, with the deployment's
+	// managed fields.
+	Settings *orgs.SettingsStore
 	// AllowCreate is config orgs.allow_create: "admins" or "anyone".
 	AllowCreate string
 	Log         *slog.Logger
@@ -55,6 +59,8 @@ func (s *Service) Routes(r chi.Router, scoped ...func(chi.Router)) {
 			r.With(RequireAdmin).Get("/members", s.members)
 			r.With(RequireAdmin).Patch("/members/{user}", s.updateMember)
 			r.Delete("/members/{user}", s.removeMember)
+			r.With(RequireAdmin).Get("/admin/settings", s.getSettings)
+			r.With(RequireAdmin).Patch("/admin/settings", s.updateSettings)
 			for _, fn := range scoped {
 				fn(r)
 			}
@@ -260,6 +266,54 @@ func (s *Service) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.JSON(w, http.StatusOK, View{o, c.Role})
+}
+
+func (s *Service) getSettings(w http.ResponseWriter, r *http.Request) {
+	st, locked, err := s.Settings.Get(r.Context(), Current(r).ID)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"settings": st, "locked": locked})
+}
+
+func (s *Service) updateSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, _ := auth.FromContext(ctx)
+	var patch map[string]json.RawMessage
+	if err := api.Decode(r, &patch); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	org := Current(r)
+	var st orgs.Settings
+	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
+		var err error
+		if st, err = s.Settings.Update(ctx, tx, org.ID, patch); err != nil {
+			return err
+		}
+		fields := make([]string, 0, len(patch))
+		for k := range patch {
+			fields = append(fields, k)
+		}
+		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: org.ID, Action: "org.settings_changed", TargetType: "org", TargetID: org.ID,
+			Data: map[string]any{"fields": fields}})
+	})
+	var syntax *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	switch {
+	case errors.Is(err, orgs.ErrLocked):
+		api.Error(w, r, api.Err(http.StatusConflict, "setting_managed", "This setting is managed by the deployment and can't be changed here."))
+		return
+	case errors.As(err, &syntax), errors.As(err, &typeErr), err != nil && strings.HasPrefix(err.Error(), "json: unknown field"):
+		api.Error(w, r, api.Invalid("settings", "Unknown setting or wrong type: "+err.Error()))
+		return
+	case err != nil:
+		api.Error(w, r, err)
+		return
+	}
+	_, locked, _ := s.Settings.Get(ctx, org.ID)
+	api.JSON(w, http.StatusOK, map[string]any{"settings": st, "locked": locked})
 }
 
 // MemberView is a member in the org console.

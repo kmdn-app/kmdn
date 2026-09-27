@@ -58,7 +58,7 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
-	api.JSON(w, http.StatusOK, map[string]any{"checks": checks, "review": review, "pending": s.Pending(r.Context(), rev.ID), "available": s.LLM.Enabled(r.Context())})
+	api.JSON(w, http.StatusOK, map[string]any{"checks": checks, "review": review, "pending": s.Pending(r.Context(), rev.ID), "available": s.LLM.EnabledForRepo(r.Context(), rev.RepoID)})
 }
 
 // request asks for a fresh summary (editors before submitting, reviewers any time).
@@ -76,8 +76,8 @@ func (s *Service) request(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, api.Err(http.StatusForbidden, "forbidden", "Editors and reviewers of the revision can ask for a summary."))
 		return
 	}
-	if !s.LLM.Enabled(r.Context()) {
-		api.Error(w, r, api.Err(http.StatusConflict, "assistant_off", "The assistant isn't set up on this instance."))
+	if !s.LLM.EnabledForRepo(r.Context(), rev.RepoID) {
+		api.Error(w, r, api.Err(http.StatusConflict, "assistant_off", "The assistant isn't set up for this organization."))
 		return
 	}
 	s.RequestReview(r.Context(), rev.ID, c.User.ID)

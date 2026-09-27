@@ -177,7 +177,12 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 			return a.Collab.PutAnchor(ctx, repo, rev, c, p, threadID, pos)
 		},
 	}
-	a.LLM = &llm.Service{DB: db, Secrets: sec, Disabled: !cfg.Assistant.Enabled, Env: llm.EnvFrom(cfg.Assistant), Log: log}
+	orgSettings := &orgs.SettingsStore{DB: db}
+	a.LLM = &llm.Service{DB: db, Secrets: sec, Disabled: !cfg.Assistant.Enabled, Env: llm.EnvFrom(cfg.Assistant), Log: log,
+		OrgAllows: func(ctx context.Context, orgID string) bool {
+			st, _, err := orgSettings.Get(ctx, orgID)
+			return err == nil && st.Assistant
+		}}
 	a.LLM.Routes(r)
 	a.Notify = &notify.Service{DB: db, Jobs: a.Jobs, PublishUser: a.Realtime.PublishUser, BaseURL: a.Repos.BaseURL, Log: log,
 		Present: func(revID, userID string) bool {
@@ -267,12 +272,12 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Server.Mount("/mcp", a.MCP.Handler(a.AuthH.TrustedProxies))
 	people := &admin.People{DB: db, Auth: a.Auth, Log: log}
 	people.Routes(r)
-	a.Orgs = &orghttp.Service{DB: db, AllowCreate: cfg.Orgs.AllowCreate, Log: log}
+	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, Log: log}
 
 	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL}
 	a.Invites.Routes(r)
-	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes, a.Invites.OrgRoutes, a.MCP.OrgRoutes)
+	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes, a.Invites.OrgRoutes, a.MCP.OrgRoutes, a.LLM.OrgRoutes)
 	(&linking.Service{DB: db, Secrets: sec, AuthH: a.AuthH, BaseURL: a.Repos.BaseURL, HTTP: a.Repos.Adapters.HTTP}).Routes(r)
 	if _, err := repos.EnsureGitHost(ctx, db); err != nil {
 		db.Close()

@@ -247,3 +247,38 @@ func TestOrgInvitesAndKeys(t *testing.T) {
 		t.Fatalf("globex reads acme's key calls: %d", code)
 	}
 }
+
+// An org can turn AI features off for its repositories.
+func TestOrgSettingsAssistantSwitch(t *testing.T) {
+	a, admin := newApp(t, nil)
+	ctx := context.Background()
+	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
+	tom, _ := users.Create(ctx, a.DB, "tom@northwind.dev", "Tom", false)
+	signIn(t, a, admin, maya)
+	tomC := &tc{t: t, base: admin.base, c: newClient()}
+	signIn(t, a, tomC, tom)
+	a.LLM.Override = &scripted{}
+
+	if code, st := admin.do("GET", "/orgs/default/admin/settings", nil); code != 200 || st["settings"].(map[string]any)["assistant"] != true {
+		t.Fatalf("settings: %d %v", code, st)
+	}
+	if code, _ := tomC.do("PATCH", "/orgs/default/admin/settings", map[string]any{"assistant": false}); code != 403 {
+		t.Fatalf("member changes settings: %d", code)
+	}
+	if code, _ := admin.do("PATCH", "/orgs/default/admin/settings", map[string]any{"assistant": "no"}); code != 422 {
+		t.Fatalf("bad value: %d", code)
+	}
+	if _, st := tomC.do("GET", "/orgs/default/assistant/status", nil); st["enabled"] != true {
+		t.Fatalf("status before: %v", st)
+	}
+	if code, _ := admin.do("PATCH", "/orgs/default/admin/settings", map[string]any{"assistant": false}); code != 200 {
+		t.Fatalf("turn off: %d", code)
+	}
+	if _, st := tomC.do("GET", "/orgs/default/assistant/status", nil); st["enabled"] != false {
+		t.Fatalf("status after: %v", st)
+	}
+	repoID := connectLocal(t, a, admin, map[string]string{"docs/index.md": "# Handbook\n"})
+	if code, b := admin.do("POST", "/repos/"+repoID+"/assistant/threads", map[string]any{"text": "Hi"}); code != 409 {
+		t.Fatalf("assistant used while off: %d %v", code, b)
+	}
+}

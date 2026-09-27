@@ -48,3 +48,13 @@ export function useCurrentOrg(): OrgView | undefined {
   const { data } = useOrgs();
   return data?.find((o) => o.slug === current) ?? (data ? pickOrg(data) : undefined);
 }
+
+/** Whether the assistant (and consistency checks) are available in the current org. */
+export function useAssistantStatus() {
+  const org = currentOrg();
+  return useQuery({
+    queryKey: ["assistant-status", org],
+    queryFn: () => unwrap(api.GET("/orgs/{org}/assistant/status", { params: { path: { org } } })),
+    staleTime: 60_000,
+  });
+}

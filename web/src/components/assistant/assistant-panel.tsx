@@ -9,12 +9,13 @@ import { DocView } from "@/components/doc/doc-view";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { api, errorMessage, unwrap, useAssistantStatus, useMe } from "@/lib/api";
+import { api, errorMessage, unwrap, useMe } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
 import { openPanel } from "@/lib/media";
 import { atLeast, fileHref, rawUrl, type RepoView } from "@/lib/repos";
 import type { RevisionView } from "@/lib/revisions";
 import { cn } from "@/lib/utils";
+import { useAssistantStatus } from "@/lib/orgs";
 
 type AssistantMessage = components["schemas"]["AssistantMessage"];
 

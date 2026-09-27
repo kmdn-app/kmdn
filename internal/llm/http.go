@@ -10,16 +10,13 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/settings"
 	"github.com/kmdn-app/kmdn/internal/store"
 )
 
 // Routes registers the admin AI settings and the assistant status.
 func (s *Service) Routes(r chi.Router) {
-	r.Group(func(r chi.Router) {
-		r.Use(auth.Require)
-		r.Get("/assistant/status", s.status)
-	})
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireAdmin)
 		r.Get("/admin/ai", s.get)
@@ -29,8 +26,17 @@ func (s *Service) Routes(r chi.Router) {
 	})
 }
 
+// OrgRoutes registers the assistant's status for an org (under /orgs/{org}).
+func (s *Service) OrgRoutes(r chi.Router) {
+	r.Get("/assistant/status", s.status)
+}
+
+// status says whether AI features are available in the org: set up on the
+// instance and on in the org.
 func (s *Service) status(w http.ResponseWriter, r *http.Request) {
-	api.JSON(w, http.StatusOK, map[string]any{"enabled": s.Enabled(r.Context()), "consistency": s.EmbeddingsEnabled(r.Context())})
+	c, _ := orgs.FromContext(r.Context())
+	on := s.OrgAllows == nil || s.OrgAllows(r.Context(), c.Org.ID)
+	api.JSON(w, http.StatusOK, map[string]any{"enabled": on && s.Enabled(r.Context()), "consistency": on && s.EmbeddingsEnabled(r.Context())})
 }
 
 // view is the settings without secrets.

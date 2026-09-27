@@ -14,10 +14,11 @@ import { NewRevisionDialog, StateDot } from "@/components/revision/revision-ui";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ForgeIcon } from "@/components/shell/forge-icon";
-import { api, errorMessage, unwrap, useAssistantStatus } from "@/lib/api";
+import { api, errorMessage, unwrap } from "@/lib/api";
 import { atLeast, useActivity, useTree, type RepoView } from "@/lib/repos";
 import { useRevisions, type RevisionView } from "@/lib/revisions";
 import { useRepo } from "@/lib/use-repo";
+import { useAssistantStatus } from "@/lib/orgs";
 
 export const Route = createFileRoute("/_app/$owner/$repo/")({
   component: RepoHome,

@@ -418,6 +418,30 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /orgs/{org}/admin/settings:
+    get:
+      tags: [orgs]
+      operationId: getOrgSettings
+      summary: The org's settings, and those the deployment manages (read-only)
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      responses:
+        "200": { description: Settings, content: { application/json: { schema: { $ref: "#/components/schemas/OrgSettingsView" } } } }
+    patch:
+      tags: [orgs]
+      operationId: updateOrgSettings
+      summary: Change org settings (org admins); managed fields are refused
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrgSettings" }
+      responses:
+        "200": { description: Settings, content: { application/json: { schema: { $ref: "#/components/schemas/OrgSettingsView" } } } }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /orgs/{org}/repos:
     get:
       parameters:
@@ -2033,11 +2057,13 @@ paths:
         "201": { description: Thread, content: { application/json: { schema: { $ref: "#/components/schemas/Thread" } } } }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
-  /assistant/status:
+  /orgs/{org}/assistant/status:
     get:
       tags: [assistant]
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       operationId: getAssistantStatus
-      summary: Whether the assistant is available on this instance
+      summary: Whether the assistant is available in the org (set up on the instance and on in the org)
       responses:
         "200":
           description: Status
@@ -3650,6 +3676,16 @@ components:
       properties:
         name: { type: string }
         slug: { type: string, description: "Made from the name when empty" }
+    OrgSettings:
+      type: object
+      properties:
+        assistant: { type: boolean, description: "AI features for the org's repositories" }
+    OrgSettingsView:
+      type: object
+      required: [settings, locked]
+      properties:
+        settings: { $ref: "#/components/schemas/OrgSettings" }
+        locked: { type: array, items: { type: string }, description: "Fields managed by the deployment" }
     OrgMember:
       type: object
       required: [id, name, email, role, status, joined_at]

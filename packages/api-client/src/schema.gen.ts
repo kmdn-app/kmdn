@@ -358,6 +358,24 @@ export interface paths {
         patch: operations["updateOrgMember"];
         trace?: never;
     };
+    "/orgs/{org}/admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The org's settings, and those the deployment manages (read-only) */
+        get: operations["getOrgSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change org settings (org admins); managed fields are refused */
+        patch: operations["updateOrgSettings"];
+        trace?: never;
+    };
     "/orgs/{org}/repos": {
         parameters: {
             query?: never;
@@ -2064,14 +2082,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/assistant/status": {
+    "/orgs/{org}/assistant/status": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Whether the assistant is available on this instance */
+        /** Whether the assistant is available in the org (set up on the instance and on in the org) */
         get: operations["getAssistantStatus"];
         put?: never;
         post?: never;
@@ -3490,6 +3508,15 @@ export interface components {
             /** @description Made from the name when empty */
             slug?: string;
         };
+        OrgSettings: {
+            /** @description AI features for the org's repositories */
+            assistant?: boolean;
+        };
+        OrgSettingsView: {
+            settings: components["schemas"]["OrgSettings"];
+            /** @description Fields managed by the deployment */
+            locked: string[];
+        };
         OrgMember: {
             id: string;
             name: string;
@@ -4582,6 +4609,58 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    getOrgSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgSettingsView"];
+                };
+            };
+        };
+    };
+    updateOrgSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgSettings"];
+            };
+        };
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgSettingsView"];
+                };
+            };
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     listRepos: {
@@ -7503,7 +7582,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody?: never;
