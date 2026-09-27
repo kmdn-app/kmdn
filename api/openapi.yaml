@@ -1259,6 +1259,23 @@ paths:
           description: Pages changed
           content: { application/json: { schema: { type: object, required: [pages], properties: { pages: { type: integer } } } } }
         "403": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/presence:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: getRevisionPresence
+      summary: Who has pages of the revision open (updates arrive as "presence" events)
+      responses:
+        "200":
+          description: People
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/PresenceUser" } }
 components:
   parameters:
     RepoID:
@@ -1289,6 +1306,14 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    PresenceUser:
+      type: object
+      required: [id, name, paths, editing]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        paths: { type: array, items: { type: string } }
+        editing: { type: boolean }
     OutboundLink:
       type: object
       required: [url, kind, line]

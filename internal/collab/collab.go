@@ -211,6 +211,9 @@ func (h *Hub) RevisionChanged(ctx context.Context, rev revisions.Revision) {
 	for _, r := range rooms {
 		r.refreshModes(ctx, rev)
 	}
+	if len(rooms) > 0 {
+		h.publishPresence(rev.ID)
+	}
 }
 
 // FileRemoved closes a room whose document was deleted (the page was deleted
@@ -412,6 +415,7 @@ func (r *Room) add(c *realtime.Conn, channel uint32, caller revisions.Caller, rw
 		r.evictT.Stop()
 		r.evictT = nil
 	}
+	go r.hub.publishPresence(r.revID)
 	return p, nil
 }
 
@@ -692,6 +696,7 @@ func (p *Peer) Close() {
 		r.evictT = time.AfterFunc(r.hub.Options.EvictAfter, r.evict)
 	}
 	r.mu.Unlock()
+	go r.hub.publishPresence(r.revID)
 	if len(gone) > 0 {
 		msg := encodeAwareness(gone)
 		for _, q := range targets {

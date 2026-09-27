@@ -1343,10 +1343,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** Who has pages of the revision open (updates arrive as "presence" events) */
+        get: operations["getRevisionPresence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PresenceUser: {
+            id: string;
+            name: string;
+            paths: string[];
+            editing: boolean;
+        };
         OutboundLink: {
             url: string;
             /** @enum {string} */
@@ -4130,6 +4155,30 @@ export interface operations {
                 };
             };
             403: components["responses"]["Problem"];
+        };
+    };
+    getRevisionPresence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description People */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["PresenceUser"][];
+                    };
+                };
+            };
         };
     };
 }

@@ -18,13 +18,14 @@ export function initials(name: string): string {
 
 const SIZES = { xs: "size-[18px] text-[8px]", sm: "size-5 text-[8.5px]", md: "size-7 text-[10.5px]", lg: "size-9 text-[12.5px]" };
 
-export function Avatar({ name, id, size = "md", className }: { name: string; id: string; size?: keyof typeof SIZES; className?: string }) {
+/** ring: outline color (presence on the same page). */
+export function Avatar({ name, id, size = "md", className, ring }: { name: string; id: string; size?: keyof typeof SIZES; className?: string; ring?: string }) {
   return (
     <span
       role="img"
       aria-label={name}
       title={name}
-      style={{ background: userColor(id) }}
+      style={{ background: userColor(id), ...(ring ? { boxShadow: `0 0 0 2px var(--background), 0 0 0 4px ${ring}` } : {}) }}
       className={cn("inline-grid shrink-0 place-items-center rounded-full font-semibold tracking-wide text-white", SIZES[size], className)}
     >
       {initials(name)}

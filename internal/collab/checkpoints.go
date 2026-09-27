@@ -377,6 +377,7 @@ func (h *Hub) Routes(r chi.Router) {
 		r.Get("/revisions/{revision}/checkpoints/{checkpoint}/files", h.checkpointFiles)
 		r.Get("/revisions/{revision}/checkpoints/{checkpoint}/files/*", h.checkpointFile)
 		r.Post("/revisions/{revision}/checkpoints/{checkpoint}/restore", h.restore)
+		r.Get("/revisions/{revision}/presence", h.presence)
 	})
 }
 
