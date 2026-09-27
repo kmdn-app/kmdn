@@ -65,9 +65,10 @@ type Hub struct {
 	Publish func(scope string, event map[string]any)
 	Options Options
 
-	once  sync.Once
-	mu    sync.Mutex
-	rooms map[string]*Room // by revision id + "\x00" + path
+	once     sync.Once
+	mu       sync.Mutex
+	rooms    map[string]*Room // by revision id + "\x00" + path
+	activity map[string]*activity
 }
 
 const maxAwarenessState = 8 << 10
@@ -529,22 +530,35 @@ func (p *Peer) update(ctx context.Context, data []byte) {
 	if len(clients) == 0 && len(data) <= 2 {
 		return // an empty update (e.g. step 2 from an up-to-date client); deletions have no clients but more bytes
 	}
-	uid := p.caller.User.ID
+	if err := r.ingest(ctx, data, clients, p.caller, p, "human"); errors.Is(err, errClientConflict) {
+		p.refuse("client_conflict", "Your editor's id collided with someone else's. Reload the page.")
+	}
+}
+
+var errClientConflict = errors.New("collab: client id belongs to someone else")
+
+// ingest appends a validated update to the room: log, broadcast to everyone
+// but from, persistence and materialization timers, client attribution, and
+// the manifest entry on the first edit. kind is recorded for new client ids
+// (human, restore, assistant).
+func (r *Room) ingest(ctx context.Context, data []byte, clients []uint64, c revisions.Caller, from *Peer, kind string) error {
+	uid := c.User.ID
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
-		return
+		return nil
 	}
 	var newClients []uint64
-	for _, c := range clients {
-		if owner, ok := r.clients[c]; ok && owner != uid {
+	for _, id := range clients {
+		if owner, ok := r.clients[id]; ok && owner != uid {
 			r.mu.Unlock()
-			p.refuse("client_conflict", "Your editor's id collided with someone else's. Reload the page.")
-			return
+			return errClientConflict
 		} else if !ok {
-			r.clients[c] = uid
-			newClients = append(newClients, c)
+			newClients = append(newClients, id)
 		}
+	}
+	for _, id := range newClients {
+		r.clients[id] = uid
 	}
 	r.seq++
 	r.tail = append(r.tail, data)
@@ -552,7 +566,7 @@ func (p *Peer) update(ctx context.Context, data []byte) {
 	r.dirty = true
 	targets := make([]*Peer, 0, len(r.peers))
 	for q := range r.peers {
-		if q != p {
+		if q != from {
 			targets = append(targets, q)
 		}
 	}
@@ -570,16 +584,16 @@ func (p *Peer) update(ctx context.Context, data []byte) {
 	for _, q := range targets {
 		q.conn.Send(realtime.KindSync, q.channel, out)
 	}
-	if len(newClients) > 0 {
-		for _, c := range newClients {
-			if _, err := store.Exec(ctx, r.hub.DB, `INSERT INTO ydoc_clients (ydoc_id, client_id, user_id, kind) VALUES (?, ?, ?, 'human') ON CONFLICT DO NOTHING`, r.docID, int64(c), uid); err != nil {
-				r.hub.Log.Error("record client", "err", err, "doc", r.docID)
-			}
+	for _, id := range newClients {
+		if _, err := store.Exec(ctx, r.hub.DB, `INSERT INTO ydoc_clients (ydoc_id, client_id, user_id, kind) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`, r.docID, int64(id), uid, kind); err != nil {
+			r.hub.Log.Error("record client", "err", err, "doc", r.docID)
 		}
 	}
 	if needManifest {
-		r.ensureManifest(ctx, p.caller)
+		r.ensureManifest(ctx, c)
 	}
+	r.hub.touched(ctx, r.revID, c.User.ID)
+	return nil
 }
 
 // ensureManifest adds the page to the revision on its first edit.
