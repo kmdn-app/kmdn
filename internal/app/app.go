@@ -36,6 +36,8 @@ import (
 	"github.com/kmdn-app/kmdn/internal/notify"
 	"github.com/kmdn-app/kmdn/internal/orghttp"
 	"github.com/kmdn-app/kmdn/internal/orgs"
+	"github.com/kmdn-app/kmdn/internal/outbound"
+	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/publish"
 	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/repos"
@@ -83,6 +85,8 @@ type App struct {
 	Consistency *consistency.Service
 	MCP         *mcp.Service
 	Orgs        *orghttp.Service
+	// Policy is what orgs may do; set from the config.
+	Policy *policy.Policy
 
 	stopTracing func(context.Context) error
 	Invites     *invites.Service
@@ -131,8 +135,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		db.Close()
 		return nil, err
 	}
+	a.Policy = &policy.Policy{Strict: cfg.Policy.Strict, NoOrgForges: cfg.Policy.NoOrgForges}
 	a.Mail = mail.NewService(cfg, db, sec, log)
-	a.Auth = &auth.Service{DB: db, Mail: a.Mail, BaseURL: cfg.Server.BaseURL, SessionTTL: cfg.Auth.SessionTTL, AutoJoinDomains: cfg.Auth.AutoJoinDomains, Log: log}
+	a.Auth = &auth.Service{DB: db, Mail: a.Mail, BaseURL: cfg.Server.BaseURL, SessionTTL: cfg.Auth.SessionTTL, AutoJoinDomains: cfg.Auth.AutoJoinDomains, Policy: a.Policy, Log: log}
 	a.AuthH = auth.NewHTTP(a.Auth, strings.HasPrefix(cfg.Server.BaseURL, "https://"), trusted)
 	a.AuthH.BaseURL = cfg.Server.BaseURL
 	a.Setup = &setup.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: cfg.Server.BaseURL, Log: log}
@@ -144,8 +149,13 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	(&admin.SMTP{DB: db, Mail: a.Mail, Secrets: sec, Log: log}).Routes(r)
 
 	a.Repos = &repos.Service{
-		DB: db, Secrets: sec, Jobs: a.Jobs, Git: &gitmirror.Git{}, DataDir: cfg.DataDir, BaseURL: strings.TrimRight(cfg.Server.BaseURL, "/"), Log: log,
+		DB: db, Secrets: sec, Jobs: a.Jobs, Git: &gitmirror.Git{AllowProtocols: a.Policy.GitProtocols()}, DataDir: cfg.DataDir, BaseURL: strings.TrimRight(cfg.Server.BaseURL, "/"), Log: log,
 		Adapters: &repos.Adapters{DB: db, Secrets: sec, HTTP: &http.Client{Timeout: 30 * time.Second, Transport: telemetry.Transport(nil)}},
+		Policy:   a.Policy,
+	}
+	if cfg.Policy.Strict {
+		// Hosts an org added only reach public addresses.
+		a.Repos.Adapters.OrgHTTP = outbound.Client(false)
 	}
 	a.Repos.Register()
 	idx := &search.Indexer{Index: search.Index{DB: db}, Repos: a.Repos, Jobs: a.Jobs}
@@ -154,7 +164,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Repos.Routes(r)
 	a.Repos.ForgeRoutes(r)
 	uploads := blobs.FS{Root: filepath.Join(cfg.DataDir, "uploads")}
-	a.Revisions = &revisions.Service{DB: db, Repos: a.Repos, Log: log, DataDir: cfg.DataDir, Blobs: uploads, UploadMaxMB: cfg.Limits.UploadMaxMB}
+	a.Revisions = &revisions.Service{DB: db, Repos: a.Repos, Log: log, DataDir: cfg.DataDir, Blobs: uploads, UploadMaxMB: cfg.Limits.UploadMaxMB, Policy: a.Policy}
 	a.Revisions.Routes(r)
 	eng, err := docengine.New(docengine.Options{})
 	if err != nil {
@@ -206,7 +216,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Notify.Register()
 	a.Notify.Routes(r)
 	a.Notify.FollowRoutes(r)
-	a.Hooks = &hooks.Service{DB: db, Secrets: sec, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, AllowPrivate: cfg.Hooks.AllowPrivate, Log: log}
+	a.Hooks = &hooks.Service{DB: db, Secrets: sec, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, AllowPrivate: a.Policy.AllowPrivateOutbound(cfg.Hooks.AllowPrivate), Log: log}
 	a.Hooks.Register()
 	a.Hooks.Routes(r)
 	a.Notify.OnEvent = a.Hooks.RevisionEvent
@@ -279,12 +289,12 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Server.Mount("/mcp", a.MCP.Handler(a.AuthH.TrustedProxies))
 	people := &admin.People{DB: db, Auth: a.Auth, Log: log}
 	people.Routes(r)
-	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, Log: log}
+	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, OrgForges: a.Policy.OrgForgesAllowed(), Log: log}
 
 	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
-	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL}
+	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL, Policy: a.Policy}
 	a.Invites.Routes(r)
-	link := &linking.Service{DB: db, Secrets: sec, AuthH: a.AuthH, BaseURL: a.Repos.BaseURL, HTTP: a.Repos.Adapters.HTTP}
+	link := &linking.Service{DB: db, Secrets: sec, AuthH: a.AuthH, BaseURL: a.Repos.BaseURL, HTTP: a.Repos.Adapters.HTTP, Adapters: a.Repos.Adapters}
 	link.Routes(r)
 	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes, a.Invites.OrgRoutes, a.MCP.OrgRoutes, a.LLM.OrgRoutes, a.Repos.OrgForgeRoutes, link.OrgRoutes)
 	if _, err := repos.EnsureGitHost(ctx, db); err != nil {

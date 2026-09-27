@@ -40,9 +40,16 @@ type Service struct {
 	AuthH   *auth.HTTP
 	BaseURL string
 	HTTP    *http.Client
+	// Adapters picks the client per host (org hosts may be restricted).
+	Adapters *repos.Adapters
 }
 
-func (s *Service) client() *http.Client {
+// client is the HTTP client for a host: hosts an org added go through the
+// restricted one when the instance has it (policy strict).
+func (s *Service) client(h repos.HostRecord) *http.Client {
+	if s.Adapters != nil {
+		return s.Adapters.For(h)
+	}
 	if s.HTTP != nil {
 		return s.HTTP
 	}
@@ -354,7 +361,7 @@ func (s *Service) token(ctx context.Context, h repos.HostRecord, code string) (s
 		AccessToken string `json:"access_token"`
 		Error       string `json:"error"`
 	}
-	if err := s.doJSON(req, &tok); err != nil {
+	if err := s.doJSON(h, req, &tok); err != nil {
 		return "", err
 	}
 	if tok.AccessToken == "" {
@@ -375,7 +382,7 @@ func (s *Service) profile(ctx context.Context, h repos.HostRecord, token string)
 			Name      string `json:"name"`
 			AvatarURL string `json:"avatar_url"`
 		}
-		if err := s.get(ctx, h.APIURL+"/user", "Bearer "+tok.AccessToken, &u); err != nil {
+		if err := s.get(ctx, h, h.APIURL+"/user", "Bearer "+tok.AccessToken, &u); err != nil {
 			return Profile{}, err
 		}
 		var emails []struct {
@@ -383,7 +390,7 @@ func (s *Service) profile(ctx context.Context, h repos.HostRecord, token string)
 			Primary  bool   `json:"primary"`
 			Verified bool   `json:"verified"`
 		}
-		_ = s.get(ctx, h.APIURL+"/user/emails", "Bearer "+tok.AccessToken, &emails)
+		_ = s.get(ctx, h, h.APIURL+"/user/emails", "Bearer "+tok.AccessToken, &emails)
 		p := Profile{ID: strconv.FormatInt(u.ID, 10), Login: u.Login, Name: u.Name, AvatarURL: u.AvatarURL, Noreply: GitHubNoreply(host, u.ID, u.Login)}
 		for _, e := range emails {
 			if e.Verified && e.Primary {
@@ -402,7 +409,7 @@ func (s *Service) profile(ctx context.Context, h repos.HostRecord, token string)
 			AvatarURL   string `json:"avatar_url"`
 			ConfirmedAt string `json:"confirmed_at"`
 		}
-		if err := s.get(ctx, strings.TrimRight(h.BaseURL, "/")+"/api/v4/user", "Bearer "+tok.AccessToken, &u); err != nil {
+		if err := s.get(ctx, h, strings.TrimRight(h.BaseURL, "/")+"/api/v4/user", "Bearer "+tok.AccessToken, &u); err != nil {
 			return Profile{}, err
 		}
 		p := Profile{ID: strconv.FormatInt(u.ID, 10), Login: u.Username, Name: u.Name, AvatarURL: u.AvatarURL, Noreply: GitLabNoreply(host, u.ID, u.Username)}
@@ -414,15 +421,15 @@ func (s *Service) profile(ctx context.Context, h repos.HostRecord, token string)
 	return Profile{}, errors.New("linking: unsupported forge")
 }
 
-func (s *Service) get(ctx context.Context, u, auth string, out any) error {
+func (s *Service) get(ctx context.Context, h repos.HostRecord, u, auth string, out any) error {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	req.Header.Set("Authorization", auth)
 	req.Header.Set("Accept", "application/json")
-	return s.doJSON(req, out)
+	return s.doJSON(h, req, out)
 }
 
-func (s *Service) doJSON(req *http.Request, out any) error {
-	res, err := s.client().Do(req)
+func (s *Service) doJSON(h repos.HostRecord, req *http.Request, out any) error {
+	res, err := s.client(h).Do(req)
 	if err != nil {
 		return err
 	}

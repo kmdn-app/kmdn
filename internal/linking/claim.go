@@ -103,7 +103,7 @@ func (s *Service) claim(w http.ResponseWriter, r *http.Request, h repos.HostReco
 		fail(w, r, st, "session")
 		return
 	}
-	mine, err := forge.UserInstallations(ctx, s.client(), h.APIURL, token)
+	mine, err := forge.UserInstallations(ctx, s.client(h), h.APIURL, token)
 	if err != nil {
 		fail(w, r, st, "forge")
 		return

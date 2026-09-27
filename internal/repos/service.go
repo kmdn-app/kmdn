@@ -23,6 +23,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/jobs"
+	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/store"
 )
@@ -42,9 +43,11 @@ type Service struct {
 	Jobs     *jobs.Queue
 	Git      *gitmirror.Git
 	Adapters *Adapters
-	DataDir  string
-	BaseURL  string
-	Log      *slog.Logger
+	// Policy says which clone URLs and how many repos an org may have.
+	Policy  *policy.Policy
+	DataDir string
+	BaseURL string
+	Log     *slog.Logger
 
 	OnHeadChanged []HeadChanged
 	// OnScopeChanged refreshes derived content after root or filter changes.
@@ -102,6 +105,15 @@ func (s *Service) Connect(ctx context.Context, by auth.Principal, in ConnectInpu
 	if err != nil || !h.UsableBy(in.OrgID) {
 		return Repo{}, "", &ErrInvalid{"forge_host_id", "Pick a configured forge."}
 	}
+	if max := s.Policy.For(ctx, in.OrgID).Repos; max > 0 {
+		var n int
+		if err := store.QueryRow(ctx, s.DB, `SELECT COUNT(*) FROM repos WHERE org_id = ?`, in.OrgID).Scan(&n); err != nil {
+			return Repo{}, "", err
+		}
+		if n >= max {
+			return Repo{}, "", &policy.ErrLimit{What: "repositories", Limit: max}
+		}
+	}
 	fr := forge.Repo{Owner: in.Owner, Name: in.Name, CloneURL: in.CloneURL}
 	var info forge.RepoInfo
 	var adapter forge.Adapter
@@ -110,13 +122,16 @@ func (s *Service) Connect(ctx context.Context, by auth.Principal, in ConnectInpu
 		if in.CloneURL == "" {
 			return Repo{}, "", &ErrInvalid{"clone_url", "Enter the repository's git URL."}
 		}
+		if err := s.Policy.GitURL(ctx, in.CloneURL); err != nil {
+			return Repo{}, "", &ErrInvalid{"clone_url", err.Error()}
+		}
 		fr.Owner, fr.Name = forge.SplitCloneURL(in.CloneURL)
 		adapter = &forge.PlainGit{Token: in.Token}
 	case forge.KindGitLab:
 		if in.Token == "" {
 			return Repo{}, "", &ErrInvalid{"token", "Paste a project or group access token with api and write_repository scopes."}
 		}
-		adapter = &forge.GitLab{BaseURL: h.BaseURL, Token: in.Token, HTTP: s.Adapters.HTTP}
+		adapter = &forge.GitLab{BaseURL: h.BaseURL, Token: in.Token, HTTP: s.Adapters.For(h)}
 	case forge.KindGitHub:
 		adapter, err = s.Adapters.GitHubApp(ctx, h)
 		if err != nil {

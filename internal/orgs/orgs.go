@@ -52,11 +52,13 @@ func ValidRole(r string) bool { return r == Member || r == Admin || r == Owner }
 
 // Org is an organization.
 type Org struct {
-	ID        string    `json:"id"`
-	Slug      string    `json:"slug"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
+	ID     string `json:"id"`
+	Slug   string `json:"slug"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	// StatusReason says why a suspended org is read-only.
+	StatusReason string    `json:"status_reason,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Membership is a person's place in an org.
@@ -123,12 +125,12 @@ func Slugify(name string) string {
 // ErrSlugTaken is returned when another org has the slug.
 var ErrSlugTaken = errors.New("orgs: slug taken")
 
-const cols = `id, slug, name, status, created_at`
+const cols = `id, slug, name, status, created_at, status_reason`
 
 func scan(r interface{ Scan(...any) error }) (Org, error) {
 	var o Org
 	var at int64
-	err := r.Scan(&o.ID, &o.Slug, &o.Name, &o.Status, &at)
+	err := r.Scan(&o.ID, &o.Slug, &o.Name, &o.Status, &at, &o.StatusReason)
 	o.CreatedAt = store.FromMillis(at)
 	return o, err
 }
@@ -232,7 +234,7 @@ func ForUser(ctx context.Context, q store.Querier, u users.User) ([]Org, error) 
 		}
 		return []Org{o}, nil
 	}
-	return list(ctx, q, `SELECT o.id, o.slug, o.name, o.status, o.created_at FROM orgs o
+	return list(ctx, q, `SELECT o.id, o.slug, o.name, o.status, o.created_at, o.status_reason FROM orgs o
 		JOIN org_members m ON m.org_id = o.id
 		WHERE m.user_id = ? AND m.status = ? AND o.status <> ? ORDER BY o.name, o.slug`, u.ID, Active, Deleting)
 }
@@ -405,12 +407,16 @@ func SetSlug(ctx context.Context, q store.Querier, id, slug string) error {
 	return one(store.Exec(ctx, q, `UPDATE orgs SET slug = ? WHERE id = ?`, slug, id))
 }
 
-// SetStatus suspends, resumes or marks an org for deletion.
-func SetStatus(ctx context.Context, q store.Querier, id, status string) error {
+// SetStatus suspends (read-only, with a reason people see), resumes or
+// marks an org for deletion.
+func SetStatus(ctx context.Context, q store.Querier, id, status, reason string) error {
 	if status != Active && status != Suspended && status != Deleting {
 		return fmt.Errorf("orgs: bad status %q", status)
 	}
-	return one(store.Exec(ctx, q, `UPDATE orgs SET status = ? WHERE id = ?`, status, id))
+	if status == Active {
+		reason = ""
+	}
+	return one(store.Exec(ctx, q, `UPDATE orgs SET status = ?, status_reason = ? WHERE id = ?`, status, reason, id))
 }
 
 func one(res sql.Result, err error) error {
@@ -421,4 +427,21 @@ func one(res sql.Result, err error) error {
 		return store.ErrNotFound
 	}
 	return nil
+}
+
+// Seats counts an org's active members plus its pending invitations (what
+// a member limit caps).
+func Seats(ctx context.Context, q store.Querier, orgID string) (int, error) {
+	where, args, err := MemberClause(ctx, q, orgID, "u.id")
+	if err != nil {
+		return 0, err
+	}
+	var members, invites int
+	if err := store.QueryRow(ctx, q, `SELECT COUNT(*) FROM users u WHERE u.status = ? AND `+where, append([]any{users.Active}, args...)...).Scan(&members); err != nil {
+		return 0, err
+	}
+	if err := store.QueryRow(ctx, q, `SELECT COUNT(*) FROM invites WHERE org_id = ? AND accepted_at IS NULL AND expires_at > ?`, orgID, store.Millis(time.Now())).Scan(&invites); err != nil {
+		return 0, err
+	}
+	return members + invites, nil
 }

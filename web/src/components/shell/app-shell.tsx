@@ -10,6 +10,7 @@ import type { RepoView } from "@/lib/repos";
 import { RightPanel, type PanelTabs } from "./right-panel";
 import { AssistantPanel } from "@/components/assistant/assistant-panel";
 import { isPhone, onOpenPanel } from "@/lib/media";
+import { useCurrentOrg } from "@/lib/orgs";
 
 const PANEL_KEY = "kmdn-panel-open";
 const SIDEBAR_KEY = "kmdn-sidebar-open";
@@ -55,6 +56,7 @@ export function AppShell({
   // Pages outside a repository (account, admin) keep the last repository's sidebar.
   const { data: repos } = useRepos();
   const ctxRepo = repo ?? repos?.find((r) => r.id === lastRepo()) ?? repos?.[0];
+  const org = useCurrentOrg();
 
   const togglePanel = () =>
     setPanelOpen((v) => {
@@ -108,7 +110,14 @@ export function AppShell({
         <Sidebar repo={ctxRepo} revision={revision} currentPath={currentPath} onNavigate={() => setMobileNav(false)} />
       </div>
       {mobileNav && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} aria-hidden />}
-      <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">{children({ panelOpen, togglePanel, toggleSidebar })}</main>
+      <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">
+        {org?.status === "suspended" && (
+          <p role="status" className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-[0.8125rem]">
+            {org.status_reason ? t("orgs.suspendedReason", { org: org.name, reason: org.status_reason }) : t("orgs.suspended", { org: org.name })}
+          </p>
+        )}
+        {children({ panelOpen, togglePanel, toggleSidebar })}
+      </main>
       {panelOpen && <div className="fixed inset-0 z-20 bg-black/40 md:hidden" onClick={togglePanel} aria-hidden />}
       {panelOpen && <RightPanel onClose={togglePanel}>{withAssistant(panel, ctxRepo, revision, currentPath)}</RightPanel>}
     </div>

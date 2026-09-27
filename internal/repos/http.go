@@ -18,6 +18,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/groups"
 	"github.com/kmdn-app/kmdn/internal/orghttp"
 	"github.com/kmdn-app/kmdn/internal/orgs"
+	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
@@ -125,6 +126,10 @@ func (s *Service) connect(w http.ResponseWriter, r *http.Request) {
 		var inv *ErrInvalid
 		if errors.As(err, &inv) {
 			api.Error(w, r, api.Invalid(inv.Field, inv.Msg))
+			return
+		}
+		if l, ok := policy.IsLimit(err); ok {
+			api.Error(w, r, policy.Problem(l))
 			return
 		}
 		api.Error(w, r, err)

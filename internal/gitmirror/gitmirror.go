@@ -63,6 +63,9 @@ var ErrNotFound = errors.New("gitmirror: not found")
 type Git struct {
 	Binary  string // default "git"
 	Askpass string // path to the kmdn binary; default os.Executable()
+	// AllowProtocols restricts git's transports (GIT_ALLOW_PROTOCOL, e.g.
+	// "https:ssh"); empty keeps git's defaults.
+	AllowProtocols string
 }
 
 func (g *Git) bin() string {
@@ -142,6 +145,9 @@ func (g *Git) runEnv(ctx context.Context, dir string, cred *Credential, stdin io
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"LC_ALL=C",
 	)
+	if g.AllowProtocols != "" {
+		cmd.Env = append(cmd.Env, "GIT_ALLOW_PROTOCOL="+g.AllowProtocols)
+	}
 	cmd.Env = append(cmd.Env, env...)
 	if cred != nil && cred.Password != "" {
 		cmd.Env = append(cmd.Env,

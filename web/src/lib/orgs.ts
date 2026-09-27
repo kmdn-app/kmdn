@@ -14,8 +14,8 @@ export const orgsQuery = queryOptions({
 export const orgsInfoQuery = queryOptions({
   queryKey: ["orgs", "info"],
   queryFn: async () => {
-    const { mode, can_create } = await unwrap(api.GET("/orgs"));
-    return { mode, can_create };
+    const { mode, can_create, org_forges } = await unwrap(api.GET("/orgs"));
+    return { mode, can_create, org_forges };
   },
   staleTime: 60_000,
 });

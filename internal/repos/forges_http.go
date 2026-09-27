@@ -93,7 +93,20 @@ func GitLabCallbackURL(baseURL string) string {
 	return strings.TrimRight(baseURL, "/") + "/api/v1/auth/oauth/callback"
 }
 
+// orgForgesRefused answers org admins when the instance only offers its
+// shared forges; it reports whether it did.
+func (s *Service) orgForgesRefused(w http.ResponseWriter, r *http.Request) bool {
+	if orgOf(r) == "" || s.Policy.OrgForgesAllowed() {
+		return false
+	}
+	api.Error(w, r, api.Err(http.StatusForbidden, "org_forges_off", "This instance provides the forges; organizations can't add their own."))
+	return true
+}
+
 func (s *Service) createHost(w http.ResponseWriter, r *http.Request) {
+	if s.orgForgesRefused(w, r) {
+		return
+	}
 	var in struct {
 		Kind         string `json:"kind"`
 		BaseURL      string `json:"base_url"`
@@ -191,6 +204,9 @@ type manifestState struct {
 }
 
 func (s *Service) githubManifest(w http.ResponseWriter, r *http.Request) {
+	if s.orgForgesRefused(w, r) {
+		return
+	}
 	var in struct {
 		BaseURL      string `json:"base_url"` // GitHub web URL; empty = github.com
 		Organization string `json:"organization"`
@@ -250,7 +266,7 @@ func (s *Service) githubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apiURL := forge.GitHubAPIURL(st.BaseURL)
-	conv, err := forge.ConvertManifest(ctx, s.Adapters.HTTP, apiURL, code)
+	conv, err := forge.ConvertManifest(ctx, s.Adapters.For(HostRecord{OrgID: st.OrgID}), apiURL, code)
 	if err != nil {
 		s.Log.Error("github manifest conversion", "error", err)
 		http.Redirect(w, r, "/admin?forge_error=conversion", http.StatusFound)

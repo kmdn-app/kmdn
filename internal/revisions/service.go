@@ -17,6 +17,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/blobs"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/ids"
+	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/textdiff"
@@ -41,8 +42,10 @@ type Service struct {
 	Blobs blobs.Store
 	// DataDir is the data directory.
 	DataDir string
-	// UploadMaxMB caps uploads; repo settings and .kmdn.yml can only lower it.
+	// UploadMaxMB caps uploads; repo settings, .kmdn.yml and the org's
+	// limits (Policy) can only lower it.
 	UploadMaxMB int
+	Policy      *policy.Policy
 
 	// Changed is called after a revision or its manifest changes (realtime
 	// fan-out and room mode switches hook in here). Optional.

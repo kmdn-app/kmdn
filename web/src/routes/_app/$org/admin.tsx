@@ -482,6 +482,10 @@ function ReposPanel() {
   const hosts = useQuery({ queryKey: ["forges", currentOrg()], queryFn: async () => (await unwrap(api.GET("/orgs/{org}/admin/forges", { params: { path: { org: currentOrg() } } }))).items });
   const [connectHost, setConnectHost] = useState<ForgeHost | null>(null);
   const [addGitLab, setAddGitLab] = useState(false);
+  const { data: me } = useMe();
+  const info = useQuery(orgsInfoQuery);
+  // Org admins add their own forges unless the instance provides them all.
+  const canAddForges = !!me?.is_instance_admin || info.data?.org_forges !== false;
   return (
     <Panel title={t("admin.repositories")} desc={t("admin.reposDesc")}>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -503,13 +507,15 @@ function ReposPanel() {
           </Card>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2">
-        <GitHubAppButton />
-        <Button variant="outline" onClick={() => setAddGitLab(true)}>
-          <ForgeIcon kind="gitlab" />
-          {t("admin.addGitLab")}
-        </Button>
-      </div>
+      {canAddForges && (
+        <div className="flex flex-wrap gap-2">
+          <GitHubAppButton />
+          <Button variant="outline" onClick={() => setAddGitLab(true)}>
+            <ForgeIcon kind="gitlab" />
+            {t("admin.addGitLab")}
+          </Button>
+        </div>
+      )}
       <div className="overflow-x-auto rounded-xl border">
         <table className="w-full text-[0.84375rem]">
           <thead className="text-left text-[0.8125rem] text-muted-foreground">

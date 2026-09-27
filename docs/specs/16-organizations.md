@@ -114,7 +114,7 @@ A `Policy` decides what orgs may do. The default is permissive (self-hosted admi
 - limits per org: members, repos, mirror size, upload size, AI on/off and budgets;
 - which console sections org admins can edit.
 
-A refused limit is an explicit state with its own message: an org over its member limit is **read-only** (read and comment; no new revisions, no publishing) until it's back under.
+A limit reached is an explicit answer (409 `limit_reached`, with what and how many): members (pending invitations count, and auto-join stops at the limit), repositories, upload size. A **suspended** org (status and a reason, set by an instance admin or the embedder) is read-only: everyone's repo role is at most Viewer (read and comment; no new revisions, no publishing), org admins keep the console, and members see the reason in a banner. Config: `policy.strict` and `policy.no_org_forges`; limits come from the embedder.
 
 ## Embedding
 

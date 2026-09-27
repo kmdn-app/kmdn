@@ -1247,6 +1247,8 @@
     "budgetHint": "Tokens per calendar month (UTC) for this organization. 0 means no budget of its own.",
     "usedThisMonth": "{{used}} tokens used this month",
     "usedOfBudget": "{{used}} of {{budget}} tokens used this month",
-    "saveBudget": "Save budget"
+    "saveBudget": "Save budget",
+    "suspended": "{{org}} is read-only: you can read and comment, but not edit or publish.",
+    "suspendedReason": "{{org}} is read-only: {{reason}}"
   }
 }
