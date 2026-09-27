@@ -183,3 +183,43 @@
   .doc .annotated-block { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .doc .annotation { padding-top: 0; }
 }
+
+/* Editor (Tiptap/ProseMirror) on top of .doc typography. */
+.kmdn-editor { outline: none; white-space: pre-wrap; word-wrap: break-word; caret-color: var(--foreground); }
+.kmdn-editor p.is-editor-empty:first-child::before,
+.kmdn-editor .is-empty.is-editor-empty::before {
+  content: attr(data-placeholder); color: var(--muted-foreground); float: left; height: 0; pointer-events: none;
+}
+.kmdn-editor li[data-task] { list-style: none; display: flex; gap: 8px; margin-left: -1.4em; }
+.kmdn-editor li[data-task] > input { margin-top: 0.45em; flex-shrink: 0; accent-color: var(--primary); }
+.kmdn-editor li > .li-content { min-width: 0; flex: 1; }
+.kmdn-editor li > .li-content > p { margin: 0; }
+.kmdn-editor .ProseMirror-selectednode { outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent); outline-offset: 2px; border-radius: 4px; }
+.kmdn-editor .frontmatter pre, .kmdn-editor .rawblk pre, .kmdn-editor .math-block {
+  font-family: var(--font-mono); font-size: 13px; background: var(--muted); border-radius: 8px; padding: 10px 12px; margin: 0 0 16px; white-space: pre-wrap;
+}
+.kmdn-editor .rawblk { position: relative; }
+.kmdn-editor .rawblk::before { content: attr(data-kind); position: absolute; right: 8px; top: 6px; font-size: 11px; color: var(--muted-foreground); }
+.kmdn-editor .math-inline, .kmdn-editor .fn-ref, .kmdn-editor .raw-inline { font-family: var(--font-mono); font-size: 0.86em; background: var(--muted); border-radius: 4px; padding: 0.1em 0.3em; }
+.kmdn-editor .fn-def { border-left: 2px solid var(--border); padding-left: 12px; margin: 0 0 16px; font-size: 14px; }
+.kmdn-editor .fn-def::before { content: "[^" attr(data-label) "]:"; font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); }
+.kmdn-editor .table-wrap { overflow-x: auto; margin: 0 0 16px; }
+.kmdn-editor table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+.kmdn-editor th, .kmdn-editor td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
+.kmdn-editor th { background: var(--muted); font-weight: 600; }
+.kmdn-editor img { max-width: 100%; border-radius: 6px; }
+.kmdn-editor .drop-cursor { color: var(--ring); }
+/* Collaborators' carets (CollaborationCaret). */
+.collaboration-carets__caret { position: relative; margin: 0 -1px; border-left: 1px solid; border-right: 1px solid; word-break: normal; pointer-events: none; }
+.collaboration-carets__label {
+  position: absolute; top: -1.35em; left: -1px; font-size: 11px; font-weight: 600; line-height: 1; padding: 2px 5px; border-radius: 4px 4px 4px 0;
+  color: #fff; white-space: nowrap; user-select: none; font-family: var(--font-sans);
+}
+.kmdn-editor > pre, .kmdn-editor li pre, .kmdn-editor blockquote pre {
+  position: relative; border: 1px solid var(--border); border-radius: 10px; background: var(--muted); margin: 4px 0 20px;
+  padding: 12px 14px; overflow-x: auto; font: 13.5px/1.65 var(--font-mono);
+}
+.kmdn-editor pre[data-lang]:not([data-lang=""])::after {
+  content: attr(data-lang); position: absolute; top: 4px; right: 10px; font: 11px var(--font-sans); color: var(--muted-foreground);
+}
+.kmdn-editor pre code { background: none; padding: 0; font-size: inherit; }
