@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/ids"
@@ -30,9 +31,12 @@ const ScopePublished = "published"
 
 // Defaults (docs/specs/08-assistant.md#per-revision).
 const (
-	DefaultK         = 8
-	DefaultNear      = 0.78
-	DefaultDuplicate = 0.92
+	DefaultK = 8
+	// DefaultConcurrency judges pairs a few at a time: scans of a large repo
+	// run hundreds of calls, each a few seconds with a reasoning model.
+	DefaultConcurrency = 4
+	DefaultNear        = 0.78
+	DefaultDuplicate   = 0.92
 	// revisionMaxCalls caps LLM judgments per revision check.
 	revisionMaxCalls = 40
 	// RevisionDebounce: checks run this long after the last materialization.
@@ -63,6 +67,15 @@ type Service struct {
 	K         int
 	Near      float32
 	Duplicate float32
+	// Concurrency is how many pairs are judged at once.
+	Concurrency int
+}
+
+func (s *Service) concurrency() int {
+	if s.Concurrency > 0 {
+		return s.Concurrency
+	}
+	return DefaultConcurrency
 }
 
 func (s *Service) k() int {
@@ -299,8 +312,9 @@ type decision struct {
 
 // decide turns candidate pairs into findings: near-identical pairs are
 // duplicates outright, the rest are judged (cached verdicts are free) up to
-// maxCalls model calls. keep holds the pairs whose findings stay as they
-// are: ignored ones and ones left undecided (capped reports the latter).
+// maxCalls model calls, several at a time. keep holds the pairs whose
+// findings stay as they are: ignored ones and ones left undecided (capped
+// reports the latter). Findings come out in similarity order.
 func (s *Service) decide(ctx context.Context, repoID string, pairs []pair, maxCalls int) (d decision, err error) {
 	sort.SliceStable(pairs, func(i, j int) bool { return pairs[i].sim > pairs[j].sim })
 	ignored, err := s.ignored(ctx, repoID)
@@ -308,8 +322,9 @@ func (s *Service) decide(ctx context.Context, repoID string, pairs []pair, maxCa
 		return d, err
 	}
 	d.keep = map[string]bool{}
-	calls := 0
-	for _, p := range pairs {
+	found := make([]*Finding, len(pairs))
+	var todo []int
+	for i, p := range pairs {
 		key := PairKey(p.a.Hash, p.b.Hash)
 		if ignored[key] {
 			d.keep[key] = true
@@ -319,34 +334,79 @@ func (s *Service) decide(ctx context.Context, repoID string, pairs []pair, maxCa
 		if p.sim >= s.dup() {
 			f.Kind = Duplicate
 			f.Explanation = fmt.Sprintf("These passages are nearly the same (%.0f%% similar): one page could link to the other.", float64(p.sim)*100)
-			d.found = append(d.found, f)
+			found[i] = &f
 			continue
 		}
-		if calls >= maxCalls {
-			d.keep[key], d.capped = true, true
-			continue
-		}
-		j, called, err := s.judge(ctx, repoID, p.a, p.b)
-		if called {
+		todo = append(todo, i)
+	}
+
+	// Workers take pairs in order. A model call reserves one of maxCalls
+	// before it starts and gives it back on a cache hit; a budget error stops
+	// everyone.
+	var (
+		mu     sync.Mutex
+		next   int
+		calls  int
+		stop   error
+		wg     sync.WaitGroup
+		budget *llm.ErrBudget
+	)
+	work := func() {
+		defer wg.Done()
+		for {
+			mu.Lock()
+			if next == len(todo) {
+				mu.Unlock()
+				return
+			}
+			i := todo[next]
+			next++
+			p := pairs[i]
+			key := PairKey(p.a.Hash, p.b.Hash)
+			if stop != nil || calls >= maxCalls {
+				d.keep[key], d.capped = true, true
+				mu.Unlock()
+				continue
+			}
 			calls++
+			mu.Unlock()
+
+			j, called, err := s.judge(ctx, repoID, p.a, p.b)
+
+			mu.Lock()
+			if !called {
+				calls--
+			}
+			switch {
+			case errors.As(err, &budget):
+				stop = err
+				d.keep[key], d.capped = true, true
+			case err != nil:
+				s.Log.Warn("judge pair", "err", err, "a", p.a.Path, "b", p.b.Path)
+				d.keep[key], d.capped = true, true
+				d.failed, d.lastErr = d.failed+1, err
+			default:
+				d.judged++
+				if j.Verdict == Contradiction || j.Verdict == Duplicate {
+					found[i] = &Finding{PairKey: key, A: side(p.a), B: side(p.b), Similarity: float64(p.sim),
+						Kind: j.Verdict, ClaimA: j.ClaimA, ClaimB: j.ClaimB, Explanation: j.Explanation}
+				}
+			}
+			mu.Unlock()
 		}
-		var budget *llm.ErrBudget
-		if errors.As(err, &budget) {
-			d.capped = true
-			return d, err
+	}
+	for range min(s.concurrency(), max(len(todo), 1)) {
+		wg.Add(1)
+		go work()
+	}
+	wg.Wait()
+	for _, f := range found {
+		if f != nil {
+			d.found = append(d.found, *f)
 		}
-		if err != nil {
-			s.Log.Warn("judge pair", "err", err, "a", p.a.Path, "b", p.b.Path)
-			d.keep[key], d.capped = true, true
-			d.failed, d.lastErr = d.failed+1, err
-			continue
-		}
-		d.judged++
-		if j.Verdict != Contradiction && j.Verdict != Duplicate {
-			continue
-		}
-		f.Kind, f.ClaimA, f.ClaimB, f.Explanation = j.Verdict, j.ClaimA, j.ClaimB, j.Explanation
-		d.found = append(d.found, f)
+	}
+	if stop != nil {
+		return d, stop
 	}
 	return d, nil
 }
