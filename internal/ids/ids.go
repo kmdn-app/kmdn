@@ -13,6 +13,7 @@ import (
 // Prefixes used across kmdn. See docs/specs/10-data-model.md.
 const (
 	User       = "usr"
+	Org        = "org"
 	Session    = "ses"
 	Repo       = "rep"
 	Revision   = "rev"

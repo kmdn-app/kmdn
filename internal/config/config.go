@@ -28,6 +28,7 @@ type Config struct {
 	DB        DB        `yaml:"db"`
 	SMTP      SMTP      `yaml:"smtp"`
 	Auth      Auth      `yaml:"auth"`
+	Orgs      Orgs      `yaml:"orgs"`
 	Assistant Assistant `yaml:"assistant"`
 	Limits    Limits    `yaml:"limits"`
 	Telemetry Telemetry `yaml:"telemetry"`
@@ -64,6 +65,16 @@ type SMTP struct {
 type Auth struct {
 	AutoJoinDomains []string      `yaml:"auto_join_domains"`
 	SessionTTL      time.Duration `yaml:"session_ttl"`
+}
+
+// Orgs configures organizations (docs/specs/16-organizations.md).
+type Orgs struct {
+	// Mode is "single" (one default org, every account a member) or
+	// "multi" (accounts belong to the orgs they join).
+	Mode string `yaml:"mode"`
+	// AllowCreate says who can create orgs in multi mode: "admins"
+	// (instance admins) or "anyone" signed in.
+	AllowCreate string `yaml:"allow_create"`
 }
 
 type Assistant struct {
@@ -113,6 +124,7 @@ func Defaults() Config {
 		DataDir:   "./data",
 		SMTP:      SMTP{Port: 587, Security: "starttls"},
 		Auth:      Auth{SessionTTL: 30 * 24 * time.Hour},
+		Orgs:      Orgs{Mode: "single", AllowCreate: "admins"},
 		Assistant: Assistant{Enabled: true},
 		Limits:    Limits{UploadMaxMB: 10, WysiwygMaxFileMB: 1},
 		Telemetry: Telemetry{Metrics: true, LogFormat: "json", LogLevel: "info"},
@@ -254,6 +266,16 @@ func (c Config) Validate() error {
 		}
 	default:
 		errs = append(errs, fmt.Errorf("assistant.provider %q must be anthropic or openai (env %s)", c.Assistant.Provider, EnvName("assistant.provider")))
+	}
+	switch c.Orgs.Mode {
+	case "single", "multi":
+	default:
+		errs = append(errs, fmt.Errorf("orgs.mode %q must be single or multi (env %s)", c.Orgs.Mode, EnvName("orgs.mode")))
+	}
+	switch c.Orgs.AllowCreate {
+	case "admins", "anyone":
+	default:
+		errs = append(errs, fmt.Errorf("orgs.allow_create %q must be admins or anyone (env %s)", c.Orgs.AllowCreate, EnvName("orgs.allow_create")))
 	}
 	switch c.Telemetry.LogFormat {
 	case "json", "text":
