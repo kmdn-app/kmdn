@@ -75,7 +75,7 @@ type Provider interface {
 ```
 
 - **Anthropic** (default, first-class): Messages API with tool use, streaming, prompt caching. Default model `claude-sonnet-5`; admin can pick others (e.g. `claude-opus-5-5` for review summaries, `claude-haiku-4-5-20251001` for cheap tasks like commit titles).
-- **OpenAI-compatible**: base URL + key + model name. Covers OpenAI, OpenRouter, Ollama, vLLM, LM Studio. Tool-calling support is required; the admin console runs a capability check on save.
+- **OpenAI-compatible**: base URL + key + model name. Covers OpenAI, OpenRouter, Ollama, vLLM, LM Studio. On `api.openai.com` kmdn uses the Responses API (reasoning models only take function tools there) and `max_output_tokens` with room for reasoning; other servers get Chat Completions. Tool-calling support is required; the admin console runs a capability check on save.
 - Per task model routing: `chat`, `review_summary`, `short_text` (titles, commit messages, revision names).
 
 ## Limits, cost and privacy

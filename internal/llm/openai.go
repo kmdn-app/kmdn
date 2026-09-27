@@ -12,12 +12,25 @@ import (
 	"time"
 )
 
-// OpenAI calls an OpenAI-compatible Chat Completions endpoint (OpenAI,
-// OpenRouter, Ollama, vLLM, LM Studio…). Tool calling is required.
+// OpenAI calls an OpenAI-compatible Chat Completions endpoint (OpenRouter,
+// Ollama, vLLM, LM Studio…), or OpenAI's Responses API on api.openai.com
+// (responses.go). Tool calling is required.
 type OpenAI struct {
 	BaseURL string // e.g. https://api.openai.com/v1 or http://localhost:11434/v1
 	Key     string // optional for local servers
 	HTTP    *http.Client
+	// API is "responses" or "chat"; empty picks the Responses API on OpenAI's
+	// own endpoint and Chat Completions elsewhere.
+	API string
+}
+
+func (o *OpenAI) official() bool {
+	u, err := url.Parse(o.BaseURL)
+	return err == nil && u.Hostname() == "api.openai.com"
+}
+
+func (o *OpenAI) responses() bool {
+	return o.API == "responses" || (o.API == "" && o.official())
 }
 
 // Name implements Provider.
@@ -39,7 +52,7 @@ const reasoningHeadroom = 4096
 // reasoning models and wants max_completion_tokens; compatible servers
 // (Ollama, vLLM, LM Studio…) keep max_tokens.
 func (o *OpenAI) maxTokens(n int) (string, int) {
-	if u, err := url.Parse(o.BaseURL); err == nil && u.Hostname() == "api.openai.com" {
+	if o.official() {
 		return "max_completion_tokens", n + reasoningHeadroom
 	}
 	return "max_tokens", n
@@ -115,6 +128,9 @@ func (o *OpenAI) messages(req ChatRequest) []oaiMessage {
 
 // Stream implements Provider.
 func (o *OpenAI) Stream(ctx context.Context, req ChatRequest) (<-chan ChatEvent, error) {
+	if o.responses() {
+		return o.streamResponses(ctx, req)
+	}
 	body := map[string]any{"model": req.Model, "messages": o.messages(req), "stream": true, "stream_options": map[string]any{"include_usage": true}}
 	if req.MaxTokens > 0 {
 		k, v := o.maxTokens(req.MaxTokens)
