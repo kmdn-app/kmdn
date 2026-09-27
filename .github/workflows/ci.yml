@@ -32,6 +32,8 @@ jobs:
           go-version-file: go.mod
       - name: Vet
         run: go vet ./...
+      - name: Check reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - uses: golangci/golangci-lint-action@v8
         with:
           version: latest

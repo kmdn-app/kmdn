@@ -82,6 +82,6 @@ pnpm install
 make build
 ```
 
-The result is `bin/kmdn`, with the web app embedded. It needs Go 1.26, Node 22 or newer with pnpm, and git.
+The result is `bin/kmdn`, with the web app embedded. It needs Go 1.26.6 or newer, Node 22 or newer with pnpm, and git.
 
 After the install, continue with [First run](first-run.md).
