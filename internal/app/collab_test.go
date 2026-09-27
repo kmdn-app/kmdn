@@ -119,7 +119,8 @@ func awareness(client, clock uint64, state string) []byte {
 
 func TestCollaborativeEditingOverWebSocket(t *testing.T) {
 	a, admin := newApp(t, nil)
-	a.Collab.Options = collab.Options{FlushDelay: 5 * time.Millisecond, QuietPeriod: 30 * time.Millisecond}
+	// A quiet period shorter than adding the page to the manifest exercises that race.
+	a.Collab.Options = collab.Options{FlushDelay: time.Millisecond, QuietPeriod: time.Millisecond}
 	ctx := context.Background()
 	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
 	signIn(t, a, admin, maya)
