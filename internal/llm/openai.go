@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -27,6 +28,21 @@ func (o *OpenAI) client() *http.Client {
 		return o.HTTP
 	}
 	return &http.Client{Timeout: 10 * time.Minute}
+}
+
+// reasoningHeadroom is added to the output cap on OpenAI's API, where
+// max_completion_tokens also counts the hidden reasoning of GPT-5 and
+// o-series models: a 400-token judgment would otherwise run out mid-thought.
+const reasoningHeadroom = 4096
+
+// maxTokens names the output cap: OpenAI's own API rejects max_tokens for
+// reasoning models and wants max_completion_tokens; compatible servers
+// (Ollama, vLLM, LM Studio…) keep max_tokens.
+func (o *OpenAI) maxTokens(n int) (string, int) {
+	if u, err := url.Parse(o.BaseURL); err == nil && u.Hostname() == "api.openai.com" {
+		return "max_completion_tokens", n + reasoningHeadroom
+	}
+	return "max_tokens", n
 }
 
 type oaiToolCall struct {
@@ -101,7 +117,8 @@ func (o *OpenAI) messages(req ChatRequest) []oaiMessage {
 func (o *OpenAI) Stream(ctx context.Context, req ChatRequest) (<-chan ChatEvent, error) {
 	body := map[string]any{"model": req.Model, "messages": o.messages(req), "stream": true, "stream_options": map[string]any{"include_usage": true}}
 	if req.MaxTokens > 0 {
-		body["max_tokens"] = req.MaxTokens
+		k, v := o.maxTokens(req.MaxTokens)
+		body[k] = v
 	}
 	if len(req.Tools) > 0 {
 		tools := make([]map[string]any, len(req.Tools))

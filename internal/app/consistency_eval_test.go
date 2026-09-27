@@ -39,24 +39,26 @@ func (bagOfWords) Embed(_ context.Context, _ string, texts []string) ([][]float3
 // TestConsistencyQuality is spike S8 (docs/specs/14-roadmap.md#spikes):
 // on a seeded 300-page corpus with 20 planted contradictions, the repo scan
 // should find at least 80% of them with at most one false positive per 50
-// pages. It needs real models:
+// pages. It needs real models; by default OpenAI for both judging and
+// embeddings, with one key:
 //
-//	KMDN_EVAL_KEY=…               chat provider key (judges pairs with the short-text model)
-//	KMDN_EVAL_PROVIDER=anthropic  or openai (then KMDN_EVAL_BASE_URL)
-//	KMDN_EVAL_MODEL=…             short-text model (default: the provider's)
-//	KMDN_EVAL_EMBED_URL=…         OpenAI-compatible embeddings base URL
-//	KMDN_EVAL_EMBED_KEY=…         (optional for local servers)
-//	KMDN_EVAL_EMBED_MODEL=…       e.g. text-embedding-3-small
+//	KMDN_EVAL_KEY=…               provider key (also used for embeddings)
+//	KMDN_EVAL_PROVIDER=openai     or anthropic
+//	KMDN_EVAL_BASE_URL=…          default https://api.openai.com/v1 for openai
+//	KMDN_EVAL_MODEL=…             judging model (default gpt-5.6-terra on openai)
+//	KMDN_EVAL_EMBED_URL=…         OpenAI-compatible embeddings base URL (default: the OpenAI base URL)
+//	KMDN_EVAL_EMBED_KEY=…         default KMDN_EVAL_KEY on openai
+//	KMDN_EVAL_EMBED_MODEL=…       default text-embedding-3-small on openai
 //	KMDN_EVAL_NEAR=0.78 KMDN_EVAL_DUP=0.92   thresholds to try
 //
-//	go test ./internal/app -run TestConsistencyQuality -v -timeout 60m
+//	KMDN_EVAL_KEY=sk-… go test ./internal/app -run TestConsistencyQuality -v -timeout 60m
 //
 // KMDN_EVAL_FAKE=1 runs the pipeline with a local embedder and a judge that
 // never finds anything, to check the harness itself.
 func TestConsistencyQuality(t *testing.T) {
 	fake := os.Getenv("KMDN_EVAL_FAKE") == "1"
-	if !fake && (os.Getenv("KMDN_EVAL_KEY") == "" || os.Getenv("KMDN_EVAL_EMBED_MODEL") == "") {
-		t.Skip("set KMDN_EVAL_KEY and KMDN_EVAL_EMBED_MODEL (see the comment) to run the consistency quality eval")
+	if !fake && os.Getenv("KMDN_EVAL_KEY") == "" {
+		t.Skip("set KMDN_EVAL_KEY (see the comment) to run the consistency quality eval")
 	}
 	a, admin := newApp(t, nil)
 	ctx := context.Background()
@@ -71,19 +73,43 @@ func TestConsistencyQuality(t *testing.T) {
 		a.LLM.EmbedOverride = bagOfWords{}
 		a.LLM.Override = &scripted{} // answers "(no more steps)": no verdict, pairs stay undecided
 	} else {
-		st.Provider = envOr("KMDN_EVAL_PROVIDER", llm.ProviderAnthropic)
+		st.Provider = envOr("KMDN_EVAL_PROVIDER", llm.ProviderOpenAI)
+		openai := st.Provider == llm.ProviderOpenAI
 		st.BaseURL = os.Getenv("KMDN_EVAL_BASE_URL")
+		if openai && st.BaseURL == "" {
+			st.BaseURL = "https://api.openai.com/v1"
+		}
 		ref, err := a.LLM.Secrets.Put(ctx, a.DB, "ai_key", []byte(os.Getenv("KMDN_EVAL_KEY")))
 		if err != nil {
 			t.Fatal(err)
 		}
 		st.KeyRef = ref
+		if st.Models == nil {
+			st.Models = map[string]string{}
+		}
 		if m := os.Getenv("KMDN_EVAL_MODEL"); m != "" {
 			st.Models[llm.TaskShortText] = m
+		} else if openai {
+			st.Models[llm.TaskShortText] = "gpt-5.6-terra"
 		}
 		st.Embeddings.BaseURL, st.Embeddings.Model = os.Getenv("KMDN_EVAL_EMBED_URL"), os.Getenv("KMDN_EVAL_EMBED_MODEL")
-		if k := os.Getenv("KMDN_EVAL_EMBED_KEY"); k != "" {
-			if st.Embeddings.KeyRef, err = a.LLM.Secrets.Put(ctx, a.DB, "ai_embeddings_key", []byte(k)); err != nil {
+		embedKey := os.Getenv("KMDN_EVAL_EMBED_KEY")
+		if openai {
+			if st.Embeddings.BaseURL == "" {
+				st.Embeddings.BaseURL = st.BaseURL
+			}
+			if st.Embeddings.Model == "" {
+				st.Embeddings.Model = "text-embedding-3-small"
+			}
+			if embedKey == "" {
+				embedKey = os.Getenv("KMDN_EVAL_KEY")
+			}
+		}
+		if st.Embeddings.BaseURL == "" || st.Embeddings.Model == "" {
+			t.Fatal("set KMDN_EVAL_EMBED_URL and KMDN_EVAL_EMBED_MODEL: the scan needs an embeddings endpoint")
+		}
+		if embedKey != "" {
+			if st.Embeddings.KeyRef, err = a.LLM.Secrets.Put(ctx, a.DB, "ai_embeddings_key", []byte(embedKey)); err != nil {
 				t.Fatal(err)
 			}
 		}

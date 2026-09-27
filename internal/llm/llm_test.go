@@ -132,6 +132,19 @@ func TestOpenAIStream(t *testing.T) {
 	}
 }
 
+func TestOpenAIMaxTokens(t *testing.T) {
+	for base, want := range map[string]string{
+		"https://api.openai.com/v1":    "max_completion_tokens=4496",
+		"http://localhost:11434/v1":    "max_tokens=400",
+		"https://openrouter.ai/api/v1": "max_tokens=400",
+	} {
+		k, v := (&OpenAI{BaseURL: base}).maxTokens(400)
+		if got := fmt.Sprintf("%s=%d", k, v); got != want {
+			t.Errorf("%s: %s, want %s", base, got, want)
+		}
+	}
+}
+
 func TestSSEMultiline(t *testing.T) {
 	var got []string
 	err := sse(strings.NewReader("event: a\ndata: one\ndata: two\n\n: comment\ndata: three\n\n"), func(ev, data string) error {
