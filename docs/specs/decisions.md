@@ -73,7 +73,7 @@ Flagged so they can be challenged in review:
 - Auto-join by email domain exists, off by default.
 - Agent keys scoped per repo (or all repos), default expiry 90 days.
 - Default model `claude-sonnet-5`; per-task model routing.
-- Pending suggestions block publishing; unresolved threads don't.
+- Pending suggestions block approval and publishing (the revision overview lists them); unresolved threads don't.
 - Stale badge after 30 days; closed revisions archived after 90.
 - Phones: no editing in v1.
 - Commit trailer `Kmdn-Revision:` for idempotency and history linking.

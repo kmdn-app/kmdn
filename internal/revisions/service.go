@@ -53,6 +53,9 @@ type Service struct {
 	// PendingUpdates reports updates from Published not yet applied (they
 	// block approving and publishing). Optional.
 	PendingUpdates func(ctx context.Context, rev Revision) (bool, error)
+	// PendingSuggestions counts suggestions nobody accepted or rejected yet
+	// (they block approving and publishing). Optional.
+	PendingSuggestions func(ctx context.Context, rev Revision) (int, error)
 }
 
 func (s *Service) changed(ctx context.Context, revID, kind string) {

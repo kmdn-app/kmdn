@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -485,6 +486,13 @@ func (s *Service) Approve(ctx context.Context, rev Revision, c Caller) (Revision
 			return rev, conflict("updates_pending", "Apply the updates from Published before approving.")
 		}
 	}
+	if s.PendingSuggestions != nil {
+		if n, err := s.PendingSuggestions(ctx, rev); err != nil {
+			return rev, err
+		} else if n > 0 {
+			return rev, conflict("suggestions_pending", suggestionsPendingMsg(n))
+		}
+	}
 	h, err := ContentHash(ctx, s.DB, rev.ID)
 	if err != nil {
 		return rev, err
@@ -640,4 +648,11 @@ func (s *Service) ContentChanged(ctx context.Context, revID string, by []string)
 		s.changed(ctx, revID, "approvals_reset")
 	}
 	return err
+}
+
+func suggestionsPendingMsg(n int) string {
+	if n == 1 {
+		return "Accept or reject the pending suggestion before approving."
+	}
+	return fmt.Sprintf("Accept or reject the %d pending suggestions before approving.", n)
 }

@@ -3309,6 +3309,7 @@ components:
         id: { type: string }
         author: { type: string, description: "User id" }
         at: { type: integer, format: int64, description: "Unix milliseconds" }
+        author_name: { type: string, description: "The author's name (list endpoint)" }
         inserted: { type: string }
         deleted: { type: string }
         kinds: { type: array, items: { type: string, enum: [insert, join, delete, change] } }
@@ -3332,13 +3333,14 @@ components:
       allOf:
         - $ref: "#/components/schemas/Revision"
         - type: object
-          required: [access, members, reviewers, file_count, unsaved_changes]
+          required: [access, members, reviewers, file_count, unsaved_changes, pending_suggestions]
           properties:
             access: { $ref: "#/components/schemas/RevisionAccess" }
             members: { type: array, items: { $ref: "#/components/schemas/RevisionMember" } }
             reviewers: { type: array, items: { $ref: "#/components/schemas/Reviewer" } }
             file_count: { type: integer }
             unsaved_changes: { type: boolean, description: "The content differs from the last Save all" }
+            pending_suggestions: { type: integer, description: "Suggestions still to accept or reject; they block approving and publishing" }
     RevisionCreate:
       type: object
       required: [title]

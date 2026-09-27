@@ -243,6 +243,10 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		a.Realtime.Publish("revision:"+rev.ID, ev)
 		a.Realtime.Publish("repo:"+rev.RepoID, map[string]any{"type": "revision", "kind": kind, "revision": rev.ID, "number": rev.Number, "state": rev.State})
 	}
+	a.Revisions.PendingSuggestions = func(ctx context.Context, rev revisions.Revision) (int, error) {
+		list, err := a.Collab.Suggestions(ctx, rev, "")
+		return len(list), err
+	}
 	a.Revisions.Removed = func(_ context.Context, rev revisions.Revision, p string) { a.Collab.FileRemoved(rev, p) }
 	a.Revisions.OnSubmitted = func(ctx context.Context, rev revisions.Revision, by string) {
 		// What goes to review is committed on the pull request.
