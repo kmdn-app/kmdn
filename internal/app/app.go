@@ -153,7 +153,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		return nil, err
 	}
 	a.Engine = eng
-	a.Realtime = &realtime.Hub{Origin: originOf(cfg.Server.BaseURL), Log: log, Authorize: a.authorizeScope}
+	a.Realtime = &realtime.Hub{Auth: a.Auth, Origin: originOf(cfg.Server.BaseURL), Log: log, Authorize: a.authorizeScope}
 	a.Branches = &branches.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, DataDir: cfg.DataDir, Log: log}
 	a.Branches.Register()
 	a.Collab = &collab.Hub{DB: db, Engine: eng, Revisions: a.Revisions, Branches: a.Branches, Log: log, Publish: a.Realtime.Publish}

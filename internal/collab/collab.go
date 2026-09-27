@@ -90,6 +90,10 @@ func joinErr(code, msg string) error { return &realtime.JoinError{Code: code, Me
 // Join implements realtime.Rooms.
 func (h *Hub) Join(ctx context.Context, c *realtime.Conn, channel uint32, ref realtime.RoomRef) (realtime.Channel, string, string, error) {
 	h.init()
+	u, err := c.CurrentUser()
+	if err != nil {
+		return nil, "", "", joinErr("unauthorized", "Sign in again to open this page.")
+	}
 	rev, err := revisions.Get(ctx, h.DB, ref.Revision)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, "", "", joinErr("not_found", "This revision doesn't exist.")
@@ -100,14 +104,14 @@ func (h *Hub) Join(ctx context.Context, c *realtime.Conn, channel uint32, ref re
 	if err != nil {
 		return nil, "", "", err
 	}
-	role, err := access.Effective(ctx, h.DB, c.User, repo.ID)
+	role, err := access.Effective(ctx, h.DB, u, repo.ID)
 	if err != nil {
 		return nil, "", "", err
 	}
 	if role == access.None {
 		return nil, "", "", joinErr("not_found", "This revision doesn't exist.")
 	}
-	caller := revisions.Caller{User: c.User, Role: role}
+	caller := revisions.Caller{User: u, Role: role}
 	acc, err := h.Revisions.AccessFor(ctx, rev, caller)
 	if err != nil {
 		return nil, "", "", err
@@ -116,7 +120,7 @@ func (h *Hub) Join(ctx context.Context, c *realtime.Conn, channel uint32, ref re
 	if !repos.IsMarkdown(p) || !repo.Scope().Contains(p) {
 		return nil, "", "", joinErr("not_found", "This page isn't part of the repository's content.")
 	}
-	room, err := h.room(ctx, repo, rev, p, acc.CanEdit, c.User.ID)
+	room, err := h.room(ctx, repo, rev, p, acc.CanEdit, u.ID)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -212,7 +216,7 @@ func (h *Hub) RevisionChanged(ctx context.Context, rev revisions.Revision) {
 	}
 	h.mu.Unlock()
 	for _, r := range rooms {
-		r.refreshModes(ctx, rev)
+		r.refreshModes()
 	}
 	if len(rooms) > 0 {
 		h.publishPresence(rev.ID)
@@ -483,12 +487,73 @@ func (r *Room) merged(ctx context.Context) []byte {
 
 // Receive implements realtime.Channel.
 func (p *Peer) Receive(kind byte, payload []byte) {
+	if !p.Authorize() {
+		return
+	}
 	switch kind {
 	case realtime.KindSync:
 		p.receiveSync(payload)
 	case realtime.KindAwareness:
 		p.receiveAwareness(payload)
 	}
+}
+
+// Authorize rechecks the live session, repository scope and revision rights.
+func (p *Peer) Authorize() bool {
+	caller, acc, err := p.currentAccess()
+	if err != nil {
+		p.conn.Detach(p.channel, p)
+		p.Close()
+		p.refuse("forbidden", "You no longer have access to this page.")
+		return false
+	}
+	p.mu.Lock()
+	changed := p.rw != acc.CanEdit
+	p.caller, p.rw = caller, acc.CanEdit
+	if changed {
+		p.warned = false
+	}
+	p.mu.Unlock()
+	if changed {
+		mode := "ro"
+		if acc.CanEdit {
+			mode = "rw"
+		}
+		p.conn.Control(map[string]any{"op": "mode", "channel": p.channel, "mode": mode, "reason": acc.Reason})
+	}
+	return true
+}
+
+func (p *Peer) currentAccess() (revisions.Caller, revisions.Access, error) {
+	r := p.room
+	ctx := p.conn.Context()
+	var caller revisions.Caller
+	var acc revisions.Access
+	u, err := p.conn.CurrentUser()
+	if err != nil {
+		return caller, acc, err
+	}
+	rev, err := revisions.Get(ctx, r.hub.DB, r.revID)
+	if err != nil {
+		return caller, acc, err
+	}
+	repo, err := repos.Get(ctx, r.hub.DB, rev.RepoID)
+	if err != nil {
+		return caller, acc, err
+	}
+	r.mu.Lock()
+	filePath := r.path
+	r.mu.Unlock()
+	role, err := access.Effective(ctx, r.hub.DB, u, repo.ID)
+	if err != nil {
+		return caller, acc, err
+	}
+	if role == access.None || !repo.Scope().Contains(filePath) {
+		return caller, acc, joinErr("not_found", "This page is not accessible.")
+	}
+	caller = revisions.Caller{User: u, Role: role}
+	acc, err = r.hub.Revisions.AccessFor(ctx, rev, caller)
+	return caller, acc, err
 }
 
 func (p *Peer) receiveSync(msg []byte) {
@@ -528,6 +593,7 @@ func (p *Peer) update(ctx context.Context, data []byte) {
 	r := p.room
 	p.mu.Lock()
 	rw := p.rw
+	caller := p.caller
 	p.mu.Unlock()
 	if !rw {
 		p.refuse("read_only", "Your changes weren't saved: this page is read-only for you right now.")
@@ -545,7 +611,7 @@ func (p *Peer) update(ctx context.Context, data []byte) {
 	if len(clients) == 0 && len(data) <= 2 {
 		return // an empty update (e.g. step 2 from an up-to-date client); deletions have no clients but more bytes
 	}
-	if err := r.ingest(ctx, data, clients, p.caller, p, "human"); errors.Is(err, errClientConflict) {
+	if err := r.ingest(ctx, data, clients, caller, p, "human"); errors.Is(err, errClientConflict) {
 		p.refuse("client_conflict", "Your editor's id collided with someone else's. Reload the page.")
 	}
 }
@@ -893,7 +959,7 @@ func (r *Room) markDirty() {
 	r.mu.Unlock()
 }
 
-func (r *Room) refreshModes(ctx context.Context, rev revisions.Revision) {
+func (r *Room) refreshModes() {
 	r.mu.Lock()
 	peers := make([]*Peer, 0, len(r.peers))
 	for p := range r.peers {
@@ -901,20 +967,6 @@ func (r *Room) refreshModes(ctx context.Context, rev revisions.Revision) {
 	}
 	r.mu.Unlock()
 	for _, p := range peers {
-		acc, err := r.hub.Revisions.AccessFor(ctx, rev, p.caller)
-		if err != nil {
-			continue
-		}
-		p.mu.Lock()
-		changed := p.rw != acc.CanEdit
-		p.rw, p.warned = acc.CanEdit, false
-		p.mu.Unlock()
-		if changed {
-			mode := "ro"
-			if acc.CanEdit {
-				mode = "rw"
-			}
-			p.conn.Control(map[string]any{"op": "mode", "channel": p.channel, "mode": mode, "reason": acc.Reason})
-		}
+		p.Authorize()
 	}
 }

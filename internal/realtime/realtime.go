@@ -54,6 +54,8 @@ type RoomRef struct {
 
 // Channel is one subscription on a connection (a peer in a room).
 type Channel interface {
+	// Authorize reloads current access before receiving or sending document data.
+	Authorize() bool
 	// Start sends the first frames (sync step 1, current awareness) once the
 	// client has been told the channel is subscribed.
 	Start()
@@ -75,6 +77,7 @@ func (e *JoinError) Error() string { return e.Message }
 
 // Hub accepts connections and fans out events.
 type Hub struct {
+	Auth  *auth.Service
 	Rooms Rooms
 	// Authorize decides whether a user may receive events for a scope
 	// ("repo:<id>", "revision:<id>"; "user" is always allowed).
@@ -99,10 +102,11 @@ type Conn struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mu       sync.Mutex
-	channels map[uint32]Channel
-	scopes   map[string]bool
-	closed   bool
+	mu           sync.Mutex
+	channels     map[uint32]Channel
+	scopes       map[string]bool
+	closed       bool
+	sessionToken string
 }
 
 func (h *Hub) originOK(r *http.Request) bool {
@@ -132,6 +136,11 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad origin", http.StatusForbidden)
 		return
 	}
+	cookie, err := r.Cookie(auth.SessionCookie)
+	if err != nil || h.Auth == nil {
+		http.Error(w, "sign in first", http.StatusUnauthorized)
+		return
+	}
 	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true}) // origin checked above
 	if err != nil {
 		return
@@ -140,7 +149,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Outlive the HTTP request context (it ends when the handler returns).
 	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	c := &Conn{ID: ids.New("wsc"), User: p.User, hub: h, ws: ws, out: make(chan []byte, sendQueue), ctx: ctx, cancel: cancel,
-		channels: map[uint32]Channel{}, scopes: map[string]bool{}}
+		channels: map[uint32]Channel{}, scopes: map[string]bool{}, sessionToken: cookie.Value}
 	h.mu.Lock()
 	if h.conns == nil {
 		h.conns, h.scopes = map[*Conn]struct{}{}, map[string]map[*Conn]struct{}{}
@@ -162,6 +171,9 @@ func (c *Conn) readLoop() {
 		}
 		if typ != websocket.MessageBinary || len(data) < headerLen {
 			continue
+		}
+		if _, err := c.CurrentUser(); err != nil {
+			return
 		}
 		kind, ch := data[0], binary.BigEndian.Uint32(data[1:headerLen])
 		payload := data[headerLen:]
@@ -187,6 +199,9 @@ func (c *Conn) writeLoop() {
 		case <-c.ctx.Done():
 			return
 		case msg := <-c.out:
+			if !c.authorizedFrame(msg) {
+				continue
+			}
 			wctx, cancel := context.WithTimeout(c.ctx, writeTimeout)
 			err := c.ws.Write(wctx, websocket.MessageBinary, msg)
 			cancel()
@@ -195,6 +210,10 @@ func (c *Conn) writeLoop() {
 				return
 			}
 		case <-ping.C:
+			if _, err := c.CurrentUser(); err != nil {
+				c.shutdown(websocket.StatusPolicyViolation, "session expired or revoked")
+				return
+			}
 			pctx, cancel := context.WithTimeout(c.ctx, writeTimeout)
 			err := c.ws.Ping(pctx)
 			cancel()
@@ -266,6 +285,42 @@ func (c *Conn) Control(v any) {
 
 // Context is cancelled when the connection closes.
 func (c *Conn) Context() context.Context { return c.ctx }
+
+// CurrentUser reloads both the session and the user, including deactivation and
+// admin changes. The connection's original User is for identity/display only.
+func (c *Conn) CurrentUser() (users.User, error) {
+	if c.hub.Auth == nil {
+		return users.User{}, errors.New("realtime: authentication unavailable")
+	}
+	_, u, err := c.hub.Auth.Lookup(c.ctx, c.sessionToken)
+	return u, err
+}
+
+// Check at delivery time too: queued data must not outlive its authorization.
+func (c *Conn) authorizedFrame(msg []byte) bool {
+	u, err := c.CurrentUser()
+	if err != nil {
+		go c.shutdown(websocket.StatusPolicyViolation, "session expired or revoked")
+		return false
+	}
+	switch msg[0] {
+	case KindSync, KindAwareness:
+		id := binary.BigEndian.Uint32(msg[1:headerLen])
+		c.mu.Lock()
+		ch := c.channels[id]
+		c.mu.Unlock()
+		return ch != nil && ch.Authorize()
+	case KindEvent, KindAgent:
+		var event struct {
+			Scope string `json:"scope"`
+		}
+		if json.Unmarshal(msg[headerLen:], &event) != nil {
+			return false
+		}
+		return event.Scope == "user:"+u.ID || (c.hub.Authorize != nil && c.hub.Authorize(c.ctx, u, event.Scope))
+	}
+	return true
+}
 
 type controlMsg struct {
 	Op      string   `json:"op"`
@@ -367,7 +422,8 @@ func (c *Conn) Detach(channel uint32, ch Channel) {
 }
 
 func (c *Conn) subscribeEvents(scope string) {
-	ok := scope == "user" || (c.hub.Authorize != nil && c.hub.Authorize(c.ctx, c.User, scope))
+	u, err := c.CurrentUser()
+	ok := err == nil && (scope == "user" || (c.hub.Authorize != nil && c.hub.Authorize(c.ctx, u, scope)))
 	c.mu.Lock()
 	if ok && len(c.scopes) >= maxScopes {
 		ok = false
