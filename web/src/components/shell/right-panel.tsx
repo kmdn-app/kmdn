@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FileDiff, History, Link2, MessageSquare, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,19 @@ const TABS = [
   { key: "history", icon: History },
   { key: "links", icon: Link2 },
 ] as const;
+
+type TabKey = (typeof TABS)[number]["key"];
+
+/**
+ * The tab a page's panel opens on: Comments when the page has something to
+ * discuss, otherwise the Assistant. Decided once per page, when `ready`, so a
+ * comment arriving later doesn't pull the panel away from the tab someone picked.
+ */
+export function useInitialPanelTab(page: string, ready: boolean, hasComments: boolean): TabKey {
+  const [chosen, setChosen] = useState<{ page: string; tab: TabKey } | null>(null);
+  if (ready && chosen?.page !== page) setChosen({ page, tab: hasComments ? "comments" : "assistant" });
+  return chosen?.page === page ? chosen.tab : "assistant";
+}
 
 /** Docked right panel with Assistant / Comments / Changes / History / Links. */
 export type PanelTabs = Partial<Record<(typeof TABS)[number]["key"], ReactNode>> & { initial?: (typeof TABS)[number]["key"] };

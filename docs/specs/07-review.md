@@ -43,6 +43,7 @@ Rules:
 - **Reviewer changes**: editors can add/remove reviewers while In review; removing the last reviewer returns it to Editing. A maintainer not assigned can "Ask to review", which the editors accept.
 - **Updates from Published are previewed, then applied** (see [06](06-git-and-forges.md#updates-from-published)). While a revision has pending updates, Approve and Publish are blocked. Any editor applies them while Editing; an assigned reviewer applies them while In review or Approved. Applying changes content, so approvals reset.
 - **Conflicts go back to editing.** If applied updates bring conflicts into an In review or Approved revision, it returns to **Editing** with `has_conflicts`, approvals are dismissed, editors and reviewers are notified. The original editors resolve the conflicts together in the editor, then resubmit to the same reviewers.
+- **Pending suggestions block approval.** A reviewer can't approve while any suggestion in the revision is still to accept or reject ("Accept or reject the 2 pending suggestions before approving"). The revision overview lists them under **Suggestions to address**, with the page, author, what each changes and Accept/Reject for people who can resolve them.
 - **Publish** is a separate click by any Maintainer/Admin once Approved, blocked while suggestions or updates from Published are pending.
 - **Close**: editors or maintainers. Closed revisions are read-only, reopenable for 90 days, then archived (Y.Docs compacted to a final snapshot).
 - **Stale** badge after 30 days without activity. No auto-close in v1.

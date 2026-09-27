@@ -174,6 +174,7 @@ Assisted-by: kmdn-assistant
 - **Reviewed-by**: approving maintainers.
 - **Assisted-by: kmdn-assistant**: present when any surviving content came from the assistant. Assistant content is credited to the user who asked for it as Co-authored-by.
 - **Kmdn-Revision**: link back to the revision (used for idempotency and for History to link commits to revisions).
+- History and blame credit people, not kmdn: a commit kmdn authored (a merge, or a squashed publish from before merges) is shown as its first `Co-authored-by` (the person with the most surviving content), with the others as "with …".
 - Merge commit author: the forge's merging identity (`kmdn[bot]` on GitHub, the access token's bot user on GitLab, `kmdn` on plain git). Saved commits: author = the person, committer = kmdn.
 
 ## Webhook ingress

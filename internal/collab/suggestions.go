@@ -16,12 +16,14 @@ import (
 	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
+	"github.com/kmdn-app/kmdn/internal/users"
 )
 
 // PageSuggestion is a pending suggestion and the page it's in.
 type PageSuggestion struct {
 	docengine.Suggestion
-	Path string `json:"path"`
+	Path       string `json:"path"`
+	AuthorName string `json:"author_name,omitempty"`
 }
 
 // Suggestions lists pending suggestions in the revision's pages (one page
@@ -58,6 +60,18 @@ func (h *Hub) Suggestions(ctx context.Context, rev revisions.Revision, p string)
 		for _, s := range list {
 			out = append(out, PageSuggestion{Suggestion: s, Path: fp})
 		}
+	}
+	names := map[string]string{}
+	for i := range out {
+		id := out[i].Author
+		if _, ok := names[id]; !ok {
+			if u, err := users.ByID(ctx, h.DB, id); err == nil {
+				names[id] = u.Name
+			} else {
+				names[id] = ""
+			}
+		}
+		out[i].AuthorName = names[id]
 	}
 	return out, nil
 }

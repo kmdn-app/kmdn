@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -518,6 +519,13 @@ func (s *Service) Approve(ctx context.Context, rev Revision, c Caller) (Revision
 			return rev, conflict("updates_pending", "Apply the updates from Published before approving.")
 		}
 	}
+	if s.PendingSuggestions != nil {
+		if n, err := s.PendingSuggestions(ctx, rev); err != nil {
+			return rev, err
+		} else if n > 0 {
+			return rev, conflict("suggestions_pending", suggestionsPendingMsg(n))
+		}
+	}
 	h, err := ContentHash(ctx, s.DB, rev.ID)
 	if err != nil {
 		return rev, err
@@ -744,4 +752,11 @@ func isAdmin(ctx context.Context, q store.Querier, u users.User, repoID string) 
 	}
 	role, err := access.Effective(ctx, q, u, repoID)
 	return err == nil && role.AtLeast(access.Admin)
+}
+
+func suggestionsPendingMsg(n int) string {
+	if n == 1 {
+		return "Accept or reject the pending suggestion before approving."
+	}
+	return fmt.Sprintf("Accept or reject the %d pending suggestions before approving.", n)
 }
