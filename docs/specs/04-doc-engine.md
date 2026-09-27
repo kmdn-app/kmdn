@@ -79,6 +79,8 @@ The Yjs document holds the ProseMirror tree (`Y.XmlFragment`) and bounded author
 4. **Presence**: remote cursors in source mode are mapped from ProseMirror positions to markdown offsets via the block source map; approximate inside re-serialized blocks.
 5. **Suggesting in source mode**: edits made while Suggesting is on are converted to insertion/deletion marks on the resulting tree diff.
 
+Failed drafts retain their separate edit ranges across remount; if mapping remote changes exceeds the work budget, the draft stays editable and Save stays blocked with instructions to copy the source and reload.
+
 Risk: cursor jumps under heavy concurrent edits in the same block. Mitigation: never rewrite the block that contains the local cursor while the user is actively typing (within the debounce window); apply it after.
 
 ## Server host (Go ↔ JS bridge)
@@ -87,7 +89,7 @@ Risk: cursor jumps under heavy concurrent edits in the same block. Mitigation: n
 - Yjs binary state passes as `Uint8Array` (goja `ArrayBuffer` / wasm memory copy).
 - Runtimes are created from a precompiled bundle (goja `Program` / QuickJS bytecode) for fast startup.
 - Every call has a CPU budget and memory cap; exceeding them returns an error and marks the input for inspection.
-- Shared source metadata is untrusted input. Both hosts bound its aggregate size before parsing; the Go host applies its configured Markdown input limit as well as the encoded-state and execution limits. Invalid metadata cannot overwrite semantic content.
+- Shared source metadata is untrusted input. Both hosts reject unknown fields, nested values, embeds and formatted source text. Authored text is bounded by `MaxInputBytes`; known metadata keys and values have an aggregate budget of four times that limit. The Go host also applies the encoded-state and execution limits. Invalid metadata cannot overwrite semantic content.
 - The bundle version is stamped; Y.Doc snapshots record the engine version that wrote them for future migrations.
 
 ## Link index and graph

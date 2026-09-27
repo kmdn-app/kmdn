@@ -17,6 +17,7 @@ import { merge3 } from "./merge";
 import { suggestEdit, type EditAttrs } from "./suggest-edit";
 import { extractLinks, rewriteLinks } from "./links";
 import type { DocNode, SourceMap } from "./schema";
+import { MAX_SOURCE_BYTES, SOURCE, serializeShared, sourceSnapshot, writeSource } from "./shared-source";
 
 const u8 = (b: ArrayBuffer) => new Uint8Array(b);
 const buf = (a: Uint8Array): ArrayBuffer => a.buffer.slice(a.byteOffset, a.byteOffset + a.byteLength) as ArrayBuffer;
@@ -45,35 +46,42 @@ const api = {
    * update and the source map for materializing it later.
    */
   yFromMarkdown: (markdown: string, clientID: number): { update: ArrayBuffer; sourceMap: string } => {
-    const { doc, sourceMap } = parse(markdown);
+    const parsed = parse(markdown);
+    const { doc, sourceMap } = parsed;
     const d = new Y.Doc();
     d.clientID = clientID;
     d.transact(() => {
       writeDoc(d.getXmlFragment(CONTENT), doc);
+      writeSource(d, parsed);
       d.getMap("meta").set("engineVersion", ENGINE_VERSION);
     });
     return { update: buf(Y.encodeStateAsUpdate(d)), sourceMap: JSON.stringify(sourceMap) };
   },
   /** state → markdown, reusing untouched bytes via the source map */
-  yMaterialize: (update: ArrayBuffer, sourceMapJSON: string): string => {
+  yMaterialize: (update: ArrayBuffer, sourceMapJSON: string, maxBytes = MAX_SOURCE_BYTES): string => {
     const d = load(update);
     const sm = sourceMapJSON ? (JSON.parse(sourceMapJSON) as SourceMap) : undefined;
-    return serialize(readDoc(d.getXmlFragment(CONTENT)), sm);
+    return serializeShared(d, sm, maxBytes);
   },
   /**
    * The update that turns state into `markdown`, written by clientID (edits
    * made outside an editor). Returns an empty update when nothing changed.
    */
-  yApplyMarkdown: (update: ArrayBuffer, markdown: string, clientID: number): ArrayBuffer => {
+  yApplyMarkdown: (update: ArrayBuffer, markdown: string, clientID: number, maxBytes = MAX_SOURCE_BYTES): ArrayBuffer => {
     const d = load(update);
     d.clientID = clientID;
+    const parsed = parse(markdown);
+    const previous = sourceSnapshot(d, parse(serializeShared(d, undefined, maxBytes)));
     // The transaction's own update: encodeStateAsUpdate(d, sv) would also carry
     // the document's whole delete set.
     let out: Uint8Array = new Uint8Array([0, 0]);
     d.on("update", (u: Uint8Array) => {
       out = u;
     });
-    d.transact(() => applyDoc(d.getXmlFragment(CONTENT), parse(markdown).doc, settledHash));
+    d.transact(() => {
+      applyDoc(d.getXmlFragment(CONTENT), parsed.doc, settledHash);
+      writeSource(d, parsed, previous);
+    });
     return buf(out);
   },
   /** state → the document as JSON (suggestions included). */
@@ -170,9 +178,15 @@ const api = {
   yContributions: (update: ArrayBuffer): string => {
     const d = load(update);
     const counts: Record<string, number> = {};
+    const source = d.getMap(SOURCE);
     d.store.clients.forEach((structs, client) => {
       let n = 0;
-      for (const s of structs) if (s instanceof Y.Item && !s.deleted && s.countable) n += s.length;
+      for (const s of structs) if (s instanceof Y.Item && !s.deleted && s.countable) {
+        let parent = s.parent;
+        while (parent instanceof Y.AbstractType && parent._item) parent = parent._item.parent;
+        // Source spelling is metadata, not additional authored document content.
+        if (parent !== source) n += s.length;
+      }
       if (n > 0) counts[String(client)] = n;
     });
     return JSON.stringify(counts);
