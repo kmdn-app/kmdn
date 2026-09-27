@@ -16,6 +16,8 @@ linters:
         - fmt.Fprintf
         - fmt.Fprintln
         - (*database/sql.Rows).Close
+        - (io.ReadCloser).Close
+        - (io.Closer).Close
         - (*database/sql.Conn).Close
         - (*database/sql.DB).Close
         - (*github.com/kmdn-app/kmdn/internal/store.DB).Close
@@ -28,6 +30,10 @@ linters:
     gocritic:
       disabled-checks:
         - ifElseChain
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [bodyclose]
 formatters:
   enable:
     - gofmt

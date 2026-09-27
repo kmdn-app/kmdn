@@ -6,10 +6,18 @@ import (
 	"fmt"
 	"log/slog"
 
+	"strings"
+	"time"
+
+	"github.com/kmdn-app/kmdn/internal/admin"
+	"github.com/kmdn-app/kmdn/internal/api"
+	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/jobs"
+	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/server"
+	"github.com/kmdn-app/kmdn/internal/setup"
 	"github.com/kmdn-app/kmdn/internal/store"
 )
 
@@ -21,6 +29,10 @@ type App struct {
 	Secrets *secrets.Store
 	Jobs    *jobs.Queue
 	Server  *server.Server
+	Mail    *mail.Service
+	Auth    *auth.Service
+	AuthH   *auth.HTTP
+	Setup   *setup.Service
 }
 
 // New opens the database, applies migrations and builds the services.
@@ -56,16 +68,54 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		Server:  server.New(server.Options{Config: cfg, Logger: log}),
 	}
 	a.Server.AddReadyCheck("database", func(ctx context.Context) error { return db.PingContext(ctx) })
+
+	trusted, err := api.ParseCIDRs(cfg.Server.TrustedProxies)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	a.Mail = mail.NewService(cfg, db, sec, log)
+	a.Auth = &auth.Service{DB: db, Mail: a.Mail, BaseURL: cfg.Server.BaseURL, SessionTTL: cfg.Auth.SessionTTL, AutoJoinDomains: cfg.Auth.AutoJoinDomains, Log: log}
+	a.AuthH = auth.NewHTTP(a.Auth, strings.HasPrefix(cfg.Server.BaseURL, "https://"), trusted)
+	a.Setup = &setup.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: cfg.Server.BaseURL, Log: log}
+
+	r := a.Server.API()
+	r.Use(a.AuthH.Middleware)
+	a.AuthH.Routes(r)
+	a.Setup.Routes(r)
+	(&admin.SMTP{DB: db, Mail: a.Mail, Secrets: sec, Log: log}).Routes(r)
+
+	a.Jobs.Register("auth.purge", func(ctx context.Context, _ jobs.Job) (any, error) { return nil, a.Auth.PurgeExpired(ctx) })
 	return a, nil
 }
 
 // Run serves HTTP and runs background workers until ctx is cancelled.
 func (a *App) Run(ctx context.Context) error {
+	if _, err := a.Setup.Prepare(ctx); err != nil {
+		return err
+	}
+	go a.periodic(ctx, time.Hour, "auth.purge")
 	done := make(chan struct{})
 	go func() { a.Jobs.Run(ctx); close(done) }()
 	err := a.Server.Run(ctx)
 	<-done
 	return err
+}
+
+// periodic enqueues a maintenance job every interval (deduplicated by key).
+func (a *App) periodic(ctx context.Context, every time.Duration, kind string) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		if _, err := a.Jobs.Enqueue(ctx, a.DB, kind, nil, jobs.EnqueueOptions{Key: kind, MaxAttempts: 1}); err != nil && ctx.Err() == nil {
+			a.Log.Error("enqueue periodic job", "kind", kind, "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // Close releases resources.

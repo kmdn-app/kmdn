@@ -2,7 +2,7 @@
 
 ## Principles
 
-- `api/openapi.yaml` (OpenAPI 3.1) is the source of truth. Go server interfaces via `oapi-codegen` (strict server), TS client and TanStack Query hooks generated into `packages/api-client`.
+- `api/openapi.yaml` (OpenAPI 3.1) is the source of truth. Go handlers are hand-written; `internal/app` has a test that fails when registered routes and documented operations differ. TypeScript types are generated with `openapi-typescript` into `packages/api-client` and used through `openapi-fetch`; CI checks the generated file is current.
 - Base path `/api/v1`. JSON. Cookie session auth for the SPA. (Personal API tokens for scripts are post-v1; external agents use [MCP](12-mcp.md).)
 - Errors: RFC 9457 `application/problem+json` with a stable `code` (e.g. `revision_not_approved`, `conflicts_pending`) and i18n-friendly `params`.
 - Pagination: cursor-based (`?cursor=…&limit=…`, response `{items, next_cursor}`).

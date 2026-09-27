@@ -1,0 +1,333 @@
+openapi: 3.1.0
+info:
+  title: kmdn API
+  version: 0.1.0
+  description: |
+    REST API of the kmdn server. Paths are relative to `/api/v1`.
+
+    Browser clients authenticate with the `kmdn_session` cookie. Unsafe
+    methods (POST, PUT, PATCH, DELETE) must send the `X-Kmdn-CSRF` header with
+    the value of the `kmdn_csrf` cookie (also returned as `csrf_token` by
+    `GET /me`). Errors use RFC 9457 problem details with a stable `code`.
+  license:
+    name: AGPL-3.0
+servers:
+  - url: /api/v1
+tags:
+  - name: auth
+  - name: me
+  - name: setup
+  - name: admin
+paths:
+  /auth/magic-link:
+    post:
+      tags: [auth]
+      operationId: requestMagicLink
+      summary: Email a sign-in link and code
+      description: Always answers 202 for a valid address, whether or not an account exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              additionalProperties: false
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "202":
+          description: Sent (if the account exists)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, expires_in_minutes]
+                properties:
+                  status: { type: string, enum: [sent] }
+                  expires_in_minutes: { type: integer }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /auth/magic-link/verify:
+    post:
+      tags: [auth]
+      operationId: verifyMagicLink
+      summary: Sign in with a link token, or an email and 6-digit code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                token: { type: string }
+                email: { type: string, format: email }
+                code: { type: string, pattern: "^[0-9 ]{6,7}$" }
+      responses:
+        "200":
+          description: Signed in; session cookies set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      responses:
+        "204": { description: Signed out }
+  /me:
+    get:
+      tags: [me]
+      operationId: getMe
+      responses:
+        "200":
+          description: The signed-in user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [me]
+      operationId: updateMe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                theme: { $ref: "#/components/schemas/Theme" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /me/sessions:
+    get:
+      tags: [me]
+      operationId: listMySessions
+      responses:
+        "200":
+          description: Active sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Session" }
+  /me/sessions/{id}:
+    delete:
+      tags: [me]
+      operationId: revokeMySession
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Revoked }
+        "404": { $ref: "#/components/responses/Problem" }
+  /setup/status:
+    get:
+      tags: [setup]
+      operationId: getSetupStatus
+      security: []
+      responses:
+        "200":
+          description: Setup state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SetupStatus" }
+  /setup/admin:
+    post:
+      tags: [setup]
+      operationId: createFirstAdmin
+      security: []
+      description: Creates the first instance admin using the one-time token printed in the server log, and signs them in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, name, email]
+              additionalProperties: false
+              properties:
+                token: { type: string }
+                name: { type: string }
+                email: { type: string, format: email }
+                instance_name: { type: string }
+      responses:
+        "201":
+          description: Admin created and signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /setup/complete:
+    post:
+      tags: [setup]
+      operationId: completeSetup
+      responses:
+        "200":
+          description: Setup marked complete
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SetupStatus" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /admin/smtp:
+    get:
+      tags: [admin]
+      operationId: getSMTP
+      responses:
+        "200":
+          description: Current SMTP settings (password never returned)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SMTPSettings" }
+    put:
+      tags: [admin]
+      operationId: putSMTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SMTPInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SMTPSettings" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /admin/smtp/test:
+    post:
+      tags: [admin]
+      operationId: testSMTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                to: { type: string, format: email }
+                settings: { $ref: "#/components/schemas/SMTPInput" }
+      responses:
+        "200":
+          description: Result of the delivery attempt
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+                  to: { type: string }
+                  error: { type: string }
+                  hint: { type: string }
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: kmdn_session
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        params: { type: object, additionalProperties: true }
+    Theme:
+      type: string
+      enum: [system, light, dark]
+    User:
+      type: object
+      required: [id, email, name, locale, theme, commit_email_mode, is_instance_admin, status, created_at]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        locale: { type: string }
+        theme: { $ref: "#/components/schemas/Theme" }
+        commit_email_mode: { type: string, enum: [forge_noreply, account, custom] }
+        is_instance_admin: { type: boolean }
+        status: { type: string, enum: [active, deactivated] }
+        created_at: { type: string, format: date-time }
+        last_active_at: { type: string, format: date-time }
+    Me:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          required: [csrf_token]
+          properties:
+            csrf_token: { type: string }
+    Session:
+      type: object
+      required: [id, created_at, last_seen_at, expires_at, ip, user_agent, current]
+      properties:
+        id: { type: string }
+        created_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        ip: { type: string }
+        user_agent: { type: string }
+        current: { type: boolean }
+    SetupStatus:
+      type: object
+      required: [needed, admin_exists, completed, smtp_configured, smtp_from_config, instance_name]
+      properties:
+        needed: { type: boolean }
+        admin_exists: { type: boolean }
+        completed: { type: boolean }
+        smtp_configured: { type: boolean }
+        smtp_from_config: { type: boolean }
+        instance_name: { type: string }
+    SMTPSettings:
+      type: object
+      required: [host, port, security, username, from, has_password, from_config, configured]
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        security: { type: string, enum: [starttls, tls, none, ""] }
+        username: { type: string }
+        from: { type: string }
+        has_password: { type: boolean }
+        from_config: { type: boolean }
+        configured: { type: boolean }
+    SMTPInput:
+      type: object
+      required: [host, port, from]
+      additionalProperties: false
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        security: { type: string, enum: [starttls, tls, none] }
+        username: { type: string }
+        from: { type: string }
+        password:
+          type: string
+          description: Omit to keep the stored password; empty string removes it.
+security:
+  - session: []
