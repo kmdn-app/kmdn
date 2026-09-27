@@ -271,10 +271,11 @@ func (s *Service) CheckRevision(ctx context.Context, revID string) error {
 				}
 			}
 		}
-		found, keep, _, err = s.decide(ctx, repo.ID, pairs, revisionMaxCalls)
+		d, err := s.decide(ctx, repo.ID, pairs, revisionMaxCalls)
 		if err != nil {
 			return err
 		}
+		found, keep = d.found, d.keep
 	}
 	if err := s.record(ctx, repo.ID, rev.ID, found, keep); err != nil {
 		return err
@@ -285,33 +286,44 @@ func (s *Service) CheckRevision(ctx context.Context, revID string) error {
 	return nil
 }
 
+// decision is the outcome of judging candidate pairs.
+type decision struct {
+	found  []Finding
+	keep   map[string]bool // pair keys whose state stays as it is
+	capped bool            // pairs were left undecided (cap, budget or errors)
+	judged int             // judgments that succeeded, cached ones included
+	failed int             // judgments that errored
+	// lastErr is the latest judgment error.
+	lastErr error
+}
+
 // decide turns candidate pairs into findings: near-identical pairs are
 // duplicates outright, the rest are judged (cached verdicts are free) up to
 // maxCalls model calls. keep holds the pairs whose findings stay as they
 // are: ignored ones and ones left undecided (capped reports the latter).
-func (s *Service) decide(ctx context.Context, repoID string, pairs []pair, maxCalls int) (out []Finding, keep map[string]bool, capped bool, err error) {
+func (s *Service) decide(ctx context.Context, repoID string, pairs []pair, maxCalls int) (d decision, err error) {
 	sort.SliceStable(pairs, func(i, j int) bool { return pairs[i].sim > pairs[j].sim })
 	ignored, err := s.ignored(ctx, repoID)
 	if err != nil {
-		return nil, nil, false, err
+		return d, err
 	}
-	keep = map[string]bool{}
+	d.keep = map[string]bool{}
 	calls := 0
 	for _, p := range pairs {
 		key := PairKey(p.a.Hash, p.b.Hash)
 		if ignored[key] {
-			keep[key] = true
+			d.keep[key] = true
 			continue
 		}
 		f := Finding{PairKey: key, A: side(p.a), B: side(p.b), Similarity: float64(p.sim)}
 		if p.sim >= s.dup() {
 			f.Kind = Duplicate
 			f.Explanation = fmt.Sprintf("These passages are nearly the same (%.0f%% similar): one page could link to the other.", float64(p.sim)*100)
-			out = append(out, f)
+			d.found = append(d.found, f)
 			continue
 		}
 		if calls >= maxCalls {
-			keep[key], capped = true, true
+			d.keep[key], d.capped = true, true
 			continue
 		}
 		j, called, err := s.judge(ctx, repoID, p.a, p.b)
@@ -320,20 +332,23 @@ func (s *Service) decide(ctx context.Context, repoID string, pairs []pair, maxCa
 		}
 		var budget *llm.ErrBudget
 		if errors.As(err, &budget) {
-			return out, keep, true, err
+			d.capped = true
+			return d, err
 		}
 		if err != nil {
 			s.Log.Warn("judge pair", "err", err, "a", p.a.Path, "b", p.b.Path)
-			keep[key], capped = true, true
+			d.keep[key], d.capped = true, true
+			d.failed, d.lastErr = d.failed+1, err
 			continue
 		}
+		d.judged++
 		if j.Verdict != Contradiction && j.Verdict != Duplicate {
 			continue
 		}
 		f.Kind, f.ClaimA, f.ClaimB, f.Explanation = j.Verdict, j.ClaimA, j.ClaimB, j.Explanation
-		out = append(out, f)
+		d.found = append(d.found, f)
 	}
-	return out, keep, capped, nil
+	return d, nil
 }
 
 func side(p Passage) Side {
@@ -441,18 +456,26 @@ func (s *Service) scan(ctx context.Context, r repos.Repo, sc *Scan) error {
 		return err
 	}
 	before := s.judgedCount(ctx, r.ID)
-	found, keep, capped, err := s.decide(ctx, r.ID, pairs, st.Consistency.ScanMaxCalls)
+	d, err := s.decide(ctx, r.ID, pairs, st.Consistency.ScanMaxCalls)
 	sc.Judged = s.judgedCount(ctx, r.ID) - before
-	sc.Found = len(found)
+	sc.Found = len(d.found)
 	if err != nil {
 		return err
 	}
 	sc.Status = "done"
-	if capped {
+	if d.capped {
 		sc.Status = "capped"
 	}
-	if err := s.record(ctx, r.ID, ScopePublished, found, keep); err != nil {
+	if err := s.record(ctx, r.ID, ScopePublished, d.found, d.keep); err != nil {
 		return err
+	}
+	if d.failed > 0 {
+		// A provider that fails every call (a wrong model name, a missing
+		// permission) fails the scan, so the report says why.
+		if d.judged == 0 {
+			return fmt.Errorf("every judgment failed (%d pairs): %w", d.failed, d.lastErr)
+		}
+		sc.Error = fmt.Sprintf("%d judgments failed; the last one: %v", d.failed, d.lastErr)
 	}
 	// Vectors no page uses any more, kept a month for revisions and rollbacks.
 	_, err = store.Exec(ctx, s.DB, `DELETE FROM passage_embeddings WHERE created_at < ? AND hash NOT IN (SELECT hash FROM passages)`, store.Millis(time.Now().Add(-30*24*time.Hour)))
