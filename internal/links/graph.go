@@ -40,6 +40,14 @@ type GraphEdge struct {
 type Graph struct {
 	Nodes []GraphNode `json:"nodes"`
 	Edges []GraphEdge `json:"edges"`
+	// Duplicates are pages that repeat each other (consistency report).
+	Duplicates []GraphDuplicate `json:"duplicates"`
+}
+
+// GraphDuplicate is a pair of pages with a duplicate passage.
+type GraphDuplicate struct {
+	A string `json:"a"`
+	B string `json:"b"`
 }
 
 // pageTitle humanizes a file name ("remote-work.md" → "Remote work").
@@ -165,7 +173,18 @@ func (s *Service) Graph(ctx context.Context, repo repos.Repo, rev *revisions.Rev
 			}
 		}
 	}
-	g := Graph{Nodes: []GraphNode{}, Edges: []GraphEdge{}}
+	g := Graph{Nodes: []GraphNode{}, Edges: []GraphEdge{}, Duplicates: []GraphDuplicate{}}
+	if s.Duplicates != nil {
+		dups, err := s.Duplicates(ctx, repo.ID)
+		if err != nil {
+			return Graph{}, err
+		}
+		for _, d := range dups {
+			if pages[d[0]] && pages[d[1]] {
+				g.Duplicates = append(g.Duplicates, GraphDuplicate{A: d[0], B: d[1]})
+			}
+		}
+	}
 	in, out := map[string]int{}, map[string]int{}
 	for _, e := range edges {
 		g.Edges = append(g.Edges, *e)

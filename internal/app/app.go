@@ -19,6 +19,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/collab"
 	"github.com/kmdn-app/kmdn/internal/config"
+	"github.com/kmdn-app/kmdn/internal/consistency"
 	"github.com/kmdn-app/kmdn/internal/docengine"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/hooks"
@@ -46,31 +47,32 @@ import (
 
 // App holds the running services.
 type App struct {
-	Config    config.Config
-	Log       *slog.Logger
-	DB        *store.DB
-	Secrets   *secrets.Store
-	Jobs      *jobs.Queue
-	Server    *server.Server
-	Mail      *mail.Service
-	Auth      *auth.Service
-	AuthH     *auth.HTTP
-	Setup     *setup.Service
-	Repos     *repos.Service
-	Revisions *revisions.Service
-	Engine    *docengine.Engine
-	Realtime  *realtime.Hub
-	Collab    *collab.Hub
-	Links     *links.Service
-	Publish   *publish.Service
-	Threads   *threads.Service
-	Updates   *updates.Service
-	Notify    *notify.Service
-	Hooks     *hooks.Service
-	LLM       *llm.Service
-	Assistant *assistant.Service
-	Summaries *summaries.Service
-	Invites   *invites.Service
+	Config      config.Config
+	Log         *slog.Logger
+	DB          *store.DB
+	Secrets     *secrets.Store
+	Jobs        *jobs.Queue
+	Server      *server.Server
+	Mail        *mail.Service
+	Auth        *auth.Service
+	AuthH       *auth.HTTP
+	Setup       *setup.Service
+	Repos       *repos.Service
+	Revisions   *revisions.Service
+	Engine      *docengine.Engine
+	Realtime    *realtime.Hub
+	Collab      *collab.Hub
+	Links       *links.Service
+	Publish     *publish.Service
+	Threads     *threads.Service
+	Updates     *updates.Service
+	Notify      *notify.Service
+	Hooks       *hooks.Service
+	LLM         *llm.Service
+	Assistant   *assistant.Service
+	Summaries   *summaries.Service
+	Consistency *consistency.Service
+	Invites     *invites.Service
 }
 
 // New opens the database, applies migrations and builds the services.
@@ -196,6 +198,21 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Summaries.Register()
 	a.Summaries.Routes(r)
 	a.Publish.SuggestedCommit = a.Summaries.SuggestedCommit
+	a.Consistency = &consistency.Service{DB: db, LLM: a.LLM, Repos: a.Repos, Revisions: a.Revisions, Jobs: a.Jobs, Docs: collabDocs{a}, Publish: a.Realtime.Publish, Log: log,
+		Brief: func(ctx context.Context, rev revisions.Revision, u users.User, text, p string) error {
+			t, err := assistant.RevisionThread(ctx, db, rev.RepoID, rev.ID)
+			if err != nil {
+				return err
+			}
+			_, err = a.Assistant.Post(ctx, t, u, text, assistant.Context{Path: p})
+			return err
+		}}
+	a.Consistency.Register()
+	a.Consistency.Routes(r)
+	a.Links.Duplicates = a.Consistency.Duplicates
+	a.Revisions.OnContent = func(ctx context.Context, revID, _ string) {
+		a.Consistency.RequestRevision(ctx, revID, consistency.RevisionDebounce)
+	}
 	a.Links.Routes(r, links.ApplierFunc(func(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, md, kind string) error {
 		return a.Collab.Apply(ctx, repo, rev, c, p, md, kind)
 	}))
@@ -219,6 +236,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 			log.Error("submit checkpoint", "err", err, "revision", rev.ID)
 		}
 		a.Summaries.RequestReview(ctx, rev.ID, by)
+		a.Consistency.RequestRevision(ctx, rev.ID, 0)
 	}
 	a.Server.Mount("/ws", a.AuthH.Middleware(a.Realtime))
 	a.Server.Mount("/hooks", a.Repos.WebhookHandler())
@@ -246,6 +264,7 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	go a.periodic(ctx, time.Hour, "auth.purge")
+	go a.periodic(ctx, time.Hour, consistency.JobSchedule)
 	// Events recorded without a revision change (updates prepared, threads)
 	// still reach people within a minute.
 	go a.periodic(ctx, time.Minute, notify.JobDrain)

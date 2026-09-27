@@ -153,6 +153,9 @@ type Service struct {
 	Engine    *docengine.Engine
 	Jobs      *jobs.Queue
 	Log       *slog.Logger
+	// Duplicates returns pairs of pages with duplicate passages (the
+	// consistency report), drawn as dotted edges. Optional.
+	Duplicates func(ctx context.Context, repoID string) ([][2]string, error)
 }
 
 func (s *Service) revisions() *revisions.Service { return s.Revisions }

@@ -2,10 +2,10 @@ import { useEffect, useRef } from "react";
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation, type SimulationLinkDatum, type SimulationNodeDatum } from "d3-force";
 
 export type GNode = { path: string; title: string; folder: string; in: number; out: number; orphan?: boolean; changed?: boolean; missing?: boolean };
-export type GEdge = { from: string; to: string; count: number; broken?: boolean };
+export type GEdge = { from: string; to: string; count: number; broken?: boolean; duplicate?: boolean };
 
 type SimNode = GNode & SimulationNodeDatum;
-type SimLink = SimulationLinkDatum<SimNode> & { broken?: boolean };
+type SimLink = SimulationLinkDatum<SimNode> & { broken?: boolean; duplicate?: boolean };
 
 /** Distinct, theme-friendly folder colors (the order folders sort in picks them). */
 export const FOLDER_COLORS = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6", "#14b8a6", "#f97316", "#84cc16", "#e11d48"];
@@ -86,7 +86,7 @@ export function GraphCanvas({
         simNodes.push(ghost);
       }
     }
-    const links: SimLink[] = edges.filter((e) => byPath.has(e.from) && byPath.has(e.to)).map((e) => ({ source: e.from, target: e.to, broken: e.broken }));
+    const links: SimLink[] = edges.filter((e) => byPath.has(e.from) && byPath.has(e.to)).map((e) => ({ source: e.from, target: e.to, broken: e.broken, duplicate: e.duplicate }));
     const neighbors = new Map<string, Set<string>>();
     for (const e of edges) {
       if (!neighbors.has(e.from)) neighbors.set(e.from, new Set());
@@ -105,6 +105,7 @@ export function GraphCanvas({
     const border = styles.getPropertyValue("--border").trim() || "#ddd";
     const bg = styles.getPropertyValue("--background").trim() || "#fff";
     const danger = styles.getPropertyValue("--destructive").trim() || "#e11d48";
+    const warning = styles.getPropertyValue("--warning").trim() || "#d97706";
 
     const render = () => {
       const { match: m, selected: sel, colorOf: color, hover } = live.current;
@@ -120,9 +121,10 @@ export function GraphCanvas({
         const t = l.target as SimNode;
         const on = lit(s) && lit(t) && (!focus || s.path === focus || t.path === focus);
         ctx.globalAlpha = on ? (focus ? 0.9 : 0.45) : 0.08;
-        ctx.strokeStyle = l.broken ? danger : focus && on ? fg : border;
-        ctx.lineWidth = (l.broken ? 1.2 : 1) / view.k;
-        ctx.setLineDash(l.broken ? [4 / view.k, 3 / view.k] : []);
+        ctx.strokeStyle = l.broken ? danger : l.duplicate ? warning : focus && on ? fg : border;
+        ctx.lineWidth = (l.broken ? 1.2 : l.duplicate ? 1.6 : 1) / view.k;
+        // Broken links dashed, duplicates (consistency report) dotted.
+        ctx.setLineDash(l.broken ? [4 / view.k, 3 / view.k] : l.duplicate ? [1.5 / view.k, 3 / view.k] : []);
         ctx.beginPath();
         ctx.moveTo(s.x!, s.y!);
         ctx.lineTo(t.x!, t.y!);

@@ -21,6 +21,7 @@ import { Route as AppOwnerRepoRouteRouteImport } from './routes/_app/$owner/$rep
 import { Route as AppSettingsProfileRouteImport } from './routes/_app/settings/profile'
 import { Route as AppOwnerRepoIndexRouteImport } from './routes/_app/$owner/$repo/index'
 import { Route as AppOwnerRepoSplatRouteImport } from './routes/_app/$owner/$repo/$'
+import { Route as AppOwnerRepoConsistencyRouteImport } from './routes/_app/$owner/$repo/consistency'
 import { Route as AppOwnerRepoGraphRouteImport } from './routes/_app/$owner/$repo/graph'
 import { Route as AppOwnerRepoSettingsRouteImport } from './routes/_app/$owner/$repo/settings'
 import { Route as AppOwnerRepoRevisionsIndexRouteImport } from './routes/_app/$owner/$repo/revisions/index'
@@ -85,6 +86,11 @@ const AppOwnerRepoSplatRoute = AppOwnerRepoSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => AppOwnerRepoRouteRoute,
 } as any)
+const AppOwnerRepoConsistencyRoute = AppOwnerRepoConsistencyRouteImport.update({
+  id: '/consistency',
+  path: '/consistency',
+  getParentRoute: () => AppOwnerRepoRouteRoute,
+} as any)
 const AppOwnerRepoGraphRoute = AppOwnerRepoGraphRouteImport.update({
   id: '/graph',
   path: '/graph',
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo': typeof AppOwnerRepoRouteRouteWithChildren
   '/settings/profile': typeof AppSettingsProfileRoute
   '/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
+  '/$owner/$repo/consistency': typeof AppOwnerRepoConsistencyRoute
   '/$owner/$repo/graph': typeof AppOwnerRepoGraphRoute
   '/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
   '/$owner/$repo/': typeof AppOwnerRepoIndexRoute
@@ -135,6 +142,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/settings/profile': typeof AppSettingsProfileRoute
   '/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
+  '/$owner/$repo/consistency': typeof AppOwnerRepoConsistencyRoute
   '/$owner/$repo/graph': typeof AppOwnerRepoGraphRoute
   '/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
   '/$owner/$repo': typeof AppOwnerRepoIndexRoute
@@ -154,6 +162,7 @@ export interface FileRoutesById {
   '/_app/$owner/$repo': typeof AppOwnerRepoRouteRouteWithChildren
   '/_app/settings/profile': typeof AppSettingsProfileRoute
   '/_app/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
+  '/_app/$owner/$repo/consistency': typeof AppOwnerRepoConsistencyRoute
   '/_app/$owner/$repo/graph': typeof AppOwnerRepoGraphRoute
   '/_app/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
   '/_app/$owner/$repo/': typeof AppOwnerRepoIndexRoute
@@ -173,6 +182,7 @@ export interface FileRouteTypes {
     | '/$owner/$repo'
     | '/settings/profile'
     | '/$owner/$repo/$'
+    | '/$owner/$repo/consistency'
     | '/$owner/$repo/graph'
     | '/$owner/$repo/settings'
     | '/$owner/$repo/'
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings/profile'
     | '/$owner/$repo/$'
+    | '/$owner/$repo/consistency'
     | '/$owner/$repo/graph'
     | '/$owner/$repo/settings'
     | '/$owner/$repo'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '/_app/$owner/$repo'
     | '/_app/settings/profile'
     | '/_app/$owner/$repo/$'
+    | '/_app/$owner/$repo/consistency'
     | '/_app/$owner/$repo/graph'
     | '/_app/$owner/$repo/settings'
     | '/_app/$owner/$repo/'
@@ -308,6 +320,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOwnerRepoSplatRouteImport
       parentRoute: typeof AppOwnerRepoRouteRoute
     }
+    '/_app/$owner/$repo/consistency': {
+      id: '/_app/$owner/$repo/consistency'
+      path: '/consistency'
+      fullPath: '/$owner/$repo/consistency'
+      preLoaderRoute: typeof AppOwnerRepoConsistencyRouteImport
+      parentRoute: typeof AppOwnerRepoRouteRoute
+    }
     '/_app/$owner/$repo/graph': {
       id: '/_app/$owner/$repo/graph'
       path: '/graph'
@@ -341,6 +360,7 @@ declare module '@tanstack/react-router' {
 
 interface AppOwnerRepoRouteRouteChildren {
   AppOwnerRepoSplatRoute: typeof AppOwnerRepoSplatRoute
+  AppOwnerRepoConsistencyRoute: typeof AppOwnerRepoConsistencyRoute
   AppOwnerRepoGraphRoute: typeof AppOwnerRepoGraphRoute
   AppOwnerRepoSettingsRoute: typeof AppOwnerRepoSettingsRoute
   AppOwnerRepoIndexRoute: typeof AppOwnerRepoIndexRoute
@@ -350,6 +370,7 @@ interface AppOwnerRepoRouteRouteChildren {
 
 const AppOwnerRepoRouteRouteChildren: AppOwnerRepoRouteRouteChildren = {
   AppOwnerRepoSplatRoute: AppOwnerRepoSplatRoute,
+  AppOwnerRepoConsistencyRoute: AppOwnerRepoConsistencyRoute,
   AppOwnerRepoGraphRoute: AppOwnerRepoGraphRoute,
   AppOwnerRepoSettingsRoute: AppOwnerRepoSettingsRoute,
   AppOwnerRepoIndexRoute: AppOwnerRepoIndexRoute,

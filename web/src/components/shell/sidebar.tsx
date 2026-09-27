@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Waypoints } from "lucide-react";
+import { Scale, Waypoints } from "lucide-react";
 import { Bell, Check, ChevronsUpDown, FilePen, Home, LayoutList, LogOut, Monitor, Moon, Plus, Search, Settings, Shield, Sun, UserRound } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/logo";
@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { api, meQuery, unwrap, useMe, useSetupStatus } from "@/lib/api";
+import { api, meQuery, unwrap, useAssistantStatus, useMe, useSetupStatus } from "@/lib/api";
 import { atLeast, useRepos, useTree, type RepoView } from "@/lib/repos";
 import { useTheme } from "@/lib/theme";
 import type { ThemeChoice } from "@/theme";
@@ -247,6 +247,7 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
   const { data: me } = useMe();
   const { choice, setChoice } = useTheme();
   const palette = usePalette();
+  const assistant = useAssistantStatus();
   const [newOpen, setNewOpen] = useState(false);
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -298,6 +299,12 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
           <Link to="/$owner/$repo/graph" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
             <Waypoints />
             {t("graph.title")}
+          </Link>
+        )}
+        {repo && !revision && assistant.data?.consistency && (
+          <Link to="/$owner/$repo/consistency" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
+            <Scale />
+            {t("consistency.title")}
           </Link>
         )}
         {repo && (revision ? <RevisionNav repo={repo} rev={revision} currentPath={currentPath} onNavigate={onNavigate} /> : <PublishedNav repo={repo} currentPath={currentPath} onNavigate={onNavigate} />)}

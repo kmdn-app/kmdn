@@ -56,7 +56,18 @@ type Settings struct {
 	UserDailyTokens       int    `json:"user_daily_tokens"`       // 0: unlimited
 	InstanceMonthlyTokens int    `json:"instance_monthly_tokens"` // 0: unlimited
 	Check                 *Check `json:"check,omitempty"`
+	// Consistency scans (docs/specs/08-assistant.md#repo-scan).
+	Consistency struct {
+		ScanEveryDays int `json:"scan_every_days"` // 0: only on "Run now"
+		ScanMaxCalls  int `json:"scan_max_calls"`  // LLM judgments per scan
+	} `json:"consistency"`
 }
+
+// Consistency scan defaults.
+const (
+	DefaultScanEveryDays = 7
+	DefaultScanMaxCalls  = 500
+)
 
 // Check is the result of the capability check run on save.
 type Check struct {
@@ -89,11 +100,14 @@ type Service struct {
 	Log  *slog.Logger
 	// Override replaces the configured provider (tests).
 	Override Provider
+	// EmbedOverride replaces the embeddings endpoint (tests).
+	EmbedOverride Embedder
 }
 
 // Settings loads the configuration (zero value when unset).
 func (s *Service) Settings(ctx context.Context) (Settings, error) {
 	st := Settings{Models: map[string]string{}, UserDailyTokens: DefaultUserDailyTokens}
+	st.Consistency.ScanEveryDays, st.Consistency.ScanMaxCalls = DefaultScanEveryDays, DefaultScanMaxCalls
 	err := settings.Get(ctx, s.DB, settingsKey, &st)
 	if err != nil && !settings.IsNotFound(err) {
 		return st, err
@@ -305,6 +319,13 @@ func (s *Service) RunCheck(ctx context.Context, st Settings, key string) Check {
 	for _, b := range res.Content {
 		if b.Type == BlockToolUse && b.Name == checkTool.Name {
 			c.OK, c.Message = true, fmt.Sprintf("%s answered and called a tool.", model)
+			if st.Embeddings.BaseURL != "" && st.Embeddings.Model != "" {
+				if err := s.checkEmbeddings(ctx, st, ""); err != nil {
+					c.Message += " Embeddings failed: " + err.Error()
+				} else {
+					c.Message += fmt.Sprintf(" %s returned embeddings.", st.Embeddings.Model)
+				}
+			}
 			return c
 		}
 	}

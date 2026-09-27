@@ -1806,6 +1806,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/consistency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** Contradictions and duplicates between the revision's changed passages and the rest of the repo */
+        get: operations["getRevisionConsistency"];
+        put?: never;
+        /** Check the revision now (editors and reviewers) */
+        post: operations["runRevisionConsistency"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/consistency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** The repo's consistency report (from the latest scans) */
+        get: operations["getConsistencyReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/consistency/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan the repo now (maintainers) */
+        post: operations["runConsistencyScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/consistency/findings/{finding}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ignore the pair, with a reason (remembered until either passage changes) */
+        post: operations["ignoreConsistencyFinding"];
+        /** Stop ignoring the pair */
+        delete: operations["unignoreConsistencyFinding"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/consistency/findings/{finding}/fix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the assistant to fix a finding (in its revision; from the report, in a new revision touching both pages) */
+        post: operations["fixConsistencyFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/revisions/{revision}/assistant": {
         parameters: {
             query?: never;
@@ -2320,6 +2417,54 @@ export interface components {
             /** @description The revision changed since it was written */
             stale: boolean;
         };
+        ConsistencySide: {
+            path: string;
+            slug: string;
+            heading: string;
+            line: number;
+            text: string;
+        };
+        ConsistencyFinding: {
+            id: string;
+            /** @enum {string} */
+            kind: "contradiction" | "duplicate";
+            /** @description published (the repo report) or the revision id */
+            scope: string;
+            a: components["schemas"]["ConsistencySide"];
+            b: components["schemas"]["ConsistencySide"];
+            /** @description The conflicting claim, quoted from A */
+            claim_a?: string;
+            claim_b?: string;
+            explanation: string;
+            similarity: number;
+            /** @enum {string} */
+            status: "open" | "ignored" | "closed";
+            ignore_reason?: string;
+            fix?: {
+                id: string;
+                number: number;
+                title: string;
+                state: string;
+            };
+            /** Format: date-time */
+            first_seen: string;
+            /** Format: date-time */
+            last_seen: string;
+        };
+        ConsistencyScan: {
+            id: string;
+            /** @enum {string} */
+            status: "running" | "done" | "capped" | "error";
+            passages: number;
+            candidates: number;
+            judged: number;
+            found: number;
+            error?: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+        };
         AssistantThread: {
             id: string;
             repo_id: string;
@@ -2386,6 +2531,12 @@ export interface components {
             };
             user_daily_tokens: number;
             instance_monthly_tokens: number;
+            consistency: {
+                /** @description 0: scans only run on demand */
+                scan_every_days: number;
+                /** @description LLM judgments per scan */
+                scan_max_calls: number;
+            };
             /** @description assistant.enabled is false in the server config */
             disabled: boolean;
             check?: {
@@ -2453,6 +2604,11 @@ export interface components {
                 to: string;
                 count: number;
                 broken?: boolean;
+            }[];
+            /** @description Pages with duplicate passages (open findings of the consistency report) */
+            duplicates: {
+                a: string;
+                b: string;
             }[];
         };
         Hook: {
@@ -6068,6 +6224,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         enabled: boolean;
+                        /** @description Consistency checks are available (an embeddings model is set up too) */
+                        consistency: boolean;
                     };
                 };
             };
@@ -6287,6 +6445,209 @@ export interface operations {
             };
         };
     };
+    getRevisionConsistency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Findings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description An AI provider and an embeddings model are set up */
+                        available: boolean;
+                        /** @description A check is queued or running */
+                        pending: boolean;
+                        findings: components["schemas"]["ConsistencyFinding"][];
+                    };
+                };
+            };
+        };
+    };
+    runRevisionConsistency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getConsistencyReport: {
+        parameters: {
+            query?: {
+                status?: "open" | "ignored" | "closed";
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        available: boolean;
+                        /** @description A scan is queued or running */
+                        pending: boolean;
+                        /** @description The caller can run a scan (maintainers) */
+                        can_run: boolean;
+                        /** @description The caller can ignore findings and start revisions */
+                        can_fix: boolean;
+                        scan: components["schemas"]["ConsistencyScan"] | null;
+                        findings: components["schemas"]["ConsistencyFinding"][];
+                    };
+                };
+            };
+        };
+    };
+    runConsistencyScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    ignoreConsistencyFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Ignored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    unignoreConsistencyFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No longer ignored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    fixConsistencyFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description link replaces a duplicate with a link to the other page
+                     * @enum {string}
+                     */
+                    action: "fix" | "link";
+                };
+            };
+        };
+        responses: {
+            /** @description Revision started (report findings) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        revision: components["schemas"]["Revision"];
+                    };
+                };
+            };
+            /** @description The revision's assistant is on it */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        revision: components["schemas"]["Revision"];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     getRevisionAssistant: {
         parameters: {
             query?: never;
@@ -6400,6 +6761,10 @@ export interface operations {
                     };
                     user_daily_tokens?: number;
                     instance_monthly_tokens?: number;
+                    consistency?: {
+                        scan_every_days?: number;
+                        scan_max_calls?: number;
+                    };
                 };
             };
         };

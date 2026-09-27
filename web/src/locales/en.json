@@ -924,7 +924,9 @@
     "changed": "changed in this revision",
     "open": "Open page",
     "local": "Nearby pages",
-    "openGraph": "Open the graph"
+    "openGraph": "Open the graph",
+    "duplicates": "Show duplicates",
+    "duplicateOf": "repeats text from {{page}}"
   },
   "ai": {
     "title": "AI provider",
@@ -955,7 +957,14 @@
     "byUser": "This month by person",
     "runs": "Runs",
     "tokens": "Tokens",
-    "system": "System"
+    "system": "System",
+    "consistency": "Consistency checks",
+    "consistencyHint": "Finds contradictions and duplicate text across pages. Needs an OpenAI-compatible embeddings endpoint (Anthropic has none); pairs are judged with the titles and short text model.",
+    "embeddingsURL": "Embeddings base URL",
+    "embeddingsModel": "Embeddings model",
+    "embeddingsKey": "Embeddings API key",
+    "scanEvery": "Scan every (days, 0 = only on demand)",
+    "scanCalls": "Model calls per scan"
   },
   "assistant": {
     "off": "The assistant isn't set up on this instance.",
@@ -977,5 +986,54 @@
     "readOnly": "Only people who can edit this revision can ask the assistant here.",
     "confirm": "Confirm",
     "done": "Done"
+  },
+  "consistency": {
+    "title": "Consistency",
+    "reportTitle": "Consistency report",
+    "intro": "Places where pages say the same thing twice or say contradicting things. Advisory: nothing is blocked.",
+    "contradictions": "Contradictions",
+    "duplicates": "Duplicates",
+    "contradiction": "Contradiction",
+    "duplicate": "Duplicate",
+    "run": "Run now",
+    "scanning": "Scanning…",
+    "checking": "Checking…",
+    "check": "Check now",
+    "lastScan": "Last scan",
+    "capped": "The scan stopped at its limit of model calls; the next one picks up where it left off.",
+    "scanError": "The last scan failed: {{error}}",
+    "never": "No scan yet.",
+    "nothing": "No contradictions or duplicates found.",
+    "nothingHere": "Nothing in this list.",
+    "off": "Consistency checks aren't set up on this instance.",
+    "offAdmin": "Consistency checks need an AI provider and an embeddings model: set them up in Admin → AI provider.",
+    "firstSeen": "First seen",
+    "similar": "{{pct}}% similar",
+    "status": {
+      "open": "Open",
+      "ignored": "Ignored",
+      "closed": "Resolved"
+    },
+    "fixing": "Fixing in #{{number}}",
+    "fix": "Fix",
+    "link": "Link instead",
+    "ignore": "Ignore",
+    "unignore": "Stop ignoring",
+    "startFix": "Start a revision to fix",
+    "ignoreTitle": "Ignore this finding",
+    "ignoreDesc": "Say why this is fine. The pair stays ignored in every revision and scan until one of the passages changes.",
+    "reason": "Reason",
+    "reasonPlaceholder": "The FAQ repeats the policy on purpose.",
+    "ignoredBecause": "Ignored: {{reason}}",
+    "asked": "The assistant is on it in the revision's thread.",
+    "started": "Started #{{number}}",
+    "thisPage": "This revision",
+    "otherPage": "Elsewhere",
+    "publishNote_one": "{{count}} consistency finding is open. Advisory: you can publish anyway.",
+    "publishNote_other": "{{count}} consistency findings are open. Advisory: you can publish anyway.",
+    "pages": "Pages",
+    "passagesCompared_one": "{{count}} passage compared",
+    "passagesCompared_other": "{{count}} passages compared",
+    "statusLabel": "Status"
   }
 }

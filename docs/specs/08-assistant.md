@@ -93,7 +93,7 @@ Finds places where the repo says the same thing twice or says contradicting thin
 ### Passage index
 
 - Published content (and each open revision's changed files, in a separate scope) is chunked into **passages**: one per heading section, split further at ~300 tokens, with path, heading slug and content hash.
-- Each passage gets an **embedding** from the configured provider (a separate `embeddings` model setting: an OpenAI-compatible embeddings endpoint, e.g. a local model via Ollama, or a hosted one; Anthropic has no embeddings API, so the admin picks one). Stored as float32 blobs in `passage_embeddings`; only changed passages are re-embedded.
+- Each passage gets an **embedding** from the configured provider (a separate `embeddings` model setting: an OpenAI-compatible embeddings endpoint, e.g. a local model via Ollama, or a hosted one; Anthropic has no embeddings API, so the admin picks one). Stored as unit-length float32 blobs in `passage_embeddings`, keyed by model and content hash (page title + heading trail + text), so only changed passages are re-embedded and a revision's unchanged passages reuse the published vectors. Only published passages are stored (`passages`); a revision's are chunked from its materialized files on each check.
 - Nearest-neighbour search is brute-force cosine similarity in Go over the repo's vectors (thousands of passages fit comfortably; no vector extension, keeps SQLite pure-Go). Behind an interface so pgvector can be used on Postgres later.
 
 ### Per revision
@@ -103,7 +103,9 @@ When a revision's changed passages are materialized (debounced 30 s) and at subm
 1. For each changed passage, take the top-k (k=8) similar passages elsewhere in the repo above a similarity threshold (0.78).
 2. Pairs above 0.92 are **duplicate candidates** directly.
 3. The LLM (`short_text` task model) judges each remaining pair: `contradiction` (with the conflicting claims quoted), `duplicate`, `related`, or `none`.
-4. Findings appear in the revision overview checks, the review assistant card, and as an underline on the passage in the editor with a hover card. Actions: **Fix** (assistant suggestion to align the text), **Link instead** (replace the duplicate with a link to the other page, as a suggestion), **Ignore** (with a reason; ignored pairs are remembered by passage hashes).
+4. Findings appear in the revision overview (a Consistency section under the review card and checks), in the Publish dialog, and as an underline on the passage in the editor (wavy for contradictions, dotted for duplicates) with a hover card. Actions: **Fix** (briefs the revision's assistant thread to align the text, as suggestions), **Link instead** (duplicates: replace the repeated passage with a link to the other page, as a suggestion), **Ignore** (with a reason; ignored pairs are remembered by passage hashes across revisions and scans until either passage changes).
+
+Verdicts are cached per pair of passage hashes (`consistency_judgments`), so re-checks and scans only pay for new pairs. A check makes at most 40 model calls.
 
 Advisory only: never blocks submit, approval or publish. Findings are listed in the Publish dialog.
 
@@ -111,7 +113,8 @@ Advisory only: never blocks submit, approval or publish. Findings are listed in 
 
 - Weekly (configurable, or "Run now" by maintainers): all-pairs over Published passages via the same neighbour search, then LLM judgment on candidates, capped per run (default 500 LLM calls) and resumable.
 - Results form the repo's **Consistency report**: Contradictions and Duplicates, each with both excerpts side by side, pages involved, first seen, status (Open / Ignored / Fixing in revision X). **Start a revision to fix** creates a revision touching both pages with the assistant briefed on the finding.
-- Findings auto-close when a later scan no longer reproduces them (e.g. after a fix is published).
+- Findings auto-close when a later scan no longer reproduces them (e.g. after a fix is published). Pairs a capped scan didn't get to keep their state; the scan shows as "capped" and the next one continues (cached verdicts are free).
+- Scan frequency and the call cap are instance settings (Admin → AI provider); an hourly job queues scans that are due.
 - Cost shown in admin usage; the scan respects the instance token budget.
 
 ### Link graph integration

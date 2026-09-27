@@ -34,6 +34,7 @@ import { toast } from "sonner";
 import { schemaExtensions } from "./schema";
 import { ChangeMarks, setChangeBase } from "./change-marks";
 import { CommentAnchors, setAnchorView } from "./comment-anchors";
+import { ConsistencyMarks, setConsistencyMarks, type ConsistencyMark } from "./consistency-marks";
 import { Suggesting, setSuggesting } from "./suggest";
 import { EditorDocContext, nodeViewExtensions } from "./node-views";
 import type { DocContext } from "@/components/doc/doc-view";
@@ -75,6 +76,7 @@ export function PageEditor({
   docCtx,
   base,
   comments,
+  consistency,
   suggesting = false,
 }: {
   provider: RoomProvider;
@@ -90,6 +92,8 @@ export function PageEditor({
   comments?: { active: string | null; hidden: Set<string>; onClick: (id: string) => void };
   /** Record edits as suggestions (docs/specs/05-collaboration.md#suggestions-tracked-changes). */
   suggesting?: boolean;
+  /** Passages with consistency findings, underlined. */
+  consistency?: ConsistencyMark[];
 }) {
   const { t } = useTranslation();
   const status = useRoomStatus(provider);
@@ -114,6 +118,7 @@ export function PageEditor({
       Gapcursor,
       ChangeMarks,
       CommentAnchors.configure({ doc: provider.doc }),
+      ConsistencyMarks,
       Suggesting.configure({ author: user.id, onRefused: () => toast.info(t("suggestions.refused"), { id: "suggest-refused" }) }),
     ],
     // The editor is rebuilt only for a new room.
@@ -167,6 +172,9 @@ export function PageEditor({
   useEffect(() => {
     if (comments) setAnchorView(editor, comments);
   }, [editor, comments]);
+  useEffect(() => {
+    setConsistencyMarks(editor, consistency ?? []);
+  }, [editor, consistency]);
   useEffect(() => {
     editor?.setEditable(editable);
   }, [editor, editable]);

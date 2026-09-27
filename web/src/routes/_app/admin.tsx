@@ -725,6 +725,11 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
   const [models, setModels] = useState<Record<string, string>>(st.models ?? {});
   const [daily, setDaily] = useState(String(st.user_daily_tokens));
   const [monthly, setMonthly] = useState(String(st.instance_monthly_tokens));
+  const [embURL, setEmbURL] = useState(st.embeddings.base_url ?? "");
+  const [embModel, setEmbModel] = useState(st.embeddings.model ?? "");
+  const [embKey, setEmbKey] = useState("");
+  const [scanDays, setScanDays] = useState(String(st.consistency.scan_every_days));
+  const [scanCalls, setScanCalls] = useState(String(st.consistency.scan_max_calls));
   const save = useMutation({
     mutationFn: () =>
       unwrap(
@@ -736,6 +741,8 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
             models,
             user_daily_tokens: Number(daily) || 0,
             instance_monthly_tokens: Number(monthly) || 0,
+            embeddings: { base_url: embURL, model: embModel, ...(embKey ? { api_key: embKey } : {}) },
+            consistency: { scan_every_days: Number(scanDays) || 0, scan_max_calls: Number(scanCalls) || 0 },
           },
         }),
       ),
@@ -802,6 +809,36 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
               </div>
             </div>
             <p className="text-[12.5px] text-muted-foreground">{t("ai.budgetHint")}</p>
+            <div className="grid gap-3 border-t pt-4">
+              <div>
+                <div className="text-[13.5px] font-medium">{t("ai.consistency")}</div>
+                <p className="text-[12.5px] text-muted-foreground">{t("ai.consistencyHint")}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="ai-emb-url">{t("ai.embeddingsURL")}</Label>
+                  <Input id="ai-emb-url" value={embURL} onChange={(e) => setEmbURL(e.target.value)} placeholder="https://api.openai.com/v1 · http://localhost:11434/v1" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="ai-emb-model">{t("ai.embeddingsModel")}</Label>
+                  <Input id="ai-emb-model" value={embModel} onChange={(e) => setEmbModel(e.target.value)} placeholder="text-embedding-3-small · nomic-embed-text" className="font-mono text-[12.5px]" />
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="ai-emb-key">{t("ai.embeddingsKey")}</Label>
+                <Input id="ai-emb-key" type="password" autoComplete="off" value={embKey} onChange={(e) => setEmbKey(e.target.value)} placeholder={st.embeddings.key_set ? t("ai.keySet") : t("ai.keyOptional")} />
+              </div>
+              <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="ai-scan-days">{t("ai.scanEvery")}</Label>
+                  <Input id="ai-scan-days" inputMode="numeric" value={scanDays} onChange={(e) => setScanDays(e.target.value.replace(/\D/g, ""))} />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="ai-scan-calls">{t("ai.scanCalls")}</Label>
+                  <Input id="ai-scan-calls" inputMode="numeric" value={scanCalls} onChange={(e) => setScanCalls(e.target.value.replace(/\D/g, ""))} />
+                </div>
+              </div>
+            </div>
           </>
         )}
         {st.check && (

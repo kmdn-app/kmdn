@@ -122,3 +122,9 @@ func Slug(h string) string {
 	}
 	return b.String()
 }
+
+// Clean strips inline markdown (links, emphasis, HTML, shortcodes) from a line.
+func Clean(s string) string { return clean(s) }
+
+// StripListMarker removes a leading list marker or task box.
+func StripListMarker(s string) string { return listMarker.ReplaceAllString(s, "") }
