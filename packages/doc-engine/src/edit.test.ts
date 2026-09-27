@@ -122,3 +122,15 @@ describe("hoistWhitespace", () => {
     expect(md([{ type: "text", text: "see " }, { type: "text", text: "docs", marks: link }])).toBe("see [docs](/x)\n");
   });
 });
+
+test("adjacent lists stay separate lists", () => {
+  const { doc, sourceMap } = parse("- a\n- b\n\nMiddle.\n\n- c\n- d\n");
+  // Delete the paragraph between the lists.
+  const without = { ...doc, content: doc.content.filter((b) => b.type !== "paragraph") };
+  const out = serialize(without, sourceMap);
+  expect(out).toBe("- a\n- b\n\n* c\n* d\n");
+  expect(parse(out).doc.content.filter((b) => b.type === "bulletList")).toHaveLength(2);
+  const ol = parse("1. a\n\nMiddle.\n\n1. b\n");
+  const outOl = serialize({ ...ol.doc, content: ol.doc.content.filter((b) => b.type !== "paragraph") }, ol.sourceMap);
+  expect(outOl).toBe("1. a\n\n1) b\n");
+});

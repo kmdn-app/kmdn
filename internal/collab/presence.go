@@ -2,9 +2,15 @@ package collab
 
 import (
 	"net/http"
+	"net/url"
+	"path"
 	"sort"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/kmdn-app/kmdn/internal/api"
+	"github.com/kmdn-app/kmdn/internal/store"
 )
 
 // PresenceUser is someone with a page of the revision open.
@@ -62,4 +68,27 @@ func (h *Hub) presence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.JSON(w, http.StatusOK, map[string]any{"items": h.Presence(rev.ID)})
+}
+
+// sourceMap returns the source map of a page's document: the text it was
+// created from and its block ranges, so source mode can show the original
+// bytes of blocks nobody changed. 204 when the page has no document yet.
+func (h *Hub) sourceMap(w http.ResponseWriter, r *http.Request) {
+	rev, _, _, ok := h.load(w, r)
+	if !ok {
+		return
+	}
+	p := chi.URLParam(r, "*")
+	if u, err := url.PathUnescape(p); err == nil {
+		p = u
+	}
+	p = strings.TrimPrefix(path.Clean("/"+p), "/")
+	var sm string
+	if err := store.QueryRow(r.Context(), h.DB, `SELECT source_map FROM ydocs WHERE revision_id = ? AND path = ?`, rev.ID, p).Scan(&sm); err != nil || sm == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_, _ = w.Write([]byte(sm))
 }

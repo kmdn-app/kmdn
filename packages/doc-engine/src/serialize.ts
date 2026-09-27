@@ -18,19 +18,35 @@ export function serialize(doc: DocNode, sourceMap?: SourceMap): string {
   const blocks = doc.content;
   let out = sourceMap ? sourceMap.leading : "";
   let prevSid: number | undefined;
+  let prev: { type: string; marker: string } | null = null;
+  let prevReused = false;
+  let prevType = "";
   blocks.forEach((b, i) => {
     const sid = (b as { attrs?: { sid?: number } }).attrs?.sid;
     const orig = sourceMap && sid !== undefined ? sourceMap.blocks[sid] : undefined;
-    const reuse = orig && orig.hash === nodeHash(b);
-    if (i > 0) {
-      if (sourceMap && prevSid !== undefined && sid !== undefined && sid === prevSid + 1) {
-        out += sourceMap.original.slice(sourceMap.blocks[prevSid]!.end, sourceMap.blocks[sid]!.start);
-      } else {
-        out += nl + nl;
-      }
+    const adjacent = sourceMap && prevSid !== undefined && sid !== undefined && sid === prevSid + 1;
+    let text = orig && orig.hash === nodeHash(b) ? sourceMap!.original.slice(orig.start, orig.end) : null;
+    // Two lists of the same kind and marker separated by a blank line are one
+    // list in CommonMark: the second one switches marker, unless they were
+    // already next to each other in the source (then the bytes are right).
+    // Bytes next to their original, unchanged neighbour are safe as they are.
+    const inContext = adjacent && prevReused;
+    const clash = prev && prev.type === b.type && (b.type === "bulletList" || b.type === "orderedList") && !inContext;
+    if (text !== null && clash && listMarker(b.type, text) === prev!.marker) text = null;
+    // Indented bytes after a list or footnote continue its last item: reuse
+    // them there only next to their original neighbour.
+    if (text !== null && !inContext && /^[ \t]/.test(text) && (prevType === "bulletList" || prevType === "orderedList" || prevType === "footnoteDefinition")) text = null;
+    const reused = text !== null;
+    if (text === null) {
+      const alt = clash ? { bullet: otherBullet(prev!.marker, style), bulletOrdered: (prev!.marker === "." ? ")" : ".") as "." | ")" } : undefined;
+      text = serializeBlock(b, style, alt);
     }
-    out += reuse ? sourceMap!.original.slice(orig.start, orig.end) : serializeBlock(b, style);
+    if (i > 0) out += adjacent ? sourceMap!.original.slice(sourceMap!.blocks[prevSid!]!.end, sourceMap!.blocks[sid!]!.start) : nl + nl;
+    out += text;
     prevSid = sid;
+    prevReused = reused;
+    prevType = b.type;
+    prev = b.type === "bulletList" || b.type === "orderedList" ? { type: b.type, marker: listMarker(b.type, text) } : null;
   });
   if (sourceMap) {
     out += blocks.length ? sourceMap.trailing : "";
@@ -41,8 +57,22 @@ export function serialize(doc: DocNode, sourceMap?: SourceMap): string {
   return sourceMap?.bom ? "﻿" + out : out;
 }
 
+/** The bullet ("-", "*", "+") or ordered delimiter ("." or ")") a list's text starts with. */
+function listMarker(type: string, text: string): string {
+  const first = text.trimStart();
+  if (type === "bulletList") return first[0] ?? "";
+  return /^\d+([.)])/.exec(first)?.[1] ?? ".";
+}
+
+function otherBullet(marker: string, style: Style): "-" | "*" | "+" {
+  if (marker !== style.bullet) return style.bullet;
+  return marker === "-" ? "*" : "-";
+}
+
+type ListOverrides = { bullet?: "-" | "*" | "+"; bulletOrdered?: "." | ")" };
+
 /** Serializes a single block with the given style, without a trailing newline. */
-export function serializeBlock(b: BlockNode, style: Style = defaultStyle): string {
+export function serializeBlock(b: BlockNode, style: Style = defaultStyle, lists?: ListOverrides): string {
   let s: string;
   if (b.type === "frontmatter") {
     const fence = b.attrs.format === "toml" ? "+++" : "---";
@@ -50,7 +80,13 @@ export function serializeBlock(b: BlockNode, style: Style = defaultStyle): strin
   } else if (b.type === "rawBlock") {
     s = b.attrs.raw;
   } else {
-    s = toMarkdown({ type: "root", children: [toMdastBlock(b)] } as md.Root, options(style)).replace(/\n+$/, "");
+    const o = options(style);
+    if (lists?.bullet) {
+      o.bullet = lists.bullet;
+      o.bulletOther = lists.bullet === "-" ? "*" : "-";
+    }
+    if (lists?.bulletOrdered) o.bulletOrdered = lists.bulletOrdered;
+    s = toMarkdown({ type: "root", children: [toMdastBlock(b)] } as md.Root, o).replace(/\n+$/, "");
   }
   return style.lineEnding === "\r\n" ? s.replace(/\r?\n/g, "\r\n") : s;
 }

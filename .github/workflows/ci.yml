@@ -58,6 +58,8 @@ jobs:
       - run: pnpm -r test
       - name: Engine bundle is up to date
         run: pnpm --filter @kmdn/doc-engine check-bundle
+      - name: API client is generated from api/openapi.yaml
+        run: pnpm --filter @kmdn/api-client generate && git diff --exit-code -- packages/api-client/src/schema.gen.ts
 
   build:
     name: Build binary
