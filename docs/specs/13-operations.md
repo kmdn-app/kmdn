@@ -44,8 +44,11 @@ smtp:
   password: ${KMDN_SMTP_PASSWORD}
   from: "kmdn <kmdn@northwind.dev>"
 auth:
-  auto_join_domains: []
+  auto_join_domains: []             # single mode: the default org's auto-join
   session_ttl: 720h
+orgs:
+  mode: single                       # or multi (see 16-organizations.md)
+  allow_create: admins               # multi mode: admins | anyone
 assistant:
   enabled: true
   # Optional: fix the provider here instead of the admin console (then shown locked).
@@ -77,7 +80,7 @@ On Upsun, `deploy/upsun/kmdn` derives the base URL, database, secret key and mai
 
 Served when no instance admin exists (protected by a one-time setup token printed in the server log to prevent hijacking a fresh instance):
 
-1. **Admin account**: name + email.
+1. **Admin account**: name + email, and the organization's name (the default org in `single` mode).
 2. **Email (SMTP)**: settings + "Send test email" (must succeed; the admin's magic link is sent through it).
 3. **Forge**: "Create GitHub App" (manifest flow, github.com or GHES URL) and/or "Add GitLab" (host URL, OAuth app ID/secret). Skippable.
 4. **Assistant**: provider, key, model, "Test". Skippable.
@@ -150,7 +153,7 @@ Append-only table ([10](10-data-model.md)). Recorded actions include: sign-in (m
 
 ## License and project
 
-- AGPL-3.0 for the whole repo. `CONTRIBUTING.md` with DCO sign-off. Security policy with private disclosure.
+- AGPL-3.0 for the whole repo, copyright nlsio LLC. [`CONTRIBUTING.md`](../../CONTRIBUTING.md) and a [Contributor License Agreement](../../CLA.md) accepted once per contributor through a CLA bot (`.github/workflows/cla.yml`, signatures on the `cla-signatures` branch). The CLA replaces the DCO sign-off planned earlier: it lets nlsio LLC also distribute contributions under other terms, while kmdn stays AGPL. Security policy with private disclosure.
 - CI (GitHub Actions): Go lint/test (race), TS typecheck/lint/test, fidelity corpus in both hosts, Playwright E2E against the built binary with a fake forge server, GoReleaser on tags.
 
 ## Capacity

@@ -2,6 +2,8 @@
 
 IDs are prefixed ULIDs stored as text (`usr_01J…`, `rep_…`, `rev_…`) for readability in logs and URLs. Timestamps are stored as integer Unix milliseconds (`BIGINT`) in both engines. Schema is kept portable: no Postgres-only types except in optional indexes; JSON columns are `jsonb` / `text` with JSON functions.
 
+Organizations add `orgs`, `org_members`, `org_settings`, `org_domains` and an `org_id` on root tables; see [16 · Organizations](16-organizations.md#data-model).
+
 ## Identity and access
 
 ```
