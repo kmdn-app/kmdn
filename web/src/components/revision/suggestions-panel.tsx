@@ -1,6 +1,8 @@
 import { useMemo } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { toast } from "sonner";
 import { Check, ChevronDown, X } from "lucide-react";
 import { useEditorState, type Editor } from "@tiptap/react";
@@ -13,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { editorSuggestions, type EditorSuggestion } from "@/components/editor/suggest";
 import { api, errorMessage, unwrap, useMe } from "@/lib/api";
 import type { RevisionView } from "@/lib/revisions";
+import type { RepoView } from "@/lib/repos";
 import { useAnnounceChanges } from "@/lib/announce";
 
 /** Pending suggestions in the editor's page, recomputed when the document changes. */
@@ -23,16 +26,22 @@ export function useEditorSuggestions(editor: Editor | null): EditorSuggestion[] 
 
 type Resolve = { action: "accept" | "reject"; ids?: string[]; author?: string };
 
+type Describable = { inserted: string; deleted: string; kinds: string[]; change?: { from: string; to: string } };
+
+/** What a suggestion does, in words: "Add “…”", "Replace “…” with “…”", "Paragraph → Heading". */
+export function describeSuggestion(t: TFunction, s: Describable): string {
+  const q = (x: string) => `“${x.length > 80 ? x.slice(0, 79) + "…" : x.replace(/\n/g, " ")}”`;
+  if (s.change && !s.inserted && !s.deleted) return t("suggestions.change", { from: t(`suggestions.nodes.${s.change.from}`, { defaultValue: s.change.from }), to: t(`suggestions.nodes.${s.change.to}`, { defaultValue: s.change.to }) });
+  if (s.inserted && s.deleted) return t("suggestions.replace", { from: q(s.deleted), to: q(s.inserted) });
+  if (s.inserted) return t("suggestions.add", { text: q(s.inserted) });
+  if (s.deleted) return t("suggestions.delete", { text: q(s.deleted) });
+  if (s.kinds.includes("join")) return t("suggestions.join");
+  return t("suggestions.split");
+}
+
 function Card({ s, name, canResolve, busy, onResolve, onFocus }: { s: EditorSuggestion; name: string; canResolve: boolean; busy: boolean; onResolve: (r: Resolve) => void; onFocus: () => void }) {
   const { t } = useTranslation();
-  const q = (x: string) => `“${x.length > 80 ? x.slice(0, 79) + "…" : x.replace(/\n/g, " ")}”`;
-  let what: string;
-  if (s.change && !s.inserted && !s.deleted) what = t("suggestions.change", { from: t(`suggestions.nodes.${s.change.from}`, { defaultValue: s.change.from }), to: t(`suggestions.nodes.${s.change.to}`, { defaultValue: s.change.to }) });
-  else if (s.inserted && s.deleted) what = t("suggestions.replace", { from: q(s.deleted), to: q(s.inserted) });
-  else if (s.inserted) what = t("suggestions.add", { text: q(s.inserted) });
-  else if (s.deleted) what = t("suggestions.delete", { text: q(s.deleted) });
-  else if (s.kinds.includes("join")) what = t("suggestions.join");
-  else what = t("suggestions.split");
+  const what = describeSuggestion(t, s);
   return (
     <div role="button" tabIndex={0} onClick={onFocus} onKeyDown={(e) => e.key === "Enter" && onFocus()} className="grid gap-1.5 rounded-lg border border-dashed bg-card p-3 text-left">
       <div className="flex items-center gap-2 text-[0.78125rem]">
@@ -139,6 +148,83 @@ export function SuggestionList({ editor, rev, path }: { editor: Editor | null; r
       {items.map((s) => (
         <Card key={s.id} s={s} name={name(s.author)} canResolve={can(s)} busy={resolve.isPending} onResolve={(r) => resolve.mutate(r)} onFocus={() => focus(s)} />
       ))}
+    </section>
+  );
+}
+
+/**
+ * Every pending suggestion in the revision, for its overview: they block
+ * approval and publishing until someone accepts or rejects them.
+ */
+export function RevisionSuggestions({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
+  const { t } = useTranslation();
+  const { data: me } = useMe();
+  const qc = useQueryClient();
+  const list = useQuery({
+    queryKey: ["revision-suggestions", rev.id, rev.updated_at, rev.pending_suggestions],
+    queryFn: async () => (await unwrap(api.GET("/revisions/{revision}/suggestions", { params: { path: { revision: rev.id } } }))).items,
+    enabled: rev.pending_suggestions > 0,
+  });
+  const names = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const x of [...rev.members, ...rev.reviewers]) m.set(x.user_id, x.name);
+    return m;
+  }, [rev.members, rev.reviewers]);
+  const resolve = useMutation({
+    mutationFn: (r: Resolve & { path: string }) => unwrap(api.POST("/revisions/{revision}/suggestions/resolve", { params: { path: { revision: rev.id } }, body: r })),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["revision-suggestions", rev.id] });
+      void qc.invalidateQueries({ queryKey: ["revision", repo.id, rev.number] });
+    },
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  if (rev.pending_suggestions === 0 || !list.data?.length) return null;
+  const open = rev.state !== "published" && rev.state !== "closed";
+  const name = (id: string, fallback?: string) => names.get(id) ?? fallback ?? (id === me?.id ? (me?.name ?? "") : t("revision.someone"));
+  return (
+    <section id="suggestions" aria-label={t("suggestions.toAddress")}>
+      <h2 className="mb-2 flex items-center gap-2 text-[0.9375rem] font-semibold">
+        {t("suggestions.toAddress")}
+        <span className="rounded-md bg-warning/10 px-1.5 text-[0.75rem] font-medium text-warning">{list.data.length}</span>
+      </h2>
+      <p className="mb-2 text-[0.8125rem] text-muted-foreground">{t("suggestions.toAddressHint")}</p>
+      <ul className="overflow-hidden rounded-xl border">
+        {list.data.map((s) => {
+          const can = open && (rev.access.can_resolve || s.author === me?.id);
+          return (
+            <li key={s.path + s.id} className="flex items-start gap-3 border-b px-4 py-2.5 text-[0.84375rem] last:border-b-0">
+              <Avatar name={name(s.author, s.author_name)} id={s.author} size="xs" />
+              <div className="min-w-0 flex-1">
+                <p className="break-words">{describeSuggestion(t, s)}</p>
+                <p className="text-[0.75rem] text-muted-foreground">
+                  {name(s.author, s.author_name)} ·{" "}
+                  <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: s.path }} search={{ revision: rev.number }} className="font-mono hover:text-foreground hover:underline">
+                    {s.path}
+                  </Link>
+                  {s.at ? (
+                    <>
+                      {" · "}
+                      <Time iso={new Date(s.at).toISOString()} />
+                    </>
+                  ) : null}
+                </p>
+              </div>
+              {can && (
+                <span className="flex shrink-0 gap-1">
+                  <Button size="sm" variant="outline" className="h-7" disabled={resolve.isPending} onClick={() => resolve.mutate({ path: s.path, action: "accept", ids: [s.id] })}>
+                    <Check className="text-success" />
+                    <span className="max-md:sr-only">{t("suggestions.accept")}</span>
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7" disabled={resolve.isPending} onClick={() => resolve.mutate({ path: s.path, action: "reject", ids: [s.id] })}>
+                    <X className="text-destructive" />
+                    <span className="max-md:sr-only">{t("suggestions.reject")}</span>
+                  </Button>
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

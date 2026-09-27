@@ -3248,6 +3248,8 @@ export interface components {
              * @description Unix milliseconds
              */
             at?: number;
+            /** @description The author's name (list endpoint) */
+            author_name?: string;
             inserted: string;
             deleted: string;
             kinds: ("insert" | "join" | "delete" | "change")[];
@@ -3273,6 +3275,8 @@ export interface components {
             file_count: number;
             /** @description The content differs from the last Save all */
             unsaved_changes: boolean;
+            /** @description Suggestions still to accept or reject; they block approving and publishing */
+            pending_suggestions: number;
         };
         RevisionCreate: {
             title: string;
@@ -3576,9 +3580,12 @@ export interface components {
         BlameLine: {
             line: number;
             sha: string;
+            /** @description The commit's author; for a commit kmdn made, its first Co-authored-by */
             author: string;
             email: string;
             time: number;
+            /** @description Other people credited on the commit */
+            co_authors: string[];
         };
         Member: {
             /** @enum {string} */
