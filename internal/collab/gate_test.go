@@ -16,7 +16,7 @@ func gatedRoom(t *testing.T) (*Hub, *Room) {
 	db := storetest.Open(t)
 	for _, query := range []string{
 		`INSERT INTO forge_hosts (id, kind, display_name, created_at) VALUES ('host_gate', 'git', 'Git', 1)`,
-		`INSERT INTO repos (id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('repo_gate', 'host_gate', 'owner', 'repo', 'Repo', 'main', 1)`,
+		`INSERT INTO repos (org_id, id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('org_default', 'repo_gate', 'host_gate', 'owner', 'repo', 'Repo', 'main', 1)`,
 		`INSERT INTO revisions (id, repo_id, number, title, state, base_sha, created_at, updated_at) VALUES ('rev_gate', 'repo_gate', 1, 'Gate', 'approved', 'base', 1, 1)`,
 	} {
 		if _, err := store.Exec(context.Background(), db, query); err != nil {

@@ -319,7 +319,12 @@ func (s *Service) repoInvite(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, api.ErrNotFound)
 		return
 	}
-	if role, err := access.Effective(r.Context(), s.DB, p.User, rp.ID); err != nil || !role.AtLeast(access.Admin) {
+	role, err := access.Effective(r.Context(), s.DB, p.User, rp.ID)
+	if err != nil || role == access.None {
+		api.Error(w, r, api.ErrNotFound) // don't reveal repos the caller can't see
+		return
+	}
+	if !role.AtLeast(access.Admin) {
 		api.Error(w, r, api.Err(http.StatusForbidden, "forbidden", "Only repository admins can invite people."))
 		return
 	}

@@ -32,7 +32,7 @@ func TestIndexAndSearch(t *testing.T) {
 	if _, err := store.Exec(ctx, db, `INSERT INTO forge_hosts (id, kind, display_name, created_at) VALUES ('fh', 'git', 'g', 1)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Exec(ctx, db, `INSERT INTO repos (id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('rep_1', 'fh', 'o', 'n', 'n', 'main', ?)`, store.Millis(time.Now())); err != nil {
+	if _, err := store.Exec(ctx, db, `INSERT INTO repos (org_id, id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('org_default', 'rep_1', 'fh', 'o', 'n', 'n', 'main', ?)`, store.Millis(time.Now())); err != nil {
 		t.Fatal(err)
 	}
 	x := &Index{DB: db}
