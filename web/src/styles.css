@@ -248,3 +248,9 @@
 .kmdn-editor [data-suggestion] { box-shadow: inset 3px 0 0 var(--author, var(--success)); padding-left: 0.5rem; }
 .kmdn-editor [data-suggestion="delete"] { text-decoration: line-through; color: var(--muted-foreground); }
 .kmdn-editor [data-suggestion="join"]::before { content: "¶"; margin-right: 0.25rem; color: var(--author, var(--destructive)); text-decoration: line-through; }
+/* Conflicts from updates from Published */
+.kmdn-editor .conflict { display: grid; gap: 0.5rem; margin-block: 1rem; padding: 0.75rem; border: 1px solid color-mix(in oklab, var(--destructive) 45%, var(--border)); border-radius: 0.75rem; background: color-mix(in oklab, var(--destructive) 5%, transparent); }
+.kmdn-editor .conflict-side { padding: 0.25rem 0.75rem 0.5rem; border-radius: 0.5rem; background: var(--background); }
+.kmdn-editor .conflict-side::before { content: attr(data-label); display: block; margin-bottom: 0.25rem; font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted-foreground); }
+.kmdn-editor .conflict-side[data-side="published"] { box-shadow: inset 3px 0 0 var(--color-sky-500); }
+.kmdn-editor .conflict-side[data-side="revision"] { box-shadow: inset 3px 0 0 var(--warning); }

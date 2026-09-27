@@ -12,7 +12,8 @@ import { parse } from "./parse";
 import { serialize } from "./serialize";
 import { CONTENT, applyDoc, readDoc, writeDoc } from "./ydoc";
 import { nodeHash } from "./hash";
-import { listSuggestions, resolveSuggestions, settledHash } from "./suggestions";
+import { hasSuggestions, listSuggestions, resolveSuggestions, settledHash } from "./suggestions";
+import { merge3 } from "./merge";
 import { extractLinks, rewriteLinks } from "./links";
 import type { DocNode, SourceMap } from "./schema";
 
@@ -87,9 +88,14 @@ const api = {
     d.on("update", (u: Uint8Array) => {
       out = u;
     });
-    d.transact(() => applyDoc(d.getXmlFragment(CONTENT), JSON.parse(docJSON) as DocNode, nodeHash));
+    const target = JSON.parse(docJSON) as DocNode;
+    // A settled target (no suggestions of its own) leaves blocks whose
+    // published content it doesn't change alone, suggestions included.
+    d.transact(() => applyDoc(d.getXmlFragment(CONTENT), target, hasSuggestions(target) ? nodeHash : settledHash));
     return buf(out);
   },
+  /** base, ours, theirs markdown → JSON {doc, conflicts} (updates from Published). */
+  merge3: (base: string, ours: string, theirs: string): string => JSON.stringify(merge3(base, ours, theirs)),
   /** Pending suggestions in the page, as JSON [{id, author, inserted, deleted, kinds}]. */
   ySuggestions: (update: ArrayBuffer): string => JSON.stringify(listSuggestions(readDoc(load(update).getXmlFragment(CONTENT)))),
   /**

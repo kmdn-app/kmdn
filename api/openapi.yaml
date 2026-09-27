@@ -1277,6 +1277,49 @@ paths:
                 required: [items]
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/PresenceUser" } }
+  /revisions/{revision}/updates:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: getRevisionUpdate
+      summary: The pending update from Published (null when there is none)
+      responses:
+        "200":
+          description: Pending update and whether the caller can apply it
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [update, can_apply]
+                properties:
+                  update:
+                    oneOf:
+                      - { $ref: "#/components/schemas/RevisionUpdate" }
+                      - { type: "null" }
+                  can_apply: { type: boolean }
+  /revisions/{revision}/updates/{update}/apply:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { name: update, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [revisions]
+      operationId: applyRevisionUpdate
+      summary: Apply the pending update (checkpoint, merge into each page, move the base)
+      responses:
+        "200":
+          description: What applying did
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [files, conflicts, reopened]
+                properties:
+                  files: { type: integer }
+                  conflicts: { type: integer }
+                  reopened: { type: boolean, description: "Sent back to Editing because of conflicts" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /revisions/{revision}/suggestions:
     parameters:
       - { $ref: "#/components/parameters/RevisionID" }
@@ -1690,6 +1733,33 @@ components:
         base: { type: string }
         content: { type: string }
         additions: { type: integer }
+        deletions: { type: integer }
+        hunks: { type: array, items: { $ref: "#/components/schemas/DiffHunk" } }
+    RevisionUpdate:
+      type: object
+      required: [id, target_sha, prepared_at, files, conflicts]
+      properties:
+        id: { type: string }
+        target_sha: { type: string }
+        prepared_at: { type: string, format: date-time }
+        conflicts: { type: integer }
+        last_commit:
+          type: object
+          required: [sha, author_name, title, date]
+          properties:
+            sha: { type: string }
+            author_name: { type: string }
+            title: { type: string }
+            date: { type: string, format: date-time }
+        files: { type: array, items: { $ref: "#/components/schemas/RevisionUpdateFile" } }
+    RevisionUpdateFile:
+      type: object
+      required: [path, kind, conflicts, additions, deletions, hunks]
+      properties:
+        path: { type: string }
+        kind: { type: string, enum: [merge, deleted_upstream, deleted_both] }
+        conflicts: { type: integer }
+        additions: { type: integer, description: "What Published changed" }
         deletions: { type: integer }
         hunks: { type: array, items: { $ref: "#/components/schemas/DiffHunk" } }
     CommitPerson:

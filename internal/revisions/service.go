@@ -775,3 +775,23 @@ func (s *Service) RemoveMember(ctx context.Context, rev Revision, c Caller, user
 	}
 	return err
 }
+
+// DropFile takes a page out of the revision without recording a file
+// operation (Published deleted it too, so there's nothing left to publish).
+func (s *Service) DropFile(ctx context.Context, rev Revision, p string) error {
+	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
+		if _, err := store.Exec(ctx, tx, `DELETE FROM revision_files WHERE revision_id = ? AND path = ?`, rev.ID, p); err != nil {
+			return err
+		}
+		return s.dropDoc(ctx, tx, rev.ID, p)
+	})
+	if err == nil && s.Removed != nil {
+		s.Removed(ctx, rev, p)
+	}
+	return err
+}
+
+// Notify tells listeners the revision changed; kind says why.
+func (s *Service) Notify(ctx context.Context, revID, kind string) {
+	s.changed(ctx, revID, kind)
+}

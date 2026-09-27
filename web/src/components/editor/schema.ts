@@ -335,8 +335,37 @@ const cell = (name: string, tag: string) =>
 export const TableHeader = cell("tableHeader", "th");
 export const TableCell = cell("tableCell", "td");
 
+// --- Conflicts from updates from Published (docs/specs/06-git-and-forges.md) --
+
+/** An unresolved merge: the Published side, then the revision's. */
+export const Conflict = Node.create({
+  name: "conflict",
+  group: "block",
+  content: "conflictSide conflictSide",
+  isolating: true,
+  defining: true,
+  addAttributes: () => ({ id: { default: "" } }),
+  parseHTML: () => [{ tag: 'div[data-kmdn="conflict"]' }],
+  renderHTML: () => ["div", { "data-kmdn": "conflict", class: "conflict" }, 0],
+});
+
+export type ConflictLabels = { published: string; revision: string };
+
+export const ConflictSide = Node.create<{ labels: ConflictLabels }>({
+  name: "conflictSide",
+  content: "block*",
+  isolating: true,
+  addOptions: () => ({ labels: { published: "Published", revision: "This revision" } }),
+  addAttributes: () => ({ side: { default: "revision" } }),
+  parseHTML: () => [{ tag: "div[data-side]" }],
+  renderHTML({ node }) {
+    const side = node.attrs.side as keyof ConflictLabels;
+    return ["div", { class: "conflict-side", "data-side": side, "data-label": this.options.labels[side] ?? side }, 0];
+  },
+});
+
 /** Everything the page schema needs, without collaboration or UI helpers. */
-export function schemaExtensions(opts: { resolveImage?: (src: string) => string } = {}): AnyExtension[] {
+export function schemaExtensions(opts: { resolveImage?: (src: string) => string; conflictLabels?: ConflictLabels } = {}): AnyExtension[] {
   return [
     Doc,
     Text,
@@ -357,6 +386,8 @@ export function schemaExtensions(opts: { resolveImage?: (src: string) => string 
     FootnoteDefinition,
     Frontmatter,
     RawBlock,
+    Conflict,
+    opts.conflictLabels ? ConflictSide.configure({ labels: opts.conflictLabels }) : ConflictSide,
     HardBreak,
     Image.configure({ resolve: opts.resolveImage ?? ((s: string) => s) }),
     MathInline,

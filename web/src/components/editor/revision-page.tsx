@@ -24,6 +24,7 @@ import { selectionAnchor } from "./comment-anchors";
 import { CommentsPanel, type PendingComment } from "@/components/revision/comments-panel";
 import { useThreads } from "@/lib/threads";
 import { SuggestionList } from "@/components/revision/suggestions-panel";
+import { UpdatesBanner } from "@/components/revision/updates";
 
 /** Opens the page's room for as long as the view shows it. */
 function useRoom(revisionID: string | undefined, path: string) {
@@ -356,6 +357,7 @@ function Body({
   }
   return (
     <>
+      <UpdatesBanner rev={rev} className="mx-auto mt-5 max-w-[720px] max-md:mx-4" />
       <ReadOnlyBanner rev={rev} reason={status?.mode === "ro" ? status.reason : undefined} />
       {noDoc ? (
         content.data ? (
