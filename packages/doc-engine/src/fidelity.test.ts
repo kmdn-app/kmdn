@@ -20,7 +20,7 @@ function walk(dir: string, out: string[], depth = 0) {
   } catch {
     return;
   }
-  for (const e of entries) {
+  for (const e of entries.sort()) {
     const p = join(dir, e);
     let st;
     try {
@@ -34,8 +34,18 @@ function walk(dir: string, out: string[], depth = 0) {
 }
 
 const files: string[] = readdirSync(fixtures).map((f) => join(fixtures, f));
-const corpus: string[] = [];
-walk(join(repo, "node_modules/.pnpm"), corpus);
+// pnpm links the same package into many folders: keep one copy of each file
+// so duplicates don't skew the rates, and walk in sorted order so the corpus
+// is the same on every machine.
+const found: string[] = [];
+walk(join(repo, "node_modules/.pnpm"), found);
+const seen = new Set<string>();
+const corpus = found.filter((f) => {
+  const c = readFileSync(f, "utf8");
+  if (seen.has(c)) return false;
+  seen.add(c);
+  return true;
+});
 const all = [...files, ...corpus];
 
 test("corpus is large enough to mean something", () => {
@@ -77,7 +87,15 @@ describe("fresh serialization preserves the model", () => {
     const { doc } = parse(src);
     const fresh = serialize(stripSids(doc));
     const again = parse(fresh).doc;
-    return { f, ok: canonical(stripSids(doc)) === canonical(stripSids(again)) };
+    const a = stripSids(doc);
+    const b = stripSids(again);
+    const ok = canonical(a) === canonical(b);
+    let diff = "";
+    if (!ok) {
+      const i = a.content.findIndex((blk, k) => canonical(blk) !== canonical(b.content[k]));
+      diff = `block ${i}\n    was: ${JSON.stringify(a.content[i]).slice(0, 400)}\n    now: ${JSON.stringify(b.content[i]).slice(0, 400)}`;
+    }
+    return { f, ok, diff };
   });
   const failed = results.filter((r) => !r.ok);
   test("fixtures are exact", () => {
@@ -88,7 +106,14 @@ describe("fresh serialization preserves the model", () => {
   // starts with inline HTML re-parses as an HTML block. Both render the same.
   test("real-world corpus is at least 95% exact", () => {
     const rate = 1 - failed.length / results.length;
-    if (rate < 1) console.log(`model fidelity ${(rate * 100).toFixed(1)}%; failures:\n` + failed.slice(0, 20).map((r) => "  " + relative(repo, r.f)).join("\n"));
+    if (rate < 1)
+      console.log(
+        `model fidelity ${(rate * 100).toFixed(1)}% of ${results.length}; failures:\n` +
+          failed
+            .slice(0, 20)
+            .map((r, i) => "  " + relative(repo, r.f) + (i < 5 ? "\n    " + r.diff : ""))
+            .join("\n"),
+      );
     expect(rate).toBeGreaterThanOrEqual(0.95);
   });
 });
