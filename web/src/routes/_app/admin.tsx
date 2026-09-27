@@ -472,7 +472,7 @@ function GitHubAppButton() {
 function AddGitLabDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ base_url: "https://gitlab.com", client_id: "", client_secret: "" });
+  const [form, setForm] = useState({ base_url: "", client_id: "", client_secret: "" });
   const callback = useQuery({ queryKey: ["forges", "gitlab-callback"], queryFn: async () => (await unwrap(api.GET("/admin/forges"))).gitlab_callback_url, enabled: open });
   const add = useMutation({
     mutationFn: () => unwrap(api.POST("/admin/forges", { body: { kind: "gitlab", ...form } })),
@@ -491,7 +491,7 @@ function AddGitLabDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
         <div className="grid gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="gl-url">GitLab URL</Label>
-            <Input id="gl-url" value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
+            <Input id="gl-url" value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} placeholder="https://gitlab.com · https://gitlab.example.com" />
           </div>
           <div className="grid gap-1.5 border-t pt-3">
             <div className="text-[13.5px] font-medium">{t("admin.gitlabOAuth")}</div>

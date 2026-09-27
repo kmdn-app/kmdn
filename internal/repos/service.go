@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -121,6 +123,15 @@ func (s *Service) Connect(ctx context.Context, by auth.Principal, in ConnectInpu
 	if err != nil {
 		if errors.Is(err, forge.ErrNotFound) {
 			return Repo{}, "", &ErrInvalid{"name", "kmdn can't see that repository. Check the name and that the app or token has access."}
+		}
+		// A refused token is the person's to fix, not a server error: the
+		// usual cause is a token from another GitLab host, or an expired one.
+		var refused *forge.APIError
+		if errors.As(err, &refused) && (refused.Status == http.StatusUnauthorized || refused.Status == http.StatusForbidden) {
+			if h.Kind == forge.KindGitHub {
+				return Repo{}, "", &ErrInvalid{"name", "GitHub refused the app's access to that repository. Check the app is installed on it."}
+			}
+			return Repo{}, "", &ErrInvalid{"token", fmt.Sprintf("%s refused this token (%d). Check it was created on %s, hasn't expired or been revoked, and has the api and write_repository scopes.", hostOf(h.BaseURL), refused.Status, hostOf(h.BaseURL))}
 		}
 		return Repo{}, "", err
 	}
@@ -592,4 +603,12 @@ func (s *Service) Disconnect(ctx context.Context, by auth.Principal, r Repo) err
 	}
 	_ = removeAll(s.Mirror(r).Path)
 	return nil
+}
+
+// hostOf is a base URL's host, for messages ("lab.example.com").
+func hostOf(base string) string {
+	if u, err := url.Parse(base); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return base
 }

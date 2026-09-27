@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -232,4 +233,27 @@ func TestConnectPlainGitRepoAndRead(t *testing.T) {
 		t.Fatalf("after disconnect: %d", code)
 	}
 	_ = auth.CSRFHeader
+}
+
+// A token the forge refuses (from another GitLab, expired, revoked) is the
+// person's to fix: a 422 on the token field naming the host, not a 500.
+func TestConnectGitLabRefusedToken(t *testing.T) {
+	a, admin := newApp(t, nil)
+	ctx := context.Background()
+	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
+	signIn(t, a, admin, maya)
+	gl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"message":"401 Unauthorized"}`))
+	}))
+	defer gl.Close()
+	code, h := admin.do("POST", "/admin/forges", map[string]any{"kind": "gitlab", "base_url": gl.URL})
+	if code != 201 {
+		t.Fatalf("add gitlab: %d %v", code, h)
+	}
+	code, body := admin.do("POST", "/repos", map[string]any{"forge_host_id": h["id"], "owner": "advocacy", "name": "dispatch-kb", "token": "glpat-elsewhere"})
+	host := strings.TrimPrefix(gl.URL, "http://")
+	if msg := toJSON(body); code != 422 || !strings.Contains(msg, "token") || !strings.Contains(msg, host+" refused this token (401)") {
+		t.Fatalf("connect: %d %s", code, msg)
+	}
 }
