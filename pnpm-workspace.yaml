@@ -4,3 +4,5 @@ packages:
   - e2e
 allowBuilds:
   esbuild: true
+overrides:
+  lodash-es@<4.18.1: 4.18.1
