@@ -26,7 +26,7 @@ import { useRepo } from "@/lib/use-repo";
 const SECTIONS = ["general", "members", "hooks", "danger"] as const;
 type Section = (typeof SECTIONS)[number];
 
-export const Route = createFileRoute("/_app/$owner/$repo/settings")({
+export const Route = createFileRoute("/_app/$org/$owner/$repo/settings")({
   validateSearch: (s: Record<string, unknown>): { section?: Section } => (SECTIONS.includes(s.section as Section) ? { section: s.section as Section } : {}),
   component: RepoSettings,
 });
@@ -54,7 +54,7 @@ function RepoSettings() {
                   { key: "hooks", label: t("hooks.title"), icon: Webhook },
                   { key: "danger", label: t("settings.danger"), icon: AlertTriangle, danger: true },
                 ]}
-                linkProps={(key) => ({ to: "/$owner/$repo/settings", params, search: { section: key as Section } })}
+                linkProps={(key) => ({ to: "/$org/$owner/$repo/settings", params, search: { section: key as Section } })}
               >
                 {section === "general" && <General key={repo.id + repo.head_sha} repo={repo} />}
                 {section === "members" && <Members repo={repo} />}

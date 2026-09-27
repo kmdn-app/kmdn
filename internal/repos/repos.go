@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"net/url"
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/forge"
@@ -29,8 +30,10 @@ type Settings struct {
 
 // Repo is a connected repository.
 type Repo struct {
-	ID            string           `json:"id"`
-	OrgID         string           `json:"org_id"`
+	ID    string `json:"id"`
+	OrgID string `json:"org_id"`
+	// OrgSlug is the org's address in app URLs (/{org}/{owner}/{name}).
+	OrgSlug       string           `json:"org_slug"`
 	ForgeHostID   string           `json:"forge_host_id"`
 	ForgeKind     string           `json:"forge_kind"`
 	InstallID     string           `json:"-"`
@@ -71,9 +74,9 @@ func (r Repo) ForgeRepo() forge.Repo {
 const repoCols = `r.id, r.forge_host_id, h.kind, COALESCE(r.install_id, ''), COALESCE(i.external_id, ''), r.external_id, r.owner, r.name, r.display_name,
 	r.clone_url, r.web_url, r.default_branch, r.target_branch, r.content_root, r.include_globs, r.exclude_globs, r.settings,
 	r.protection, r.head_sha, r.health, r.health_detail, r.kmdn_yml, r.last_fetch_at, r.created_at,
-	COALESCE(r.token_ref, ''), COALESCE(r.webhook_secret_ref, ''), r.org_id`
+	COALESCE(r.token_ref, ''), COALESCE(r.webhook_secret_ref, ''), r.org_id, o.slug`
 
-const repoFrom = ` FROM repos r JOIN forge_hosts h ON h.id = r.forge_host_id LEFT JOIN forge_installs i ON i.id = r.install_id`
+const repoFrom = ` FROM repos r JOIN forge_hosts h ON h.id = r.forge_host_id JOIN orgs o ON o.id = r.org_id LEFT JOIN forge_installs i ON i.id = r.install_id`
 
 func scanRepo(row interface{ Scan(...any) error }) (Repo, error) {
 	var r Repo
@@ -82,7 +85,7 @@ func scanRepo(row interface{ Scan(...any) error }) (Repo, error) {
 	var created int64
 	err := row.Scan(&r.ID, &r.ForgeHostID, &r.ForgeKind, &r.InstallID, &r.InstallExtID, &r.ExternalID, &r.Owner, &r.Name, &r.DisplayName,
 		&r.CloneURL, &r.WebURL, &r.DefaultBranch, &r.TargetBranch, &r.ContentRoot, &inc, &exc, &settings,
-		&prot, &r.HeadSHA, &r.Health, &r.HealthDetail, &kyml, &last, &created, &r.TokenRef, &r.WebhookSecretRef, &r.OrgID)
+		&prot, &r.HeadSHA, &r.Health, &r.HealthDetail, &kyml, &last, &created, &r.TokenRef, &r.WebhookSecretRef, &r.OrgID, &r.OrgSlug)
 	if err != nil {
 		return r, err
 	}
@@ -107,6 +110,11 @@ func scanRepo(row interface{ Scan(...any) error }) (Repo, error) {
 func Get(ctx context.Context, q store.Querier, id string) (Repo, error) {
 	r, err := scanRepo(store.QueryRow(ctx, q, `SELECT `+repoCols+repoFrom+` WHERE r.id = ?`, id))
 	return r, store.NotFound(err)
+}
+
+// WebPath is the repo's page in the app: /{org}/{owner}/{name}.
+func (r Repo) WebPath() string {
+	return "/" + url.PathEscape(r.OrgSlug) + "/" + url.PathEscape(r.Owner) + "/" + url.PathEscape(r.Name)
 }
 
 // BySlug loads an org's repo by owner/name (first match across hosts).

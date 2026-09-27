@@ -90,8 +90,8 @@ function MessageItem({ m, repo, revision, canStart, onAccept, accepting }: { m: 
           return (
             <Link
               key={i}
-              to="/$owner/$repo/$"
-              params={{ owner: repo.owner, repo: repo.name, _splat: p.path ?? "" }}
+              to="/$org/$owner/$repo/$"
+              params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: p.path ?? "" }}
               search={revision ? { revision: revision.number } : {}}
               className="flex items-center gap-1.5 justify-self-start rounded-md border px-2 py-1 text-[0.75rem] hover:bg-accent"
             >
@@ -222,7 +222,7 @@ export function AssistantPanel({ repo, path, revision }: { repo: RepoView; path?
       void qc.invalidateQueries({ queryKey: ["revision-files"] });
       if ("revision" in r && r.revision) {
         toast.success(t("assistant.started", { title: r.revision.title }));
-        void navigate({ to: "/$owner/$repo/revisions/$number", params: { owner: repo.owner, repo: repo.name, number: String(r.revision.number) } });
+        void navigate({ to: "/$org/$owner/$repo/revisions/$number", params: { org: repo.org_slug, owner: repo.owner, repo: repo.name, number: String(r.revision.number) } });
       }
     },
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),

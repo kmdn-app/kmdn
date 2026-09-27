@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 
 type Search = { sha?: string; view?: "blame"; revision?: number };
 
-export const Route = createFileRoute("/_app/$owner/$repo/$")({
+export const Route = createFileRoute("/_app/$org/$owner/$repo/$")({
   validateSearch: (s: Record<string, unknown>): Search => ({
     ...(typeof s.sha === "string" && /^[0-9a-f]{7,40}$/.test(s.sha) ? { sha: s.sha } : {}),
     ...(s.view === "blame" ? { view: "blame" as const } : {}),
@@ -227,7 +227,7 @@ function PublishedPage() {
                   )}
                 </div>
                 <Button asChild variant="outline" size="sm">
-                  <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: path }}>
+                  <Link to="/$org/$owner/$repo/$" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: path }}>
                     <X />
                     {t("file.backToPublished")}
                   </Link>
@@ -359,7 +359,7 @@ function HistoryPanel({ repo, path, commits, current }: { repo: RepoView; path: 
               </div>
               {!isCurrent && (
                 <Button asChild variant="outline" size="sm" className="mt-2 h-7 text-xs">
-                  <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: c.path || path }} search={i === 0 ? {} : { sha: c.sha.slice(0, 12) }}>
+                  <Link to="/$org/$owner/$repo/$" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: c.path || path }} search={i === 0 ? {} : { sha: c.sha.slice(0, 12) }}>
                     {t("file.view")}
                   </Link>
                 </Button>

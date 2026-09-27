@@ -100,7 +100,7 @@ export function NewRevisionDialog({ repo, open, onOpenChange }: { repo: RepoView
           onOpenChange(false);
           setTitle("");
           setDescription("");
-          void navigate({ to: "/$owner/$repo/revisions/$number", params: { owner: repo.owner, repo: repo.name, number: String(rev.number) } });
+          void navigate({ to: "/$org/$owner/$repo/revisions/$number", params: { org: repo.org_slug, owner: repo.owner, repo: repo.name, number: String(rev.number) } });
         },
         onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
       },
@@ -152,9 +152,9 @@ export function RevisionPicker({ repo, revision, currentPath, onNew }: { repo: R
   const mine = useRevisions(repo, { mine: true });
   const canCreate = atLeast(repo.role, "contributor");
   const go = (n?: number) => {
-    if (currentPath) void navigate({ to: "/$owner/$repo/$", params: { owner: repo.owner, repo: repo.name, _splat: currentPath }, search: n ? { revision: n } : {} });
-    else if (n) void navigate({ to: "/$owner/$repo/revisions/$number", params: { owner: repo.owner, repo: repo.name, number: String(n) } });
-    else void navigate({ to: "/$owner/$repo", params: { owner: repo.owner, repo: repo.name } });
+    if (currentPath) void navigate({ to: "/$org/$owner/$repo/$", params: { org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: currentPath }, search: n ? { revision: n } : {} });
+    else if (n) void navigate({ to: "/$org/$owner/$repo/revisions/$number", params: { org: repo.org_slug, owner: repo.owner, repo: repo.name, number: String(n) } });
+    else void navigate({ to: "/$org/$owner/$repo", params: { org: repo.org_slug, owner: repo.owner, repo: repo.name } });
   };
   const others = (mine.data ?? []).filter((r) => r.id !== revision?.id);
   return (
@@ -207,7 +207,7 @@ export function RevisionPicker({ repo, revision, currentPath, onNew }: { repo: R
           </>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void navigate({ to: "/$owner/$repo/revisions", params: { owner: repo.owner, repo: repo.name } })}>
+        <DropdownMenuItem onSelect={() => void navigate({ to: "/$org/$owner/$repo/revisions", params: { org: repo.org_slug, owner: repo.owner, repo: repo.name } })}>
           <List />
           {t("revision.all")}
         </DropdownMenuItem>

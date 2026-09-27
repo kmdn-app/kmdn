@@ -123,7 +123,7 @@ func (t tools) repo(ctx context.Context, ref string) (repos.Repo, error) {
 
 // pageURL is where a person reads the page in kmdn.
 func (t tools) pageURL(r repos.Repo, p, slug string) string {
-	u := strings.TrimRight(t.s.BaseURL, "/") + "/" + url.PathEscape(r.Owner) + "/" + url.PathEscape(r.Name) + "/" + (&url.URL{Path: p}).EscapedPath()
+	u := strings.TrimRight(t.s.BaseURL, "/") + r.WebPath() + "/" + (&url.URL{Path: p}).EscapedPath()
 	if slug != "" {
 		u += "#" + slug
 	}
@@ -166,7 +166,7 @@ func (t tools) listRepos(ctx context.Context, _ *sdk.CallToolRequest, _ listRepo
 	out := listReposOut{Repos: []repoOut{}}
 	for _, r := range list {
 		out.Repos = append(out.Repos, repoOut{ID: r.ID, Name: r.Slug, DisplayName: r.DisplayName, Forge: r.ForgeKind, ContentRoot: r.ContentRoot,
-			URL: strings.TrimRight(t.s.BaseURL, "/") + "/" + url.PathEscape(r.Owner) + "/" + url.PathEscape(r.Name)})
+			URL: strings.TrimRight(t.s.BaseURL, "/") + r.WebPath()})
 	}
 	return nil, out, nil
 }

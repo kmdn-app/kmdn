@@ -312,6 +312,12 @@ func (s *Service) prBody(repo repos.Repo, rev revisions.Revision) string {
 
 // RevisionURL links back to the revision (the Kmdn-Revision trailer).
 func (s *Service) RevisionURL(repo repos.Repo, rev revisions.Revision) string {
+	return fmt.Sprintf("%s%s/revisions/%d", strings.TrimRight(s.BaseURL, "/"), repo.WebPath(), rev.Number)
+}
+
+// LegacyRevisionURL is the trailer's link from before orgs (no org in the
+// path): commits made then still carry it.
+func (s *Service) LegacyRevisionURL(repo repos.Repo, rev revisions.Revision) string {
 	return fmt.Sprintf("%s/%s/%s/revisions/%d", strings.TrimRight(s.BaseURL, "/"), url.PathEscape(repo.Owner), url.PathEscape(repo.Name), rev.Number)
 }
 

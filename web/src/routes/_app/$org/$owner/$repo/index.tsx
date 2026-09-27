@@ -20,7 +20,7 @@ import { useRevisions, type RevisionView } from "@/lib/revisions";
 import { useRepo } from "@/lib/use-repo";
 import { useAssistantStatus } from "@/lib/orgs";
 
-export const Route = createFileRoute("/_app/$owner/$repo/")({
+export const Route = createFileRoute("/_app/$org/$owner/$repo/")({
   component: RepoHome,
 });
 
@@ -45,7 +45,7 @@ function RepoHome() {
             actions={
               atLeast(repo.role, "admin") && (
                 <Button asChild variant="ghost" size="sm">
-                  <Link to="/$owner/$repo/settings" params={{ owner: repo.owner, repo: repo.name }}>
+                  <Link to="/$org/$owner/$repo/settings" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name }}>
                     <Settings />
                     <span className="max-sm:hidden">{t("shell.repoSettings")}</span>
                   </Link>
@@ -127,7 +127,7 @@ function RepoHome() {
                       </>
                     );
                     return first ? (
-                      <Link key={c.sha} to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: first }} className={rowCls}>
+                      <Link key={c.sha} to="/$org/$owner/$repo/$" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: first }} className={rowCls}>
                         {row}
                       </Link>
                     ) : (
@@ -167,7 +167,7 @@ function OpenFeedback() {
           const first = d.comments[0];
           return (
             <li key={d.id}>
-              <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: d.path }} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50">
+              <Link to="/$org/$owner/$repo/$" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: d.path }} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50">
                 <MessageSquare className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[0.84375rem] font-medium">{first?.body}</div>
@@ -199,7 +199,7 @@ function FollowedUpdates() {
       <ul className="divide-y rounded-xl border">
         {list.map((u) => (
           <li key={u.path}>
-            <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: u.path }} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50">
+            <Link to="/$org/$owner/$repo/$" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: u.path }} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50">
               <Sparkles className="mt-0.5 size-4 shrink-0 text-success" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[0.84375rem] font-medium">{u.path.split("/").pop()}</div>
@@ -244,7 +244,7 @@ function RevisionRow({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
   const { t } = useTranslation();
   const owner = rev.members[0];
   return (
-    <Link to="/$owner/$repo/revisions/$number" params={{ owner: repo.owner, repo: repo.name, number: String(rev.number) }} className={rowCls}>
+    <Link to="/$org/$owner/$repo/revisions/$number" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, number: String(rev.number) }} className={rowCls}>
       <StateDot state={rev.state} className="mt-2" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[0.84375rem] font-medium">{rev.title}</div>
@@ -285,7 +285,7 @@ function MineCard({ repo }: { repo: RepoView }) {
       desc={t("home.mineDesc")}
       action={
         <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-[0.78125rem]">
-          <Link to="/$owner/$repo/revisions" params={{ owner: repo.owner, repo: repo.name }} search={{ filter: "mine" }}>
+          <Link to="/$org/$owner/$repo/revisions" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name }} search={{ filter: "mine" }}>
             {t("home.all")}
           </Link>
         </Button>

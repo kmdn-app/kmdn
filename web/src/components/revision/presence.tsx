@@ -49,7 +49,7 @@ export function PresenceStack({ repo, rev, path }: { repo: RepoView; rev: Revisi
                 onClick={() => {
                   if (here && scrollToCaret(p.name)) return;
                   const to = p.paths[0];
-                  if (to) void navigate({ to: "/$owner/$repo/$", params: { owner: repo.owner, repo: repo.name, _splat: to }, search: { revision: rev.number } });
+                  if (to) void navigate({ to: "/$org/$owner/$repo/$", params: { org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: to }, search: { revision: rev.number } });
                 }}
               >
                 <Avatar

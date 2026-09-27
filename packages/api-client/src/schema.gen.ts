@@ -3159,6 +3159,8 @@ export interface components {
             data: {
                 title?: string;
                 number?: number;
+                /** @description The org's slug (absent before orgs) */
+                org?: string;
                 owner?: string;
                 repo?: string;
                 path?: string;
@@ -3880,6 +3882,8 @@ export interface components {
         RepoView: {
             id: string;
             org_id: string;
+            /** @description The org's address in app URLs: /{org_slug}/{owner}/{name} */
+            org_slug: string;
             forge_host_id: string;
             /** @enum {string} */
             forge_kind: "github" | "gitlab" | "git";
@@ -4648,6 +4652,10 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["OrgView"][];
+                        /** @enum {string} */
+                        mode: "single" | "multi";
+                        /** @description The caller may create an organization */
+                        can_create: boolean;
                     };
                 };
             };

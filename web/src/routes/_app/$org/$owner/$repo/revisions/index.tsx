@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 const FILTERS = ["open", "mine", "published", "closed", "all"] as const;
 type Filter = (typeof FILTERS)[number];
 
-export const Route = createFileRoute("/_app/$owner/$repo/revisions/")({
+export const Route = createFileRoute("/_app/$org/$owner/$repo/revisions/")({
   validateSearch: (s: Record<string, unknown>): { filter?: Filter } => (FILTERS.includes(s.filter as Filter) ? { filter: s.filter as Filter } : {}),
   component: RevisionsList,
 });
@@ -74,8 +74,8 @@ function RevisionsList() {
                 {list.data?.map((r) => (
                   <Link
                     key={r.id}
-                    to="/$owner/$repo/revisions/$number"
-                    params={{ owner: repo.owner, repo: repo.name, number: String(r.number) }}
+                    to="/$org/$owner/$repo/revisions/$number"
+                    params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, number: String(r.number) }}
                     className="flex items-center gap-4 border-b p-4 last:border-b-0 hover:bg-accent/50"
                   >
                     <div className="min-w-0 flex-1">

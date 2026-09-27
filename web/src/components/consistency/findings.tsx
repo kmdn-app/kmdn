@@ -63,8 +63,8 @@ function SideCard({ repo, side, claim, label, revisionNumber }: { repo: RepoView
         {side.heading && <span className="truncate">› {side.heading}</span>}
       </div>
       <Link
-        to="/$owner/$repo/$"
-        params={{ owner: repo.owner, repo: repo.name, _splat: side.path }}
+        to="/$org/$owner/$repo/$"
+        params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: side.path }}
         search={revisionNumber ? { revision: revisionNumber } : {}}
         hash={revisionNumber ? undefined : side.slug || undefined}
         className="truncate text-[0.78125rem] font-medium hover:underline"
@@ -115,7 +115,7 @@ export function FindingCard({ repo, f, actions, revisionNumber }: { repo: RepoVi
         {f.fix && (
           <span>
             ·{" "}
-            <Link to="/$owner/$repo/revisions/$number" params={{ owner: repo.owner, repo: repo.name, number: String(f.fix.number) }} className="hover:underline">
+            <Link to="/$org/$owner/$repo/revisions/$number" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, number: String(f.fix.number) }} className="hover:underline">
               {fixing ? t("consistency.fixing", { number: f.fix.number }) : `#${f.fix.number} ${f.fix.title}`}
             </Link>
           </span>
@@ -201,7 +201,7 @@ export function useFindingActions(repo: RepoView, invalidate: () => void, opts: 
       invalidate();
       if (f.scope === "published") {
         toast.success(t("consistency.started", { number: d.revision.number }));
-        void navigate({ to: "/$owner/$repo/revisions/$number", params: { owner: repo.owner, repo: repo.name, number: String(d.revision.number) } });
+        void navigate({ to: "/$org/$owner/$repo/revisions/$number", params: { org: repo.org_slug, owner: repo.owner, repo: repo.name, number: String(d.revision.number) } });
       } else toast.success(t("consistency.asked"));
     },
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -14,7 +14,8 @@ export const Route = createFileRoute("/auth/verify")({
 
 function Verify() {
   const { t } = useTranslation();
-  const { token } = Route.useSearch();
+  // The token leaves the address bar once used: keep the one the page opened with.
+  const [token] = useState(Route.useSearch().token);
   const qc = useQueryClient();
   const navigate = useNavigate();
   const started = useRef(false);

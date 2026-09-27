@@ -141,7 +141,13 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, View{o, role})
 	}
-	api.JSON(w, http.StatusOK, map[string]any{"items": out})
+	mode, err := orgs.Mode(r.Context(), s.DB)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	canCreate := mode == orgs.Multi && (s.AllowCreate == "anyone" || p.User.IsInstanceAdmin)
+	api.JSON(w, http.StatusOK, map[string]any{"items": out, "mode": mode, "can_create": canCreate})
 }
 
 func (s *Service) create(w http.ResponseWriter, r *http.Request) {

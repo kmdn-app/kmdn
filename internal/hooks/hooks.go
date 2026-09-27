@@ -316,7 +316,7 @@ func (s *Service) RevisionEvent(ctx context.Context, rev revisions.Revision, act
 		d["files"] = len(files)
 	}
 	p := Payload{ID: ids.New("evt"), Type: ev, CreatedAt: time.Now(), Repo: s.repoJSON(repo), Data: d,
-		Revision: map[string]any{"id": rev.ID, "number": rev.Number, "title": rev.Title, "state": rev.State, "url": s.BaseURL + "/" + repo.Owner + "/" + repo.Name + "/revisions/" + fmt.Sprint(rev.Number)}}
+		Revision: map[string]any{"id": rev.ID, "number": rev.Number, "title": rev.Title, "state": rev.State, "url": s.BaseURL + repo.WebPath() + "/revisions/" + fmt.Sprint(rev.Number)}}
 	if actorID != "" {
 		if u, err := users.ByID(ctx, s.DB, actorID); err == nil {
 			p.Actor = map[string]any{"id": u.ID, "name": u.Name}
@@ -338,14 +338,14 @@ func (s *Service) Discussion(ctx context.Context, t threads.Thread, c threads.Co
 	_ = json.Unmarshal(t.Anchor, &a)
 	p := Payload{ID: ids.New("evt"), Type: "discussion.created", CreatedAt: time.Now(), Repo: s.repoJSON(repo),
 		Actor: map[string]any{"id": by.ID, "name": by.Name},
-		Data:  map[string]any{"thread": t.ID, "path": t.Path, "quote": a.Quote, "body": c.Body, "url": s.BaseURL + "/" + repo.Owner + "/" + repo.Name + "/" + t.Path}}
+		Data:  map[string]any{"thread": t.ID, "path": t.Path, "quote": a.Quote, "body": c.Body, "url": s.BaseURL + repo.WebPath() + "/" + t.Path}}
 	if err := s.queue(ctx, repo.ID, p); err != nil && s.Log != nil {
 		s.Log.Error("queue discussion hook", "err", err)
 	}
 }
 
 func (s *Service) repoJSON(r repos.Repo) map[string]any {
-	return map[string]any{"id": r.ID, "slug": r.Slug, "url": s.BaseURL + "/" + r.Owner + "/" + r.Name}
+	return map[string]any{"id": r.ID, "slug": r.Slug, "org": r.OrgSlug, "url": s.BaseURL + r.WebPath()}
 }
 
 // queue records a delivery for each active hook of the repo that wants the event.
