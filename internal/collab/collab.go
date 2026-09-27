@@ -601,7 +601,12 @@ func (r *Room) ensureManifest(ctx context.Context, c revisions.Caller) {
 	}
 	r.mu.Lock()
 	r.inManifest = true
+	dirty := r.dirty
 	r.mu.Unlock()
+	if dirty {
+		// The quiet period may have passed while the page was being added.
+		go r.materialize(context.Background())
+	}
 }
 
 func (p *Peer) receiveAwareness(msg []byte) {
@@ -806,11 +811,14 @@ func (r *Room) materialize(ctx context.Context) {
 	defer r.work.Unlock()
 	r.mu.Lock()
 	dirty, closed, inManifest, p := r.dirty, r.closed, r.inManifest, r.path
-	r.dirty = false
-	r.mu.Unlock()
 	if !dirty || closed || !inManifest {
+		// Not yet in the manifest: stay dirty; ensureManifest materializes
+		// once the page has been added.
+		r.mu.Unlock()
 		return
 	}
+	r.dirty = false
+	r.mu.Unlock()
 	state := r.merged(ctx)
 	if state == nil {
 		r.markDirty()
