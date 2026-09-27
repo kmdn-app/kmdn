@@ -320,6 +320,8 @@ func (s *Service) acceptProposal(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Anyone already following the revision's thread sees the conversation.
+	s.emit(shared.ID, map[string]any{"kind": "message"})
 	_, _ = AddMessage(r.Context(), s.DB, t.ID, Message{Role: llm.RoleAssistant, RunID: acceptedPrefix + callID, Content: []llm.Block{{Type: llm.BlockText, Text: "Started revision #" + itoa(rev.Number) + ": " + rev.Title + ". The conversation continues there."}}})
 	s.emit(t.ID, map[string]any{"kind": "message"})
 	api.JSON(w, http.StatusCreated, map[string]any{"revision": rev, "thread": shared})
