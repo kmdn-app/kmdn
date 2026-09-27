@@ -4,7 +4,7 @@ Collaborative markdown editing with a git backend.
 
 kmdn gives anyone on a team a Google Docs-style editor over the markdown in a GitHub or GitLab repository. People co-edit **revisions** live, assigned maintainers review them in the same editor, and kmdn keeps each revision as a branch with a draft pull request: every **Save all** is a commit by the person who saved, and publishing merges the pull request, co-signed by the people who wrote it.
 
-> **Status:** early development. The design is in [`docs/specs/`](docs/specs/README.md) and the UI mockups are in [`docs/mockups/`](docs/mockups/index.html). Work is tracked in [GitHub issues](https://github.com/kmdn-app/kmdn/issues) by milestone.
+> **Status:** early development. The [documentation](docs/README.md) covers installing, running and using kmdn. The design is in [`docs/specs/`](docs/specs/README.md) and the UI mockups are in [`docs/mockups/`](docs/mockups/index.html). Work is tracked in [GitHub issues](https://github.com/kmdn-app/kmdn/issues) by milestone.
 
 ## What it does
 
@@ -19,6 +19,8 @@ kmdn gives anyone on a team a Google Docs-style editor over the markdown in a Gi
 
 ## Install
 
+The reference deployment is [Upsun](docs/admin/install-upsun.md): the repository ships its `.upsun/config.yaml`, so an install is creating a project, setting the AI provider's variables and pushing.
+
 With Docker (the image includes git; data lives in `/data`):
 
 ```bash
@@ -30,7 +32,7 @@ docker run -d -p 8080:8080 -v kmdn-data:/data \
 
 Keep the secret key: stored credentials can't be decrypted without it. For Postgres or TLS with Caddy, see [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
 
-Or download a binary from the [releases](https://github.com/kmdn-app/kmdn/releases) (linux and macOS, amd64 and arm64; needs git ≥ 2.40 on PATH), then:
+More in [Other installs](docs/admin/other-installs.md). Or download a binary from the [releases](https://github.com/kmdn-app/kmdn/releases) (linux and macOS, amd64 and arm64; needs git ≥ 2.40 on PATH), then:
 
 ```bash
 kmdn init        # writes kmdn.yaml with a new secret key
@@ -48,9 +50,11 @@ internal/            Go packages (api, auth, collab, gitmirror, forge, revisions
 api/openapi.yaml     REST API contract
 web/                 TanStack Router SPA (shadcn/ui)
 packages/doc-engine  shared TypeScript document engine (browser + embedded in Go)
+docs/                user and admin documentation
 docs/specs/          specifications and decision log
 docs/mockups/        clickable HTML mockups
-deploy/              docker-compose example (Postgres, Caddy)
+deploy/              Upsun start script, docker-compose example (Postgres, Caddy)
+e2e/                 end-to-end tests, and the documentation screenshots (e2e/docs)
 ```
 
 ## Development

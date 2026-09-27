@@ -14,6 +14,7 @@
   "include": [
     "*.ts",
     "tests/**/*.ts",
-    "load/**/*.ts"
+    "load/**/*.ts",
+    "docs/**/*.ts"
   ]
 }

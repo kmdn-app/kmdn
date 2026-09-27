@@ -5,7 +5,9 @@
   "scripts": {
     "e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "load": "node load/load.ts"
+    "load": "node load/load.ts",
+    "screenshots": "node docs/screenshots.ts",
+    "docs-demo": "node docs/serve.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
