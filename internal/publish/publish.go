@@ -25,6 +25,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -82,6 +83,14 @@ func (s *Service) Register() {
 			return nil, jobs.Permanent(err)
 		}
 		sha, url, err := s.run(ctx, p)
+		switch {
+		case err != nil:
+			telemetry.Publishes.WithLabelValues("failed").Inc()
+		case url != "":
+			telemetry.Publishes.WithLabelValues("pull_request").Inc()
+		case sha != "":
+			telemetry.Publishes.WithLabelValues("pushed").Inc()
+		}
 		return map[string]string{"sha": sha, "url": url}, err
 	})
 	s.Repos.OnChangeRequest = append(s.Repos.OnChangeRequest, s.onChangeRequest)

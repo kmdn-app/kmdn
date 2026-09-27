@@ -23,6 +23,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/search"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 	"github.com/kmdn-app/kmdn/internal/version"
 )
 
@@ -745,6 +746,7 @@ func (t tools) middleware(next sdk.MethodHandler) sdk.MethodHandler {
 		if aerr := audit.Write(wctx, t.s.DB, e); aerr != nil {
 			t.s.Log.Error("audit mcp call", "err", aerr)
 		}
+		telemetry.MCPCalls.WithLabelValues(strings.TrimPrefix(e.Action, "mcp."), t.c.key.ID).Inc()
 		if cerr := count(wctx, t.s.DB, t.c.key.ID); cerr != nil {
 			t.s.Log.Error("count mcp call", "err", cerr)
 		}

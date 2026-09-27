@@ -22,6 +22,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 )
 
 // Options tunes rooms; zero values use the spec's defaults.
@@ -227,6 +228,13 @@ func (h *Hub) FileRemoved(rev revisions.Revision, p string) {
 	if r != nil {
 		r.shutdown("deleted")
 	}
+}
+
+// Rooms counts the documents open in memory (metrics).
+func (h *Hub) Rooms() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.rooms)
 }
 
 // Flush persists and materializes every room (shutdown, tests).
@@ -547,6 +555,7 @@ var errClientConflict = errors.New("collab: client id belongs to someone else")
 // the manifest entry on the first edit. kind is recorded for new client ids
 // (human, restore, assistant).
 func (r *Room) ingest(ctx context.Context, data []byte, clients []uint64, c revisions.Caller, from *Peer, kind string) error {
+	telemetry.YjsUpdates.Inc()
 	uid := c.User.ID
 	r.mu.Lock()
 	if r.closed {

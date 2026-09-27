@@ -17,8 +17,12 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 )
 
 // Status values.
@@ -268,12 +272,24 @@ func (q *Queue) RunOnce(ctx context.Context) (bool, error) {
 	q.mu.RLock()
 	h := q.handlers[j.Kind]
 	q.mu.RUnlock()
-	jctx, cancel := context.WithTimeout(ctx, q.opts.LockFor)
+	start := q.now()
+	telemetry.JobDelay.WithLabelValues(j.Kind).Observe(max(0, start.Sub(j.RunAt).Seconds()))
+	jctx, span := telemetry.Tracer().Start(ctx, "job "+j.Kind, trace.WithAttributes(attribute.String("kmdn.job.id", j.ID), attribute.String("kmdn.job.kind", j.Kind), attribute.Int("kmdn.job.attempt", j.Attempts)))
+	jctx, cancel := context.WithTimeout(jctx, q.opts.LockFor)
 	result, herr := safeRun(jctx, h, j)
 	cancel()
+	telemetry.End(span, herr)
+	telemetry.JobDuration.WithLabelValues(j.Kind).Observe(q.now().Sub(start).Seconds())
+	outcome := "done"
 	if herr != nil {
 		q.opts.Logger.Warn("job failed", "job_id", j.ID, "kind", j.Kind, "attempt", j.Attempts, "error", herr)
+		outcome = "retry"
+		var p permanent
+		if errors.As(herr, &p) || j.Attempts >= j.MaxAttempts {
+			outcome = "failed"
+		}
 	}
+	telemetry.JobRuns.WithLabelValues(j.Kind, outcome).Inc()
 	return true, q.finish(context.WithoutCancel(ctx), j, result, herr)
 }
 
