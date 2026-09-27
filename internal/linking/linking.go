@@ -85,6 +85,8 @@ func Accounts(ctx context.Context, q store.Querier, userID string) ([]Account, e
 
 // Routes registers the OAuth and linked-account endpoints.
 func (s *Service) Routes(r chi.Router) {
+	// GitHub's setup URL for Apps kmdn creates: back from installing.
+	r.With(auth.Require).Get("/admin/forges/github/setup", s.githubSetup)
 	r.Get("/auth/oauth/providers", s.providers)
 	r.Get("/auth/oauth/{host}/start", s.start)
 	r.Get("/auth/oauth/{host}/callback", s.callback)
@@ -131,11 +133,14 @@ func (s *Service) providers(w http.ResponseWriter, r *http.Request) {
 }
 
 type pending struct {
-	HostID   string    `json:"host_id"`
-	Mode     string    `json:"mode"` // link | signin
-	UserID   string    `json:"user_id,omitempty"`
-	Redirect string    `json:"redirect"`
-	Created  time.Time `json:"created"`
+	HostID string `json:"host_id"`
+	Mode   string `json:"mode"` // link | signin | claim
+	// For claim: the org claiming the GitHub installation.
+	OrgID     string    `json:"org_id,omitempty"`
+	InstallID string    `json:"install_id,omitempty"`
+	UserID    string    `json:"user_id,omitempty"`
+	Redirect  string    `json:"redirect"`
+	Created   time.Time `json:"created"`
 }
 
 // redirectURI is where the forge sends people back. GitHub Apps register a
@@ -173,6 +178,12 @@ func (s *Service) start(w http.ResponseWriter, r *http.Request) {
 		}
 		st.Mode, st.UserID = "link", p.User.ID
 	}
+	s.authorize(w, r, h, st)
+}
+
+// authorize sends the browser to the forge's OAuth page with a fresh state.
+func (s *Service) authorize(w http.ResponseWriter, r *http.Request, h repos.HostRecord, st pending) {
+	ctx := r.Context()
 	state := auth.Token(24)
 	if err := settings.Set(ctx, s.DB, "oauth_state:"+auth.Hash(state), st); err != nil {
 		api.Error(w, r, err)
@@ -207,7 +218,7 @@ type Profile struct {
 
 func fail(w http.ResponseWriter, r *http.Request, st pending, code string) {
 	target := "/signin?oauth_error=" + code
-	if st.Mode == "link" {
+	if st.Mode == "link" || st.Mode == "claim" {
 		target = safeRedirect(st.Redirect)
 		sep := "?"
 		if strings.Contains(target, "?") {
@@ -239,7 +250,16 @@ func (s *Service) callback(w http.ResponseWriter, r *http.Request) {
 		fail(w, r, st, "unavailable")
 		return
 	}
-	prof, err := s.exchange(ctx, h, r.URL.Query().Get("code"))
+	token, err := s.token(ctx, h, r.URL.Query().Get("code"))
+	if err != nil {
+		fail(w, r, st, "forge")
+		return
+	}
+	if st.Mode == "claim" {
+		s.claim(w, r, h, st, token)
+		return
+	}
+	prof, err := s.profile(ctx, h, token)
 	if err != nil {
 		fail(w, r, st, "forge")
 		return
@@ -312,13 +332,14 @@ func (s *Service) userFor(ctx context.Context, h repos.HostRecord, p Profile) (u
 	return users.User{}, errors.New("linking: no account")
 }
 
-func (s *Service) exchange(ctx context.Context, h repos.HostRecord, code string) (Profile, error) {
+// token exchanges an OAuth code for the person's access token.
+func (s *Service) token(ctx context.Context, h repos.HostRecord, code string) (string, error) {
 	if code == "" {
-		return Profile{}, errors.New("linking: no code")
+		return "", errors.New("linking: no code")
 	}
 	secret, err := s.Secrets.Get(ctx, s.DB, h.ClientSecretRef)
 	if err != nil {
-		return Profile{}, err
+		return "", err
 	}
 	form := url.Values{"client_id": {h.ClientID}, "client_secret": {string(secret)}, "code": {code}, "redirect_uri": {s.redirectURI(h)}}
 	tokenURL := strings.TrimRight(h.BaseURL, "/") + "/login/oauth/access_token"
@@ -334,11 +355,17 @@ func (s *Service) exchange(ctx context.Context, h repos.HostRecord, code string)
 		Error       string `json:"error"`
 	}
 	if err := s.doJSON(req, &tok); err != nil {
-		return Profile{}, err
+		return "", err
 	}
 	if tok.AccessToken == "" {
-		return Profile{}, fmt.Errorf("linking: token exchange failed: %s", tok.Error)
+		return "", fmt.Errorf("linking: token exchange failed: %s", tok.Error)
 	}
+	return tok.AccessToken, nil
+}
+
+// profile reads the person's forge profile with their token.
+func (s *Service) profile(ctx context.Context, h repos.HostRecord, token string) (Profile, error) {
+	tok := struct{ AccessToken string }{token}
 	host := hostOf(h.BaseURL)
 	switch h.Kind {
 	case forge.KindGitHub:

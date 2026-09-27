@@ -478,6 +478,43 @@ type ManifestConversion struct {
 	ClientSecret  string `json:"client_secret"`
 }
 
+// InstallURL is where a person installs the App (or picks an account it's
+// already installed on), with state handed back to the setup URL.
+func InstallURL(baseURL, slug, state string) string {
+	u := strings.TrimRight(baseURL, "/") + "/apps/" + url.PathEscape(slug) + "/installations/new"
+	if state != "" {
+		u += "?state=" + url.QueryEscape(state)
+	}
+	return u
+}
+
+// UserInstallations lists the App's installations the person with this
+// user-to-server token can access (GET /user/installations).
+func UserInstallations(ctx context.Context, client *http.Client, apiURL, token string) ([]Install, error) {
+	g := &GitHubApp{APIURL: apiURL, HTTP: client}
+	var out []Install
+	for page := 1; page <= 10; page++ {
+		var res struct {
+			Installations []struct {
+				ID      int64 `json:"id"`
+				Account struct {
+					Login string `json:"login"`
+				} `json:"account"`
+			} `json:"installations"`
+		}
+		if err := g.do(ctx, http.MethodGet, fmt.Sprintf("/user/installations?per_page=100&page=%d", page), "Bearer "+token, nil, &res); err != nil {
+			return nil, err
+		}
+		for _, in := range res.Installations {
+			out = append(out, Install{ExternalID: strconv.FormatInt(in.ID, 10), AccountLogin: in.Account.Login})
+		}
+		if len(res.Installations) < 100 {
+			break
+		}
+	}
+	return out, nil
+}
+
 // ConvertManifest exchanges the manifest flow code for App credentials.
 func ConvertManifest(ctx context.Context, client *http.Client, apiURL, code string) (ManifestConversion, error) {
 	g := &GitHubApp{APIURL: apiURL, HTTP: client}
@@ -496,7 +533,11 @@ func AppManifest(baseURL, name, hostID string) map[string]any {
 		"callback_urls": []string{
 			b + "/api/v1/auth/oauth/" + hostID + "/callback",
 		},
-		"setup_url":       b + "/admin/repositories",
+		// After installing (or configuring), GitHub sends people back with
+		// the installation id and the state kmdn passed, so the org that
+		// started it can claim the installation.
+		"setup_url":       b + "/api/v1/admin/forges/github/setup",
+		"setup_on_update": true,
 		"public":          false,
 		"hook_attributes": map[string]any{"url": b + "/hooks/github/" + hostID, "active": true},
 		"default_permissions": map[string]string{

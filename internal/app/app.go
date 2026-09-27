@@ -280,8 +280,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL}
 	a.Invites.Routes(r)
-	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes, a.Invites.OrgRoutes, a.MCP.OrgRoutes, a.LLM.OrgRoutes)
-	(&linking.Service{DB: db, Secrets: sec, AuthH: a.AuthH, BaseURL: a.Repos.BaseURL, HTTP: a.Repos.Adapters.HTTP}).Routes(r)
+	link := &linking.Service{DB: db, Secrets: sec, AuthH: a.AuthH, BaseURL: a.Repos.BaseURL, HTTP: a.Repos.Adapters.HTTP}
+	link.Routes(r)
+	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes, a.Invites.OrgRoutes, a.MCP.OrgRoutes, a.LLM.OrgRoutes, a.Repos.OrgForgeRoutes, link.OrgRoutes)
 	if _, err := repos.EnsureGitHost(ctx, db); err != nil {
 		db.Close()
 		return nil, err

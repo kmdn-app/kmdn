@@ -17,6 +17,9 @@ import (
 // HostRecord is a stored forge host with its secret references.
 type HostRecord struct {
 	forge.Host
+	// OrgID is the org that added the host; empty for hosts the instance
+	// shares with every org (16-organizations.md#forges).
+	OrgID            string    `json:"org_id,omitempty"`
 	ClientSecretRef  string    `json:"-"`
 	PrivateKeyRef    string    `json:"-"`
 	WebhookSecretRef string    `json:"-"`
@@ -25,12 +28,12 @@ type HostRecord struct {
 }
 
 const hostCols = `id, kind, base_url, api_url, display_name, app_id, app_slug, client_id, COALESCE(client_secret_ref, ''), COALESCE(private_key_ref, ''), COALESCE(webhook_secret_ref, ''), created_at,
-	(SELECT COUNT(*) FROM repos r WHERE r.forge_host_id = forge_hosts.id)`
+	(SELECT COUNT(*) FROM repos r WHERE r.forge_host_id = forge_hosts.id), COALESCE(org_id, '')`
 
 func scanHost(row interface{ Scan(...any) error }) (HostRecord, error) {
 	var h HostRecord
 	var at int64
-	err := row.Scan(&h.ID, &h.Kind, &h.BaseURL, &h.APIURL, &h.DisplayName, &h.AppID, &h.AppSlug, &h.ClientID, &h.ClientSecretRef, &h.PrivateKeyRef, &h.WebhookSecretRef, &at, &h.Repos)
+	err := row.Scan(&h.ID, &h.Kind, &h.BaseURL, &h.APIURL, &h.DisplayName, &h.AppID, &h.AppSlug, &h.ClientID, &h.ClientSecretRef, &h.PrivateKeyRef, &h.WebhookSecretRef, &at, &h.Repos, &h.OrgID)
 	h.CreatedAt = store.FromMillis(at)
 	return h, err
 }
@@ -43,7 +46,19 @@ func GetHost(ctx context.Context, q store.Querier, id string) (HostRecord, error
 
 // ListHosts returns all forge hosts.
 func ListHosts(ctx context.Context, q store.Querier) ([]HostRecord, error) {
-	rows, err := store.Query(ctx, q, `SELECT `+hostCols+` FROM forge_hosts ORDER BY created_at`)
+	return listHosts(ctx, q, `SELECT `+hostCols+` FROM forge_hosts ORDER BY created_at`)
+}
+
+// ListHostsFor returns the hosts an org can use: the shared ones and its own.
+func ListHostsFor(ctx context.Context, q store.Querier, orgID string) ([]HostRecord, error) {
+	return listHosts(ctx, q, `SELECT `+hostCols+` FROM forge_hosts WHERE org_id IS NULL OR org_id = ? ORDER BY created_at`, orgID)
+}
+
+// UsableBy reports whether an org can connect repositories through h.
+func (h HostRecord) UsableBy(orgID string) bool { return h.OrgID == "" || h.OrgID == orgID }
+
+func listHosts(ctx context.Context, q store.Querier, query string, args ...any) ([]HostRecord, error) {
+	rows, err := store.Query(ctx, q, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +77,7 @@ func ListHosts(ctx context.Context, q store.Querier) ([]HostRecord, error) {
 // HostInput creates a host.
 type HostInput struct {
 	ID            string // optional, generated when empty
+	OrgID         string // empty: shared by the instance
 	Kind          string
 	BaseURL       string
 	APIURL        string
@@ -83,7 +99,7 @@ func CreateHost(ctx context.Context, tx *store.Tx, sec *secrets.Store, in HostIn
 		if v == "" {
 			return nil, nil
 		}
-		return sec.Put(ctx, tx, kind, []byte(v))
+		return sec.PutOrg(ctx, tx, in.OrgID, kind, []byte(v))
 	}
 	cs, err := put("forge_client_secret", in.ClientSecret)
 	if err != nil {
@@ -97,8 +113,12 @@ func CreateHost(ctx context.Context, tx *store.Tx, sec *secrets.Store, in HostIn
 	if err != nil {
 		return HostRecord{}, err
 	}
-	if _, err := store.Exec(ctx, tx, `INSERT INTO forge_hosts (id, kind, base_url, api_url, display_name, app_id, app_slug, client_id, client_secret_ref, private_key_ref, webhook_secret_ref, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, in.ID, in.Kind, in.BaseURL, in.APIURL, in.DisplayName, in.AppID, in.AppSlug, in.ClientID, cs, pk, ws, store.Millis(time.Now())); err != nil {
+	var org any
+	if in.OrgID != "" {
+		org = in.OrgID
+	}
+	if _, err := store.Exec(ctx, tx, `INSERT INTO forge_hosts (id, kind, base_url, api_url, display_name, app_id, app_slug, client_id, client_secret_ref, private_key_ref, webhook_secret_ref, created_at, org_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, in.ID, in.Kind, in.BaseURL, in.APIURL, in.DisplayName, in.AppID, in.AppSlug, in.ClientID, cs, pk, ws, store.Millis(time.Now()), org); err != nil {
 		return HostRecord{}, err
 	}
 	return GetHost(ctx, tx, in.ID)
@@ -106,7 +126,7 @@ func CreateHost(ctx context.Context, tx *store.Tx, sec *secrets.Store, in HostIn
 
 // EnsureGitHost returns the built-in host for plain git remotes, creating it once.
 func EnsureGitHost(ctx context.Context, db *store.DB) (HostRecord, error) {
-	h, err := scanHost(store.QueryRow(ctx, db, `SELECT `+hostCols+` FROM forge_hosts WHERE kind = 'git' ORDER BY created_at LIMIT 1`))
+	h, err := scanHost(store.QueryRow(ctx, db, `SELECT `+hostCols+` FROM forge_hosts WHERE kind = 'git' AND org_id IS NULL ORDER BY created_at LIMIT 1`))
 	if err == nil {
 		return h, nil
 	}

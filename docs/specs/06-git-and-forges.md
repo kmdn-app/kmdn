@@ -27,6 +27,7 @@ type ChangeRequester interface {
 - **Events**: `push`, `pull_request`, `installation`, `installation_repositories`, `repository` (rename/transfer/delete).
 - **Tokens**: installation access tokens (1 h), cached and refreshed at 50 min.
 - **User OAuth**: the same App's user-to-server OAuth for "Continue with GitHub" and account linking.
+- **Organizations**: an App set up in the instance console is shared by every org; each installation is connected to one org, after GitHub confirms the person connecting it can access it (the App's setup URL is `/api/v1/admin/forges/github/setup`). See [16](16-organizations.md#forges).
 
 ### GitLab (gitlab.com and self-managed)
 

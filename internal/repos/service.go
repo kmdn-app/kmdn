@@ -99,7 +99,7 @@ func (e *ErrInvalid) Error() string { return e.Msg }
 // first sync. It returns the repo and the sync job id.
 func (s *Service) Connect(ctx context.Context, by auth.Principal, in ConnectInput) (Repo, string, error) {
 	h, err := GetHost(ctx, s.DB, in.ForgeHostID)
-	if err != nil {
+	if err != nil || !h.UsableBy(in.OrgID) {
 		return Repo{}, "", &ErrInvalid{"forge_host_id", "Pick a configured forge."}
 	}
 	fr := forge.Repo{Owner: in.Owner, Name: in.Name, CloneURL: in.CloneURL}
@@ -170,6 +170,14 @@ func (s *Service) Connect(ctx context.Context, by auth.Principal, in ConnectInpu
 		}
 		iid, err := UpsertInstall(ctx, s.DB, h.ID, inst)
 		if err != nil {
+			return Repo{}, "", err
+		}
+		switch err := InstallFor(ctx, s.DB, iid, in.OrgID, by.User.ID); {
+		case errors.Is(err, ErrClaimed):
+			return Repo{}, "", &ErrInvalid{"name", "This GitHub account is connected to another organization."}
+		case errors.Is(err, ErrUnclaimed):
+			return Repo{}, "", &ErrInvalid{"name", "Connect the GitHub account to this organization first (Forges → GitHub → Connect)."}
+		case err != nil:
 			return Repo{}, "", err
 		}
 		installID = iid

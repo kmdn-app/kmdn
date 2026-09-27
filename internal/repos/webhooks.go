@@ -104,6 +104,8 @@ func (s *Service) githubHook(w http.ResponseWriter, r *http.Request) {
 			if ev.Removed {
 				_, _ = store.Exec(ctx, s.DB, `UPDATE repos SET health = ?, health_detail = ? WHERE install_id IN (SELECT id FROM forge_installs WHERE forge_host_id = ? AND external_id = ?)`,
 					HealthDisconnected, "The GitHub App was uninstalled from this account.", h.ID, ev.Install.ExternalID)
+				// A new installation on the account must be connected again.
+				_ = ReleaseInstall(ctx, s.DB, h.ID, ev.Install.ExternalID)
 			} else {
 				_, _ = UpsertInstall(ctx, s.DB, h.ID, *ev.Install)
 			}
