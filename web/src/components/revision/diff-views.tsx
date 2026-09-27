@@ -55,7 +55,37 @@ const plain = (b: BlockNode): string => {
   return text(b);
 };
 
-const TEXT = new Set(["paragraph", "heading"]);
+function plainBlock(b: BlockNode): boolean {
+  return (b.type === "paragraph" || b.type === "heading") && (b.content ?? []).every((n) => n.type === "text" && !n.marks?.length);
+}
+
+type ReviewNode = { type: string; attrs?: Record<string, unknown>; content?: ReviewNode[]; marks?: ReviewNode[] };
+
+/** Individual diff blocks cannot rely on reference definitions in other blocks. */
+function inlineReferences(node: ReviewNode): ReviewNode {
+  return {
+    ...node,
+    ...(node.attrs?.ref ? { attrs: { ...node.attrs, ref: undefined } } : {}),
+    ...(node.content ? { content: node.content.map(inlineReferences) } : {}),
+    ...(node.marks ? { marks: node.marks.map(inlineReferences) } : {}),
+  };
+}
+
+/** Destinations and descriptions can change without changing the rendered label. */
+function reviewDetails(b: BlockNode): string[] {
+  const values = new Set<string>();
+  const walk = (value: unknown) => {
+    const node = value as { type?: string; attrs?: Record<string, unknown>; marks?: unknown[]; content?: unknown[] };
+    const fields = node.type === "link" ? ["href", "title"] : node.type === "image" ? ["src", "alt", "title"] : node.type === "mathInline" ? ["source"] : [];
+    for (const field of fields) {
+      const text = node.attrs?.[field];
+      if (typeof text === "string" && text) values.add(text);
+    }
+    for (const child of [...(node.content ?? []), ...(node.marks ?? [])]) walk(child);
+  };
+  walk(b);
+  return [...values];
+}
 
 /**
  * Changes view: the page as a rendered diff. Unchanged blocks render
@@ -82,7 +112,7 @@ export function ChangesView({ base, content, ctx }: { base: string; content: str
       for (let k = 0; k < n; k++) {
         const o = olds[k];
         const w = news[k];
-        if (o && w && o.type === w.type && TEXT.has(o.type)) out.push({ kind: "changed", old: o, now: w });
+        if (o && w && o.type === w.type && plainBlock(o) && plainBlock(w) && (o.type !== "heading" || (w.type === "heading" && o.attrs.level === w.attrs.level))) out.push({ kind: "changed", old: o, now: w });
         else {
           if (o) out.push({ kind: "removed", old: o });
           if (w) out.push({ kind: "added", now: w });
@@ -94,7 +124,7 @@ export function ChangesView({ base, content, ctx }: { base: string; content: str
     }
     return out;
   }, [base, content]);
-  const md = (b: BlockNode) => serializeBlock(b) + "\n";
+  const md = (b: BlockNode) => serializeBlock(inlineReferences(b) as BlockNode) + "\n";
   if (!parts.some((p) => p.kind !== "same")) return <p className="doc text-muted-foreground">{t("diff.noChanges")}</p>;
   return (
     <div className="doc changes-view" aria-label={t("diff.changes")}>
@@ -106,12 +136,14 @@ export function ChangesView({ base, content, ctx }: { base: string; content: str
             return (
               <div key={i} className="chg-added">
                 <DocView markdown={md(p.now!)} ctx={ctx} className="!m-0 !max-w-none !p-0" />
+                <AttributeDetails block={p.now!} />
               </div>
             );
           case "removed":
             return (
               <div key={i} className="chg-removed" aria-label={t("diff.removed")}>
                 <DocView markdown={md(p.old!)} ctx={ctx} className="!m-0 !max-w-none !p-0" />
+                <AttributeDetails block={p.old!} />
               </div>
             );
           case "changed": {
@@ -128,6 +160,12 @@ export function ChangesView({ base, content, ctx }: { base: string; content: str
       })}
     </div>
   );
+}
+
+function AttributeDetails({ block }: { block: BlockNode }) {
+  const details = reviewDetails(block);
+  if (!details.length) return null;
+  return <ul className="my-2 break-all font-mono text-xs text-muted-foreground">{details.map((value) => <li key={value}>{value}</li>)}</ul>;
 }
 
 /** Source diff: unified markdown line diff with line numbers. */
