@@ -41,9 +41,11 @@ import (
 	"github.com/kmdn-app/kmdn/internal/setup"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/summaries"
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 	"github.com/kmdn-app/kmdn/internal/threads"
 	"github.com/kmdn-app/kmdn/internal/updates"
 	"github.com/kmdn-app/kmdn/internal/users"
+	"github.com/kmdn-app/kmdn/internal/version"
 )
 
 // App holds the running services.
@@ -74,6 +76,8 @@ type App struct {
 	Summaries   *summaries.Service
 	Consistency *consistency.Service
 	MCP         *mcp.Service
+
+	stopTracing func(context.Context) error
 	Invites     *invites.Service
 }
 
@@ -129,7 +133,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 
 	a.Repos = &repos.Service{
 		DB: db, Secrets: sec, Jobs: a.Jobs, Git: &gitmirror.Git{}, DataDir: cfg.DataDir, BaseURL: strings.TrimRight(cfg.Server.BaseURL, "/"), Log: log,
-		Adapters: &repos.Adapters{DB: db, Secrets: sec, HTTP: &http.Client{Timeout: 30 * time.Second}},
+		Adapters: &repos.Adapters{DB: db, Secrets: sec, HTTP: &http.Client{Timeout: 30 * time.Second, Transport: telemetry.Transport(nil)}},
 	}
 	a.Repos.Register()
 	idx := &search.Indexer{Index: search.Index{DB: db}, Repos: a.Repos, Jobs: a.Jobs}
@@ -254,6 +258,41 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		return nil, err
 	}
 
+	telemetry.SetSources(telemetry.Sources{
+		WebSockets: a.Realtime.Connections,
+		Rooms:      func() int { return a.Collab.Rooms() },
+		Engine:     eng.Pool,
+		Jobs: func(ctx context.Context) (map[string]int, map[string]int, error) {
+			rows, err := store.Query(ctx, db, `SELECT kind, status, COUNT(*) FROM jobs WHERE status IN ('pending', 'failed') GROUP BY kind, status`)
+			if err != nil {
+				return nil, nil, err
+			}
+			defer rows.Close()
+			queued, failed := map[string]int{}, map[string]int{}
+			for rows.Next() {
+				var kind, status string
+				var n int
+				if err := rows.Scan(&kind, &status, &n); err != nil {
+					return nil, nil, err
+				}
+				if status == "pending" {
+					queued[kind] = n
+				} else {
+					failed[kind] = n
+				}
+			}
+			return queued, failed, rows.Err()
+		},
+	})
+	if ep := cfg.Telemetry.OTLPEndpoint; ep != "" {
+		shutdown, err := telemetry.SetupTracing(ctx, ep, version.Get().Version)
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("telemetry.otlp_endpoint: %w", err)
+		}
+		a.stopTracing = shutdown
+	}
+
 	a.Jobs.Register("auth.purge", func(ctx context.Context, _ jobs.Job) (any, error) {
 		if err := notify.Purge(ctx, a.DB); err != nil {
 			return nil, err
@@ -373,8 +412,15 @@ func (a *App) periodic(ctx context.Context, every time.Duration, kind string) {
 	}
 }
 
-// Close releases resources.
-func (a *App) Close() error { return a.DB.Close() }
+// Close releases resources (and flushes traces).
+func (a *App) Close() error {
+	if a.stopTracing != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = a.stopTracing(ctx)
+		cancel()
+	}
+	return a.DB.Close()
+}
 
 // pushSubject identifies this instance to Web Push services.
 func pushSubject(base string) string {

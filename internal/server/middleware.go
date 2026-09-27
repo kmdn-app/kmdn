@@ -8,7 +8,17 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 )
 
 type ctxKey int
@@ -63,18 +73,30 @@ func accessLog(log *slog.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: w}
-			next.ServeHTTP(rec, r)
-			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" {
+			ctx, info := telemetry.WithRequestInfo(r.Context())
+			next.ServeHTTP(rec, r.WithContext(ctx))
+			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/metrics" {
 				return
 			}
-			log.LogAttrs(r.Context(), slog.LevelInfo, "http",
+			attrs := []slog.Attr{
 				slog.String("request_id", RequestID(r.Context())),
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.Int("status", rec.status),
 				slog.Int("bytes", rec.bytes),
 				slog.Duration("duration", time.Since(start)),
-			)
+			}
+			if info.UserID != "" {
+				attrs = append(attrs, slog.String("user_id", info.UserID))
+			}
+			if rc := chi.RouteContext(r.Context()); rc != nil {
+				for _, p := range []string{"repo", "revision"} {
+					if v := rc.URLParam(p); v != "" {
+						attrs = append(attrs, slog.String(p+"_id", v))
+					}
+				}
+			}
+			log.LogAttrs(r.Context(), slog.LevelInfo, "http", attrs...)
 		})
 	}
 }
@@ -111,5 +133,36 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		next.ServeHTTP(w, r)
+	})
+}
+
+// observe records a server span and request metrics, labelled by route
+// pattern (known after routing) rather than path, to bound cardinality.
+func observe(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		ctx, span := telemetry.Tracer().Start(ctx, r.Method, trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(attribute.String("http.request.method", r.Method), attribute.String("url.path", r.URL.Path), attribute.String("kmdn.request_id", RequestID(r.Context()))))
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w}
+		next.ServeHTTP(rec, r.WithContext(ctx))
+		route := "spa"
+		if rc := chi.RouteContext(r.Context()); rc != nil && rc.RoutePattern() != "" && rc.RoutePattern() != "/*" {
+			route = rc.RoutePattern()
+		}
+		status := rec.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		telemetry.HTTPRequests.WithLabelValues(r.Method, route, strconv.Itoa(status)).Inc()
+		if status != http.StatusSwitchingProtocols {
+			telemetry.HTTPDuration.WithLabelValues(r.Method, route).Observe(time.Since(start).Seconds())
+		}
+		span.SetName(r.Method + " " + route)
+		span.SetAttributes(attribute.String("http.route", route), attribute.Int("http.response.status_code", status))
+		if status >= 500 {
+			span.SetStatus(codes.Error, http.StatusText(status))
+		}
+		span.End()
 	})
 }

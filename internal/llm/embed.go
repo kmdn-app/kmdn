@@ -9,6 +9,11 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 )
 
 // Embedder turns texts into vectors (consistency checks).
@@ -131,7 +136,7 @@ func (s *Service) EmbeddingModel(ctx context.Context) string {
 
 // Embed is a metered embeddings call, batched. It respects the instance's
 // monthly budget (embeddings aren't charged to a person).
-func (s *Service) Embed(ctx context.Context, r Run, texts []string) ([][]float32, error) {
+func (s *Service) Embed(ctx context.Context, r Run, texts []string) (_ [][]float32, err error) {
 	if s.Disabled {
 		return nil, ErrNotConfigured
 	}
@@ -147,6 +152,13 @@ func (s *Service) Embed(ctx context.Context, r Run, texts []string) ([][]float32
 		return nil, err
 	}
 	r.Task, r.Provider, r.Model = TaskEmbeddings, "embeddings", model
+	ctx, span := telemetry.Tracer().Start(ctx, "llm embeddings", trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(attribute.String("gen_ai.request.model", model), attribute.Int("kmdn.embeddings.texts", len(texts))))
+	start := time.Now()
+	defer func() {
+		telemetry.LLMDuration.WithLabelValues("embeddings", model, telemetry.Outcome(err)).Observe(time.Since(start).Seconds())
+	}()
+	defer func() { telemetry.End(span, err) }()
 	id, err := s.StartRun(ctx, r)
 	if err != nil {
 		return nil, err
@@ -165,6 +177,7 @@ func (s *Service) Embed(ctx context.Context, r Run, texts []string) ([][]float32
 		status, msg = "error", err.Error()
 	}
 	_ = s.FinishRun(context.WithoutCancel(ctx), id, Usage{InputTokens: tokens}, nil, status, msg)
+	telemetry.LLMTokens.WithLabelValues("embeddings", model, "input").Add(float64(tokens))
 	if err != nil {
 		return nil, err
 	}

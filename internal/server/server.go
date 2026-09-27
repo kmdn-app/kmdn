@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kmdn-app/kmdn/internal/config"
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 	"github.com/kmdn-app/kmdn/internal/version"
 	"github.com/kmdn-app/kmdn/internal/web"
 )
@@ -66,11 +67,14 @@ func (s *Server) AddReadyCheck(name string, c ReadyCheck) {
 
 func (s *Server) routes() chi.Router {
 	r := chi.NewRouter()
-	r.Use(requestID, recoverer(s.log), accessLog(s.log), securityHeaders)
+	r.Use(requestID, observe, recoverer(s.log), accessLog(s.log), securityHeaders)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	r.Get("/readyz", s.readyz)
+	if s.cfg.Telemetry.Metrics {
+		r.Handle("/metrics", telemetry.MetricsHandler())
+	}
 	r.Get("/version", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, version.Get())
 	})

@@ -14,6 +14,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -96,6 +97,7 @@ func (h *HTTP) Middleware(next http.Handler) http.Handler {
 				return
 			}
 		}
+		telemetry.SetUser(r.Context(), u.ID)
 		next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), Principal{User: u, Session: sess})))
 	})
 }

@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
+
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 )
 
 // Bundle is the compiled engine (regenerate with `pnpm --filter @kmdn/doc-engine bundle`).
@@ -144,9 +146,16 @@ func (e *Engine) call(ctx context.Context, f func(*vm) (goja.Value, error)) (str
 	})
 }
 
+// Pool reports runtimes in use and the pool size (metrics).
+func (e *Engine) Pool() (inUse, size int) { return e.opts.Runtimes - len(e.pool), e.opts.Runtimes }
+
 // run borrows a runtime from the pool for f, under the time budget. f must
 // finish converting JS values to Go before returning.
-func run[T any](ctx context.Context, e *Engine, f func(*vm) (T, error)) (T, error) {
+func run[T any](ctx context.Context, e *Engine, f func(*vm) (T, error)) (out T, err error) {
+	start := time.Now()
+	defer func() {
+		telemetry.EngineCalls.WithLabelValues(telemetry.Outcome(err)).Observe(time.Since(start).Seconds())
+	}()
 	var zero T
 	var v *vm
 	select {
@@ -167,7 +176,7 @@ func run[T any](ctx context.Context, e *Engine, f func(*vm) (T, error)) (T, erro
 		budget = time.Until(dl)
 	}
 	timer := time.AfterFunc(budget, func() { v.rt.Interrupt(ErrTimeout) })
-	out, err := f(v)
+	out, err = f(v)
 	stopped := timer.Stop()
 	if !stopped {
 		// The interrupt fired (or is firing): the runtime may be mid-call, so

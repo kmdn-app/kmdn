@@ -21,6 +21,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 )
 
 // Credential authenticates git over HTTPS. Empty means anonymous.
@@ -107,7 +112,28 @@ func (g *Git) run(ctx context.Context, dir string, cred *Credential, stdin io.Re
 	return g.runEnv(ctx, dir, cred, stdin, nil, args...)
 }
 
-func (g *Git) runEnv(ctx context.Context, dir string, cred *Credential, stdin io.Reader, env []string, args ...string) ([]byte, error) {
+// subcommand is git's command in args, after global options (-c k=v, -C dir).
+func subcommand(args []string) string {
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "-c" || a == "-C":
+			i++
+		case strings.HasPrefix(a, "-"):
+		default:
+			return a
+		}
+	}
+	return "git"
+}
+
+func (g *Git) runEnv(ctx context.Context, dir string, cred *Credential, stdin io.Reader, env []string, args ...string) (out []byte, err error) {
+	sub := subcommand(args)
+	ctx, span := telemetry.Tracer().Start(ctx, "git "+sub, trace.WithAttributes(attribute.String("kmdn.git.command", sub)))
+	start := time.Now()
+	defer func() {
+		telemetry.GitCommands.WithLabelValues(sub, telemetry.Outcome(err)).Observe(time.Since(start).Seconds())
+		telemetry.End(span, err)
+	}()
 	cmd := exec.CommandContext(ctx, g.bin(), args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),

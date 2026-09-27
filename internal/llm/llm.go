@@ -11,6 +11,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 )
 
 // Roles.
@@ -149,7 +155,25 @@ func (r Result) TextOf() string {
 }
 
 // Collect runs a call and gathers its events; onText (optional) sees deltas.
-func Collect(ctx context.Context, p Provider, req ChatRequest, onText func(string)) (Result, error) {
+// Each call is a span and feeds the token and latency metrics.
+func Collect(ctx context.Context, p Provider, req ChatRequest, onText func(string)) (res Result, err error) {
+	ctx, span := telemetry.Tracer().Start(ctx, "llm "+p.Name(), trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(attribute.String("gen_ai.system", p.Name()), attribute.String("gen_ai.request.model", req.Model)))
+	start := time.Now()
+	defer func() {
+		telemetry.LLMDuration.WithLabelValues(p.Name(), req.Model, telemetry.Outcome(err)).Observe(time.Since(start).Seconds())
+		for typ, n := range map[string]int{"input": res.Usage.InputTokens, "output": res.Usage.OutputTokens, "cache_read": res.Usage.CacheReadTokens, "cache_write": res.Usage.CacheWriteTokens} {
+			if n > 0 {
+				telemetry.LLMTokens.WithLabelValues(p.Name(), req.Model, typ).Add(float64(n))
+			}
+		}
+		span.SetAttributes(attribute.Int("gen_ai.usage.input_tokens", res.Usage.InputTokens), attribute.Int("gen_ai.usage.output_tokens", res.Usage.OutputTokens))
+		telemetry.End(span, err)
+	}()
+	return collect(ctx, p, req, onText)
+}
+
+func collect(ctx context.Context, p Provider, req ChatRequest, onText func(string)) (Result, error) {
 	ch, err := p.Stream(ctx, req)
 	if err != nil {
 		return Result{}, err

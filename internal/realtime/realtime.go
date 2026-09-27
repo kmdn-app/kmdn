@@ -416,6 +416,13 @@ func (h *Hub) Publish(scope string, event map[string]any) {
 // PublishUser sends an event to a user's connections.
 func (h *Hub) PublishUser(userID string, event map[string]any) { h.Publish("user:"+userID, event) }
 
+// Connections counts open WebSockets (metrics).
+func (h *Hub) Connections() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.conns)
+}
+
 // Close disconnects everyone (server shutdown).
 func (h *Hub) Close() {
 	h.mu.Lock()
