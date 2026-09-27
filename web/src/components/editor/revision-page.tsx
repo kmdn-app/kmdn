@@ -190,7 +190,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-auto">
-            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} view={inRevision ? (phone && view === "source" ? "changes" : view) : "result"} comments={comments} suggesting={suggesting && status.mode === "rw" && !phone} readOnly={phone} /> : <Loading />}
+            {rev.data && provider && status ? <RevisionPageBody repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} view={inRevision ? (phone && view === "source" ? "changes" : view) : "result"} comments={comments} suggesting={suggesting && status.mode === "rw" && !phone} readOnly={phone} /> : <Loading />}
           </div>
           {phone && rev.data && (rev.data.access.can_review || rev.data.access.can_submit || rev.data.access.can_publish) && (
             <div className="flex shrink-0 justify-end gap-2 border-t bg-background px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] [&>*]:flex-1">
@@ -321,7 +321,7 @@ function Loading() {
   );
 }
 
-function Body({
+export function RevisionPageBody({
   repo,
   rev,
   path,
@@ -367,6 +367,7 @@ function Body({
       <div className="doc">
         <h1>{t("revision.unavailable")}</h1>
         <p className="text-muted-foreground">{status.error.message}</p>
+        {status.error.code === "file_deleted" && <PageConflict rev={rev} path={path} onKeep={() => provider.retry()} />}
       </div>
     );
   }
@@ -417,16 +418,18 @@ function Body({
   );
 }
 
-/** Published deleted this page while the revision changes it: keep it or let it go. */
-function PageConflict({ rev, path }: { rev: RevisionView; path: string }) {
+/** Either side deleted a page the other changed: choose the content or the deletion. */
+function PageConflict({ rev, path, onKeep }: { rev: RevisionView; path: string; onKeep?: () => void }) {
   const { t } = useTranslation();
   const files = useRevisionFiles(rev);
   const qc = useQueryClient();
   const resolve = useMutation({
     mutationFn: (choice: "keep" | "delete") => unwrap(api.POST("/revisions/{revision}/conflicts/resolve", { params: { path: { revision: rev.id } }, body: { path, choice } })),
-    onSuccess: () => {
+    onSuccess: (_result, choice) => {
       void qc.invalidateQueries({ queryKey: ["revision-files", rev.id] });
       void qc.invalidateQueries({ queryKey: ["revision"] });
+      void qc.invalidateQueries({ queryKey: ["revision-content", rev.id, path] });
+      if (choice === "keep") onKeep?.();
     },
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
   });
@@ -435,14 +438,14 @@ function PageConflict({ rev, path }: { rev: RevisionView; path: string }) {
   return (
     <div className="mx-auto mt-5 flex max-w-[45rem] flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-[0.84375rem] max-md:mx-4">
       <TriangleAlert className="size-4 shrink-0 text-destructive" />
-      <span className="min-w-0 flex-1">{t("updates.conflict.pageDeleted")}</span>
+      <span className="min-w-0 flex-1">{f.op === "delete" ? t("updates.conflict.deletedLocally") : t("updates.conflict.pageDeleted")}</span>
       {rev.access.can_edit && (
         <span className="flex gap-2">
           <Button size="sm" variant="outline" disabled={resolve.isPending} onClick={() => resolve.mutate("keep")}>
-            {t("updates.conflict.keepPage")}
+            {f.op === "delete" ? t("updates.conflict.keepPublishedPage") : t("updates.conflict.keepPage")}
           </Button>
           <Button size="sm" variant="ghost" disabled={resolve.isPending} onClick={() => resolve.mutate("delete")}>
-            {t("updates.conflict.deletePage")}
+            {f.op === "delete" ? t("updates.conflict.keepDeletion") : t("updates.conflict.deletePage")}
           </Button>
         </span>
       )}

@@ -868,6 +868,9 @@
       "keepRevision": "Keep this revision",
       "keepBoth": "Keep both",
       "pageDeleted": "Published deleted this page after the revision started changing it.",
+      "deletedLocally": "This revision deleted the page, but Published changed it.",
+      "keepPublishedPage": "Keep Published's page",
+      "keepDeletion": "Keep this revision's deletion",
       "keepPage": "Keep this revision's page",
       "deletePage": "Delete it too"
     }
