@@ -1581,6 +1581,56 @@ paths:
         "201": { description: Thread, content: { application/json: { schema: { $ref: "#/components/schemas/Thread" } } } }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/discussions:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [threads]
+      operationId: listDiscussions
+      summary: Discussions on published pages (one page with path)
+      parameters:
+        - { name: path, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string, enum: [open, resolved] } }
+        - { name: sort, in: query, schema: { type: string, enum: [hot, updated] } }
+      responses:
+        "200":
+          description: Discussions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Thread" } }
+    post:
+      tags: [threads]
+      operationId: createDiscussion
+      summary: Comment on a published page (anyone who can read the repository), anchored by quote
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ThreadCreate" } } }
+      responses:
+        "201": { description: Thread, content: { application/json: { schema: { $ref: "#/components/schemas/Thread" } } } }
+        "422": { $ref: "#/components/responses/Problem" }
+  /threads/{thread}/fix-this:
+    parameters:
+      - { name: thread, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [threads]
+      operationId: fixDiscussion
+      summary: "Start a revision fixing a discussion (titled Fix: <page title>) and link them"
+      responses:
+        "201":
+          description: The new revision
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision]
+                properties:
+                  revision: { $ref: "#/components/schemas/Revision" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /threads/{thread}:
     parameters:
       - { name: thread, in: path, required: true, schema: { type: string } }
@@ -1711,7 +1761,7 @@ components:
         reactions: { type: array, items: { $ref: "#/components/schemas/Reaction" } }
     Thread:
       type: object
-      required: [id, path, kind, review_round, anchor, state, created_at, last_activity_at, comments, hot]
+      required: [id, repo_id, path, kind, review_round, anchor, state, created_at, last_activity_at, comments, hot]
       properties:
         id: { type: string }
         revision_id: { type: string }
@@ -1727,6 +1777,15 @@ components:
         resolved_at: { type: string, format: date-time }
         comments: { type: array, items: { $ref: "#/components/schemas/Comment" } }
         hot: { type: number }
+        repo_id: { type: string }
+        outdated: { type: boolean, description: "A discussion whose quote Published no longer has" }
+        fix_revision:
+          type: object
+          required: [id, number, state]
+          properties:
+            id: { type: string }
+            number: { type: integer }
+            state: { type: string }
     DiffLine:
       type: object
       required: [op, text]

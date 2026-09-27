@@ -119,6 +119,24 @@ const api = {
     d.transact(() => applyDoc(frag, next, nodeHash));
     return buf(out);
   },
+  /** markdown → its text as readers see it, one line per block (re-anchoring discussions) */
+  plainText: (markdown: string): string => {
+    const out: string[] = [];
+    const walk = (n: { type: string; text?: string; content?: unknown[]; attrs?: Record<string, unknown> }): string => {
+      if (n.type === "text") return n.text ?? "";
+      if (n.type === "hardBreak") return "\n";
+      return (n.content ?? []).map((c) => walk(c as never)).join("");
+    };
+    const blocks = (list: unknown[]) => {
+      for (const b of list as { type: string; content?: unknown[] }[]) {
+        const inline = (b.content ?? []).some((c) => (c as { type: string }).type === "text");
+        if (inline || !b.content) out.push(walk(b as never));
+        else blocks(b.content);
+      }
+    };
+    blocks(parse(markdown).doc.content);
+    return out.filter((l) => l !== "").join("\n");
+  },
   /** markdown → JSON {links, headings} */
   links: (markdown: string): string => JSON.stringify(extractLinks(markdown)),
   /** markdown + JSON {oldUrl: newUrl} → markdown with those destinations replaced */

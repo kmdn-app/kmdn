@@ -260,3 +260,6 @@
 .kmdn-editor .conflict-head button:hover { background: var(--accent); }
 .kmdn-editor[contenteditable="false"] .conflict-head button { display: none; }
 .kmdn-editor .conflict-sides { display: grid; gap: 0.5rem; }
+/* Discussions on published pages (CSS Custom Highlights) */
+::highlight(kmdn-comment) { background-color: color-mix(in oklab, var(--warning) 22%, transparent); }
+::highlight(kmdn-comment-active) { background-color: color-mix(in oklab, var(--warning) 42%, transparent); }

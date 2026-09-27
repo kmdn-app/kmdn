@@ -380,3 +380,21 @@ func (e *Engine) YConflicts(ctx context.Context, state []byte) (int, error) {
 		return int(out.ToInteger()), nil
 	})
 }
+
+// PlainText returns a page's text as readers see it, one line per block.
+func (e *Engine) PlainText(ctx context.Context, markdown string) (string, error) {
+	if len(markdown) > e.opts.MaxInputBytes {
+		return "", ErrTooLarge
+	}
+	return run(ctx, e, func(v *vm) (string, error) {
+		f, err := v.fn("plainText")
+		if err != nil {
+			return "", err
+		}
+		out, err := f(goja.Undefined(), v.rt.ToValue(markdown))
+		if err != nil {
+			return "", err
+		}
+		return out.String(), nil
+	})
+}

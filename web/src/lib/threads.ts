@@ -22,3 +22,19 @@ export function useThreads(revisionID: string | undefined, path: string, sort: "
     enabled: !!revisionID,
   });
 }
+
+/** Discussions on a published page, kept live by repo events. */
+export function useDiscussions(repoID: string | undefined, path: string, sort: "hot" | "updated") {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!repoID) return;
+    return realtime.follow("repo:" + repoID, (ev) => {
+      if (ev.type === "thread") void qc.invalidateQueries({ queryKey: ["discussions", repoID] });
+    });
+  }, [qc, repoID]);
+  return useQuery({
+    queryKey: ["discussions", repoID, path, sort],
+    queryFn: async () => (await unwrap(api.GET("/repos/{repo}/discussions", { params: { path: { repo: repoID! }, query: { path, sort } } }))).items,
+    enabled: !!repoID,
+  });
+}

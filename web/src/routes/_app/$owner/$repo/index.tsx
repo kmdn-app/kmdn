@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, FileText, Loader2, RefreshCw, Settings } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, FileText, Loader2, MessageSquare, RefreshCw, Settings } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { Avatar } from "@/components/avatar";
@@ -94,6 +94,8 @@ function RepoHome() {
                 </div>
               )}
 
+              <OpenFeedback />
+
               <section className="mt-8">
                 <h2 className="mb-2 text-[15px] font-semibold">{t("repo.recent")}</h2>
                 {activity && activity.length === 0 && <p className="text-muted-foreground">{t("repo.noActivity")}</p>}
@@ -127,5 +129,42 @@ function RepoHome() {
         </>
       )}
     </AppShell>
+  );
+}
+
+/** Open discussions on published pages, most active first. */
+function OpenFeedback() {
+  const { t } = useTranslation();
+  const repo = useRepo();
+  const q = useQuery({
+    queryKey: ["discussions", repo.id, "open"],
+    queryFn: async () => (await unwrap(api.GET("/repos/{repo}/discussions", { params: { path: { repo: repo.id }, query: { state: "open" } } }))).items,
+  });
+  const list = q.data ?? [];
+  if (!list.length) return null;
+  return (
+    <section className="mt-8">
+      <h2 className="mb-2 text-[15px] font-semibold">{t("repo.feedback")}</h2>
+      <ul className="divide-y rounded-xl border">
+        {list.slice(0, 6).map((d) => {
+          const first = d.comments[0];
+          return (
+            <li key={d.id}>
+              <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: d.path }} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50">
+                <MessageSquare className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13.5px] font-medium">{first?.body}</div>
+                  <div className="mt-0.5 truncate text-[12.5px] text-muted-foreground">
+                    {first?.author_name} · {d.path}
+                    {d.comments.length > 1 && ` · ${t("comments.activity", { count: d.comments.length - 1 })}`}
+                  </div>
+                </div>
+                <Time iso={d.last_activity_at} className="shrink-0 text-xs whitespace-nowrap text-muted-foreground" />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
