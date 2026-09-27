@@ -7,12 +7,14 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 
 	"github.com/kmdn-app/kmdn/internal/ids"
+	"github.com/kmdn-app/kmdn/internal/outbound"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/settings"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -102,7 +104,8 @@ func (p *Pusher) sender() Sender {
 	if p.Transport != nil {
 		return p.Transport
 	}
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := outbound.Client(false)
+	client.Timeout = 15 * time.Second
 	return func(ctx context.Context, sub Subscription, payload []byte, keys VAPID) (int, error) {
 		resp, err := webpush.SendNotificationWithContext(ctx, payload, &webpush.Subscription{Endpoint: sub.Endpoint, Keys: webpush.Keys{P256dh: sub.P256dh, Auth: sub.Auth}}, &webpush.Options{
 			HTTPClient: client, Subscriber: p.Subject, VAPIDPublicKey: keys.Public, VAPIDPrivateKey: keys.Private, TTL: 3600, Urgency: webpush.UrgencyNormal,
@@ -167,10 +170,11 @@ var errEndpoint = errors.New("notify: push endpoint must be an https URL")
 
 // Subscribe records (or moves to this user) a browser's push subscription.
 func Subscribe(ctx context.Context, q store.Querier, userID string, s Subscription, userAgent string) error {
-	if len(s.Endpoint) < 12 || s.Endpoint[:8] != "https://" || len(s.Endpoint) > 2048 || s.P256dh == "" || s.Auth == "" {
+	u, err := url.Parse(s.Endpoint)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.Fragment != "" || len(s.Endpoint) > 2048 || s.P256dh == "" || s.Auth == "" {
 		return errEndpoint
 	}
-	_, err := store.Exec(ctx, q, `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+	_, err = store.Exec(ctx, q, `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, user_agent = excluded.user_agent`,
 		ids.New("psh"), userID, s.Endpoint, s.P256dh, s.Auth, truncate(userAgent, 300), store.Millis(time.Now()))
 	return err

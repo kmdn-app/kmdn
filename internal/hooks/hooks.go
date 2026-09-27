@@ -16,15 +16,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/jobs"
+	"github.com/kmdn-app/kmdn/internal/outbound"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
 	"github.com/kmdn-app/kmdn/internal/secrets"
@@ -500,30 +499,13 @@ func Sign(secret, body []byte) string {
 	return "sha256=" + hex.EncodeToString(m.Sum(nil))
 }
 
-var errPrivate = errors.New("hooks: the address is on a private network")
-
 // client refuses loopback, private and link-local addresses unless allowed,
 // so hooks can't be used to reach the instance's own network.
 func (s *Service) client() *http.Client {
 	if s.HTTP != nil {
 		return s.HTTP
 	}
-	d := &net.Dialer{Timeout: 10 * time.Second}
-	if !s.AllowPrivate {
-		d.Control = func(_, address string, _ syscall.RawConn) error {
-			host, _, err := net.SplitHostPort(address)
-			if err != nil {
-				return err
-			}
-			ip := net.ParseIP(host)
-			if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-				return errPrivate
-			}
-			return nil
-		}
-	}
-	return &http.Client{Transport: &http.Transport{DialContext: d.DialContext, TLSHandshakeTimeout: 10 * time.Second}, Timeout: 20 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return outbound.Client(s.AllowPrivate)
 }
 
 // Deliveries lists a hook's recent deliveries.
