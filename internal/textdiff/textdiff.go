@@ -151,3 +151,83 @@ func Stats(a, b string) (additions, deletions int) {
 	}
 	return additions, deletions
 }
+
+// Line is one line of a hunk.
+type Line struct {
+	Op   string `json:"op"` // " " unchanged, "+" added, "-" removed
+	Text string `json:"text"`
+	Old  int    `json:"old,omitempty"` // 1-based line in the old text
+	New  int    `json:"new,omitempty"` // 1-based line in the new text
+}
+
+// Hunk is a run of changes with context around it.
+type Hunk struct {
+	OldStart int    `json:"old_start"`
+	OldLines int    `json:"old_lines"`
+	NewStart int    `json:"new_start"`
+	NewLines int    `json:"new_lines"`
+	Lines    []Line `json:"lines"`
+}
+
+// Hunks groups the line diff of a and b into hunks with context lines around
+// each change (like diff -u).
+func Hunks(a, b string, context int) []Hunk {
+	la, lb := Lines(a), Lines(b)
+	es := Diff(la, lb)
+	var lines []Line
+	for _, e := range es {
+		switch e.Op {
+		case Equal:
+			lines = append(lines, Line{Op: " ", Text: la[e.A], Old: e.A + 1, New: e.B + 1})
+		case Delete:
+			lines = append(lines, Line{Op: "-", Text: la[e.A], Old: e.A + 1})
+		case Insert:
+			lines = append(lines, Line{Op: "+", Text: lb[e.B], New: e.B + 1})
+		}
+	}
+	out := []Hunk{}
+	i := 0
+	for i < len(lines) {
+		if lines[i].Op == " " {
+			i++
+			continue
+		}
+		start := max(0, i-context)
+		end := i
+		// Extend while changes are within 2*context of each other.
+		for end < len(lines) {
+			if lines[end].Op != " " {
+				end++
+				continue
+			}
+			j := end
+			for j < len(lines) && lines[j].Op == " " {
+				j++
+			}
+			if j < len(lines) && j-end <= 2*context {
+				end = j
+				continue
+			}
+			end = min(len(lines), end+context)
+			break
+		}
+		h := Hunk{Lines: lines[start:end]}
+		for _, l := range h.Lines {
+			if l.Op != "+" {
+				if h.OldStart == 0 {
+					h.OldStart = l.Old
+				}
+				h.OldLines++
+			}
+			if l.Op != "-" {
+				if h.NewStart == 0 {
+					h.NewStart = l.New
+				}
+				h.NewLines++
+			}
+		}
+		out = append(out, h)
+		i = end
+	}
+	return out
+}

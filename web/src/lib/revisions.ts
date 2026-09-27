@@ -81,6 +81,8 @@ export function useRevisionEvents(repo: RepoView, rev: RevisionView | undefined)
         void qc.invalidateQueries({ queryKey: ["revisions", repo.id] });
       } else if (ev.type === "file_content") {
         void qc.invalidateQueries({ queryKey: ["revision-files", id] });
+        void qc.invalidateQueries({ queryKey: ["revision-content", id] });
+        void qc.invalidateQueries({ queryKey: ["revision-diff", id] });
       } else if (ev.type === "presence") {
         qc.setQueryData(["presence", id], ev.users as PresenceUser[]);
       }
@@ -131,5 +133,13 @@ export function usePresence(rev: RevisionView | undefined) {
     queryFn: async () => (await unwrap(api.GET("/revisions/{revision}/presence", { params: { path: { revision: rev!.id } } }))).items,
     enabled: !!rev,
     staleTime: Infinity,
+  });
+}
+
+export function useRevisionDiff(rev: RevisionView | undefined, path: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["revision-diff", rev?.id, path],
+    queryFn: () => unwrap(api.GET("/revisions/{revision}/diff/{path}", { params: { path: { revision: rev!.id, path } } })),
+    enabled: enabled && !!rev,
   });
 }

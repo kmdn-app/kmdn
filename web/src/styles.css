@@ -231,3 +231,11 @@
 .kmdn-editor .math-inline-edit.is-selected, .kmdn-editor .math-inline-edit:hover { outline: 1px solid var(--border); border-radius: 4px; }
 .kmdn-editor .rawblk-edit { margin: 0 0 16px; border: 1px dashed var(--border); border-radius: 10px; overflow: hidden; }
 .kmdn-editor .rawblk-bar { display: flex; align-items: center; gap: 6px; padding: 4px 10px; font: 12px var(--font-sans); color: var(--muted-foreground); border-bottom: 1px dashed var(--border); }
+/* Review: Result marks and Changes view */
+.kmdn-editor .chg-block { position: relative; }
+.kmdn-editor .chg-block::before { content: ""; position: absolute; left: -14px; top: 2px; bottom: 2px; width: 3px; border-radius: 2px; background: color-mix(in oklab, var(--success) 70%, transparent); }
+.kmdn-editor .chg-ins { background: color-mix(in oklab, var(--success) 14%, transparent); border-radius: 2px; }
+.changes-view ins { background: color-mix(in oklab, var(--success) 20%, transparent); text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--success) 60%, transparent); }
+.changes-view del { background: color-mix(in oklab, var(--destructive) 14%, transparent); color: var(--muted-foreground); }
+.changes-view .chg-added { border-left: 3px solid color-mix(in oklab, var(--success) 70%, transparent); padding-left: 12px; margin-left: -15px; background: color-mix(in oklab, var(--success) 6%, transparent); }
+.changes-view .chg-removed { border-left: 3px solid color-mix(in oklab, var(--destructive) 60%, transparent); padding-left: 12px; margin-left: -15px; opacity: 0.7; text-decoration: line-through; }

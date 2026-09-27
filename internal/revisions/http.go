@@ -16,6 +16,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/textdiff"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -57,6 +58,7 @@ func (s *Service) Routes(r chi.Router) {
 			r.Put("/reviewers/{user}", s.putReviewer)
 			r.Delete("/reviewers/{user}", s.deleteReviewer)
 			r.Get("/reviewer-suggestions", s.reviewerSuggestions)
+			r.Get("/diff/*", s.diff)
 			r.Get("/assets", s.listAssets)
 			r.Post("/assets", s.upload)
 			r.Get("/raw/*", s.raw)
@@ -609,4 +611,38 @@ func (s *Service) reviewerSuggestions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.JSON(w, http.StatusOK, map[string]any{"items": list})
+}
+
+// FileDiff is a page's change in the revision, against the revision's base.
+type FileDiff struct {
+	Path      string          `json:"path"`
+	Op        string          `json:"op"`
+	FromPath  string          `json:"from_path,omitempty"`
+	Base      string          `json:"base"`
+	Content   string          `json:"content"`
+	Additions int             `json:"additions"`
+	Deletions int             `json:"deletions"`
+	Hunks     []textdiff.Hunk `json:"hunks"`
+}
+
+func (s *Service) diff(w http.ResponseWriter, r *http.Request) {
+	rev, _, _, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	f, err := FileAt(r.Context(), s.DB, rev.ID, wildcard(r))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	ctxLines := 3
+	if v, err := strconv.Atoi(r.URL.Query().Get("context")); err == nil && v >= 0 && v <= 50 {
+		ctxLines = v
+	}
+	content := f.ContentMD
+	if f.Op == OpDelete {
+		content = ""
+	}
+	api.JSON(w, http.StatusOK, FileDiff{Path: f.Path, Op: f.Op, FromPath: f.FromPath, Base: f.BaseMD, Content: content,
+		Additions: f.Additions, Deletions: f.Deletions, Hunks: textdiff.Hunks(f.BaseMD, content, ctxLines)})
 }
