@@ -7,6 +7,7 @@ import { Bell, BellRing, ChevronRight, History as HistoryIcon, Loader2, MessageS
 import { nodeHash, parse } from "@kmdn/doc-engine";
 import { usePageRead, useFollowState, useToggleFollow } from "@/lib/follows";
 import { AppShell } from "@/components/shell/app-shell";
+import { useInitialPanelTab } from "@/components/shell/right-panel";
 import { TopBar } from "@/components/shell/top-bar";
 import { Avatar } from "@/components/avatar";
 import { Time } from "@/components/time";
@@ -71,6 +72,8 @@ function PublishedPage() {
   const [pending, setPending] = useState<PendingComment | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const discussions = useDiscussions(discussable ? repo.id : undefined, path, "hot");
+  const openDiscussions = (discussions.data ?? []).filter((x) => x.state === "open").length;
+  const initialTab = useInitialPanelTab(path, !discussable || discussions.isSuccess, openDiscussions > 0);
   const anchors = useMemo(
     () => (discussions.data ?? []).filter((d) => d.state === "open" && !d.outdated).map((d) => ({ id: d.id, anchor: d.anchor as QuoteAnchor })),
     [discussions.data],
@@ -106,7 +109,7 @@ function PublishedPage() {
   });
 
   const panel = {
-    initial: pending || active ? ("comments" as const) : ("history" as const),
+    initial: pending || active ? ("comments" as const) : initialTab,
     history: <HistoryPanel repo={repo} path={path} commits={history.data} current={sha} />,
     links: file.data?.markdown ? <LinksPanel repo={repo} path={path} /> : undefined,
     comments: discussable ? (
