@@ -1,17 +1,20 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Mail, ArrowLeft, Loader2 } from "lucide-react";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ForgeIcon } from "@/components/shell/forge-icon";
 import { ApiError, api, errorMessage, refreshMe, unwrap, useSetupStatus } from "@/lib/api";
 
 export const Route = createFileRoute("/signin")({
-  validateSearch: (s: Record<string, unknown>): { redirect?: string } =>
-    typeof s.redirect === "string" && s.redirect.startsWith("/") ? { redirect: s.redirect } : {},
+  validateSearch: (s: Record<string, unknown>): { redirect?: string; oauth_error?: string } => ({
+    ...(typeof s.redirect === "string" && s.redirect.startsWith("/") && !s.redirect.startsWith("//") ? { redirect: s.redirect } : {}),
+    ...(typeof s.oauth_error === "string" ? { oauth_error: s.oauth_error } : {}),
+  }),
   component: SignIn,
 });
 
@@ -55,10 +58,36 @@ function RequestForm({
     send.mutate();
   };
   const err = send.error;
+  const { redirect, oauth_error } = Route.useSearch();
+  const providers = useQuery({ queryKey: ["oauth-providers"], queryFn: async () => (await unwrap(api.GET("/auth/oauth/providers"))).items });
   return (
     <form onSubmit={onSubmit} noValidate>
       <h1 className="mt-3.5 text-center text-xl font-semibold tracking-tight">{t("signin.title", { instance })}</h1>
       <p className="mt-1.5 mb-6 text-center text-muted-foreground">{t("signin.subtitle")}</p>
+      {oauth_error && (
+        <p role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[13px]">
+          {t(`signin.oauthError.${oauth_error}`, { defaultValue: t("signin.oauthError.generic") })}
+        </p>
+      )}
+      {(providers.data?.length ?? 0) > 0 && (
+        <>
+          <div className="grid gap-2">
+            {providers.data!.map((p) => (
+              <Button key={p.id} asChild variant="outline" className="w-full">
+                <a href={`/api/v1/auth/oauth/${p.id}/start?mode=signin&redirect=${encodeURIComponent(redirect ?? "/")}`}>
+                  <ForgeIcon kind={p.kind} />
+                  {t("signin.withForge", { name: p.display_name })}
+                </a>
+              </Button>
+            ))}
+          </div>
+          <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            {t("signin.or")}
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      )}
       <div className="mb-4 grid gap-1.5">
         <Label htmlFor="signin-email">{t("signin.email")}</Label>
         <Input

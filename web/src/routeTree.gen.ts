@@ -13,7 +13,14 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AuthVerifyRouteImport } from './routes/auth.verify'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
+import { Route as AppOwnerRepoRouteRouteImport } from './routes/_app/$owner/$repo/route'
+import { Route as AppSettingsProfileRouteImport } from './routes/_app/settings/profile'
+import { Route as AppOwnerRepoIndexRouteImport } from './routes/_app/$owner/$repo/index'
+import { Route as AppOwnerRepoSplatRouteImport } from './routes/_app/$owner/$repo/$'
+import { Route as AppOwnerRepoSettingsRouteImport } from './routes/_app/$owner/$repo/settings'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -34,38 +41,127 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AppRoute,
+} as any)
 const AuthVerifyRoute = AuthVerifyRouteImport.update({
   id: '/auth/verify',
   path: '/auth/verify',
   getParentRoute: () => rootRouteImport,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppOwnerRepoRouteRoute = AppOwnerRepoRouteRouteImport.update({
+  id: '/$owner/$repo',
+  path: '/$owner/$repo',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsProfileRoute = AppSettingsProfileRouteImport.update({
+  id: '/settings/profile',
+  path: '/settings/profile',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOwnerRepoIndexRoute = AppOwnerRepoIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppOwnerRepoRouteRoute,
+} as any)
+const AppOwnerRepoSplatRoute = AppOwnerRepoSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AppOwnerRepoRouteRoute,
+} as any)
+const AppOwnerRepoSettingsRoute = AppOwnerRepoSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppOwnerRepoRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/admin': typeof AppAdminRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/invite/$token': typeof InviteTokenRoute
+  '/$owner/$repo': typeof AppOwnerRepoRouteRouteWithChildren
+  '/settings/profile': typeof AppSettingsProfileRoute
+  '/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
+  '/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
+  '/$owner/$repo/': typeof AppOwnerRepoIndexRoute
 }
 export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/admin': typeof AppAdminRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/': typeof AppIndexRoute
+  '/settings/profile': typeof AppSettingsProfileRoute
+  '/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
+  '/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
+  '/$owner/$repo': typeof AppOwnerRepoIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/_app/admin': typeof AppAdminRoute
   '/auth/verify': typeof AuthVerifyRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/$owner/$repo': typeof AppOwnerRepoRouteRouteWithChildren
+  '/_app/settings/profile': typeof AppSettingsProfileRoute
+  '/_app/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
+  '/_app/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
+  '/_app/$owner/$repo/': typeof AppOwnerRepoIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/setup' | '/signin' | '/auth/verify'
+  fullPaths:
+    | '/'
+    | '/setup'
+    | '/signin'
+    | '/admin'
+    | '/auth/verify'
+    | '/invite/$token'
+    | '/$owner/$repo'
+    | '/settings/profile'
+    | '/$owner/$repo/$'
+    | '/$owner/$repo/settings'
+    | '/$owner/$repo/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/setup' | '/signin' | '/auth/verify' | '/'
-  id: '__root__' | '/_app' | '/setup' | '/signin' | '/auth/verify' | '/_app/'
+  to:
+    | '/setup'
+    | '/signin'
+    | '/admin'
+    | '/auth/verify'
+    | '/invite/$token'
+    | '/'
+    | '/settings/profile'
+    | '/$owner/$repo/$'
+    | '/$owner/$repo/settings'
+    | '/$owner/$repo'
+  id:
+    | '__root__'
+    | '/_app'
+    | '/setup'
+    | '/signin'
+    | '/_app/admin'
+    | '/auth/verify'
+    | '/invite/$token'
+    | '/_app/'
+    | '/_app/$owner/$repo'
+    | '/_app/settings/profile'
+    | '/_app/$owner/$repo/$'
+    | '/_app/$owner/$repo/settings'
+    | '/_app/$owner/$repo/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -73,6 +169,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SigninRoute: typeof SigninRoute
   AuthVerifyRoute: typeof AuthVerifyRoute
+  InviteTokenRoute: typeof InviteTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -105,6 +202,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin': {
+      id: '/_app/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/auth/verify': {
       id: '/auth/verify'
       path: '/auth/verify'
@@ -112,15 +216,78 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/$owner/$repo': {
+      id: '/_app/$owner/$repo'
+      path: '/$owner/$repo'
+      fullPath: '/$owner/$repo'
+      preLoaderRoute: typeof AppOwnerRepoRouteRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings/profile': {
+      id: '/_app/settings/profile'
+      path: '/settings/profile'
+      fullPath: '/settings/profile'
+      preLoaderRoute: typeof AppSettingsProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/$owner/$repo/': {
+      id: '/_app/$owner/$repo/'
+      path: '/'
+      fullPath: '/$owner/$repo/'
+      preLoaderRoute: typeof AppOwnerRepoIndexRouteImport
+      parentRoute: typeof AppOwnerRepoRouteRoute
+    }
+    '/_app/$owner/$repo/$': {
+      id: '/_app/$owner/$repo/$'
+      path: '/$'
+      fullPath: '/$owner/$repo/$'
+      preLoaderRoute: typeof AppOwnerRepoSplatRouteImport
+      parentRoute: typeof AppOwnerRepoRouteRoute
+    }
+    '/_app/$owner/$repo/settings': {
+      id: '/_app/$owner/$repo/settings'
+      path: '/settings'
+      fullPath: '/$owner/$repo/settings'
+      preLoaderRoute: typeof AppOwnerRepoSettingsRouteImport
+      parentRoute: typeof AppOwnerRepoRouteRoute
+    }
   }
 }
 
+interface AppOwnerRepoRouteRouteChildren {
+  AppOwnerRepoSplatRoute: typeof AppOwnerRepoSplatRoute
+  AppOwnerRepoSettingsRoute: typeof AppOwnerRepoSettingsRoute
+  AppOwnerRepoIndexRoute: typeof AppOwnerRepoIndexRoute
+}
+
+const AppOwnerRepoRouteRouteChildren: AppOwnerRepoRouteRouteChildren = {
+  AppOwnerRepoSplatRoute: AppOwnerRepoSplatRoute,
+  AppOwnerRepoSettingsRoute: AppOwnerRepoSettingsRoute,
+  AppOwnerRepoIndexRoute: AppOwnerRepoIndexRoute,
+}
+
+const AppOwnerRepoRouteRouteWithChildren =
+  AppOwnerRepoRouteRoute._addFileChildren(AppOwnerRepoRouteRouteChildren)
+
 interface AppRouteChildren {
+  AppAdminRoute: typeof AppAdminRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppOwnerRepoRouteRoute: typeof AppOwnerRepoRouteRouteWithChildren
+  AppSettingsProfileRoute: typeof AppSettingsProfileRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAdminRoute: AppAdminRoute,
   AppIndexRoute: AppIndexRoute,
+  AppOwnerRepoRouteRoute: AppOwnerRepoRouteRouteWithChildren,
+  AppSettingsProfileRoute: AppSettingsProfileRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -130,6 +297,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SigninRoute: SigninRoute,
   AuthVerifyRoute: AuthVerifyRoute,
+  InviteTokenRoute: InviteTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FileDiff, History, Link2, MessageSquare, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,11 +13,13 @@ const TABS = [
 ] as const;
 
 /** Docked right panel with Assistant / Comments / Changes / History / Links. */
-export function RightPanel({ onClose }: { onClose: () => void }) {
+export type PanelTabs = Partial<Record<(typeof TABS)[number]["key"], ReactNode>> & { initial?: (typeof TABS)[number]["key"] };
+
+export function RightPanel({ onClose, children }: { onClose: () => void; children?: ReactNode | PanelTabs }) {
   const { t } = useTranslation();
   return (
     <aside aria-label="Side panel" className="flex w-[360px] shrink-0 flex-col border-l bg-background max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[min(360px,100%)] max-lg:shadow-xl">
-      <Tabs defaultValue="assistant" className="flex min-h-0 flex-1 flex-col gap-0">
+      <Tabs defaultValue={panelInitial(children)} className="flex min-h-0 flex-1 flex-col gap-0">
         <div className="flex min-h-[52px] items-center gap-1.5 border-b px-3 py-2">
           <TabsList className="h-8 flex-1">
             {TABS.map(({ key, icon: Icon }) => (
@@ -32,11 +35,25 @@ export function RightPanel({ onClose }: { onClose: () => void }) {
         </div>
         {TABS.map(({ key }) => (
           <TabsContent key={key} value={key} className="min-h-0 flex-1 overflow-auto p-3.5 text-[13.5px]">
-            <h2 className="mb-1 font-medium">{t(`shell.panel.${key}`)}</h2>
-            <p className="text-muted-foreground">{t("shell.panelEmpty")}</p>
+            {panelContent(children, key) ?? (
+              <>
+                <h2 className="mb-1 font-medium">{t(`shell.panel.${key}`)}</h2>
+                <p className="text-muted-foreground">{t("shell.panelEmpty")}</p>
+              </>
+            )}
           </TabsContent>
         ))}
       </Tabs>
     </aside>
   );
+}
+
+function isTabs(c: unknown): c is PanelTabs {
+  return !!c && typeof c === "object" && !("$$typeof" in (c as object));
+}
+function panelInitial(c: ReactNode | PanelTabs): string {
+  return isTabs(c) && c.initial ? c.initial : "assistant";
+}
+function panelContent(c: ReactNode | PanelTabs, key: string): ReactNode {
+  return isTabs(c) ? (c as unknown as Record<string, ReactNode>)[key] : undefined;
 }
