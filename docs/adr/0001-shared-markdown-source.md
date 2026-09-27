@@ -1,6 +1,6 @@
 # Shared Markdown source
 
-Status: proposed
+Status: accepted, 2026-09-27
 
 ## Context
 

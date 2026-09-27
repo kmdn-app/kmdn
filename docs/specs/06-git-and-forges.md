@@ -134,7 +134,7 @@ Preconditions: revision Approved, no pending suggestions, no conflicts, no pendi
 
 Publishing **merges the revision's pull request** with a merge commit, whether the target branch is protected or not ([D60](decisions.md)). The commits people saved stay in the target branch's history.
 
-1. Save pending changes: if the content differs from the last commit, a final commit is saved on the branch (authored by the person publishing).
+1. Hold the shared revision mutation gate, recover any interrupted save, flush accepted edits and save pending changes. If content differs from the last commit, save a final commit authored by the person publishing. Recheck approval, pending suggestions, conflicts and updates against that saved snapshot, then durably claim its exact commit by entering **Publishing** before any merge side effect. Release the gate while the external operation runs; subsequent mutations check the state under the gate and fail before changing content. See [ADR 0002](../adr/0002-journaled-revision-saves.md) and [ADR 0003](../adr/0003-publish-claims.md).
 2. Build the merge message ([Attribution](#attribution)).
 3. Mark the pull request ready if it's still a draft.
 4. Merge it through the forge API with the merge method **merge** (never squash or rebase), with the message as the merge commit's title and body, pinned to the branch tip kmdn pushed:
@@ -142,9 +142,9 @@ Publishing **merges the revision's pull request** with a merge commit, whether t
    - **GitLab**: `PUT /projects/{id}/merge_requests/{iid}/merge` with `merge_commit_message` and `sha`.
    - **Plain git**: kmdn writes the merge commit in the mirror (parents: target head, branch tip) and pushes it with a lease on the head.
 5. **Protected branches.** kmdn merges through the API, so protection that only restricts pushes doesn't stop it. When the forge refuses because required checks are still running, kmdn turns on auto-merge (GitHub auto-merge with the merge method *merge*; GitLab "merge when pipeline succeeds") and the revision stays **Publishing** until the merge webhook arrives. Protection that needs approvals on the forge can't be satisfied by kmdn (the pull request's author is kmdn's bot): the Publish dialog says to add the kmdn App (or the token's bot user) to the rule's bypass list. A repository that doesn't allow merge commits can't be published to; the Publish dialog says so.
-6. After the merge: fetch the mirror, mark the revision Published with the merge commit's SHA, record an audit entry, notify, fire outgoing webhooks, close rooms (read-only), delete the revision branch on the forge.
+6. After the merge: fetch the mirror, finalize only the matching claim as Published with the merge commit's SHA, record an audit entry, notify, fire outgoing webhooks, close rooms (read-only), delete the revision branch on the forge. Completion must not overwrite a newer state.
 
-Idempotency: publish is a job with a stable key per revision; a crash mid-publish resumes by checking whether the target branch already contains a commit with trailer `Kmdn-Revision: <revision url>` (the merge commit carries it), or the pull request is already merged.
+Idempotency: publish is a job with a stable key per revision. A crash resumes the durable claim for the same saved commit, reconciling the exact Git or forge outcome before retrying or releasing it. A timeout alone does not prove a merge failed. Keep the revision read-only while the outcome is unknown; release only a matching claim whose merge is known not to have happened or remain queued. A merge commit carries the `Kmdn-Revision: <revision url>` trailer for history linking.
 
 ## Attribution
 
@@ -183,7 +183,7 @@ Assisted-by: kmdn-assistant
 
 ## Failure handling
 
-- Forge down: publishing retries with backoff up to 1 h, revision shows "Publishing delayed". Editing is unaffected.
+- Forge down: publishing retries with backoff, revision shows "Publishing delayed". A claimed revision remains read-only until the outcome is reconciled. A failed request that is known to have no merge effect may release its matching claim; ambiguous outcomes must retain it for recovery.
 - Token revoked / App uninstalled: repo goes to "Disconnected" health state; revisions become read-only, admins alerted in inbox.
 - Force-push on target branch (history rewritten): the update preparation treats the new head as theirs with `base_md` unchanged, which still works because merges are content-based. Activity notes "Published history was rewritten".
 - Repo renamed/transferred: `repository` event updates the connection.
