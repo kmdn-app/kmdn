@@ -806,6 +806,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Version, database, job queue (by kind and status) and failed jobs */
+        get: operations["getSystem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/system/doctor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The doctor's checks, including network reachability (SMTP, forges, AI provider) */
+        get: operations["runDoctor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/jobs/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Put a failed job back in the queue */
+        post: operations["retryJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/invites": {
         parameters: {
             query?: never;
@@ -4916,6 +4969,102 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    getSystem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description System */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        version: {
+                            version: string;
+                            commit: string;
+                            date?: string;
+                            go: string;
+                        };
+                        /** Format: date-time */
+                        started_at: string;
+                        /** @enum {string} */
+                        db: "sqlite" | "postgres";
+                        data_dir: string;
+                        repos: number;
+                        users: number;
+                        /** @description kind → status (pending, running, failed) → count */
+                        jobs: {
+                            [key: string]: {
+                                [key: string]: number;
+                            };
+                        };
+                        failed_jobs: {
+                            id: string;
+                            kind: string;
+                            attempts: number;
+                            last_error: string;
+                            /** Format: date-time */
+                            updated_at: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    runDoctor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        checks: {
+                            name: string;
+                            /** @enum {string} */
+                            status: "ok" | "warn" | "fail";
+                            detail: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    retryJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
         };
     };
     inviteUser: {

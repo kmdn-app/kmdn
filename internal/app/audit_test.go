@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/audit"
+	"github.com/kmdn-app/kmdn/internal/jobs"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -138,5 +140,39 @@ func TestAuditLog(t *testing.T) {
 	}
 	if _, after := admin.do("GET", "/admin/audit?action=audit.exported", nil); len(after["items"].([]any)) != 2 {
 		t.Fatalf("exports not audited: %v", after)
+	}
+}
+
+func TestAdminSystem(t *testing.T) {
+	a, admin := newApp(t, nil)
+	ctx := context.Background()
+	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
+	signIn(t, a, admin, maya)
+	a.Jobs.Register("test.flaky", func(context.Context, jobs.Job) (any, error) {
+		return nil, jobs.Permanent(errors.New("the forge said no"))
+	})
+	if _, err := a.Jobs.Enqueue(ctx, a.DB, "test.flaky", nil, jobs.EnqueueOptions{Key: "k"}); err != nil {
+		t.Fatal(err)
+	}
+	runJobs(t, a)
+	_, sys := admin.do("GET", "/admin/system", nil)
+	failed := sys["failed_jobs"].([]any)
+	if sys["db"] != "sqlite" || len(failed) != 1 || failed[0].(map[string]any)["last_error"] != "the forge said no" {
+		t.Fatalf("system: %v", sys)
+	}
+	id := failed[0].(map[string]any)["id"].(string)
+	if code, _ := admin.do("POST", "/admin/jobs/"+id+"/retry", nil); code != 204 {
+		t.Fatalf("retry: %d", code)
+	}
+	if code, _ := admin.do("POST", "/admin/jobs/"+id+"/retry", nil); code != 409 {
+		t.Fatalf("retry twice: %d", code)
+	}
+	_, sys = admin.do("GET", "/admin/system", nil)
+	if sys["jobs"].(map[string]any)["test.flaky"].(map[string]any)["pending"] != float64(1) {
+		t.Fatalf("not requeued: %v", sys["jobs"])
+	}
+	_, doc := admin.do("GET", "/admin/system/doctor", nil)
+	if s := toJSON(doc); !strings.Contains(s, `"name":"git"`) || !strings.Contains(s, `"name":"secret_key"`) {
+		t.Fatalf("doctor: %s", s)
 	}
 }

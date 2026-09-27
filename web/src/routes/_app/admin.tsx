@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { CheckCircle2, GitBranch, Grid2x2, KeyRound, Loader2, Mail, Plus, ScrollText, Server, Shield, Sparkles, Trash2, TriangleAlert, UserPlus, Users } from "lucide-react";
+import { Activity, CheckCircle2, GitBranch, Grid2x2, KeyRound, Loader2, Mail, Plus, ScrollText, Server, Shield, Sparkles, Trash2, TriangleAlert, UserPlus, Users } from "lucide-react";
 import type { components, paths } from "@kmdn/api-client";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
@@ -23,11 +23,12 @@ import { cn } from "@/lib/utils";
 import { SmtpForm } from "@/components/smtp-form";
 import { AgentKeysPanel } from "@/components/admin/agent-keys";
 import { AuditLogPanel } from "@/components/admin/audit-log";
+import { SystemPanel } from "@/components/admin/system";
 
 type AdminUser = components["schemas"]["AdminUser"];
 type ForgeHost = components["schemas"]["ForgeHost"];
 
-const SECTIONS = ["users", "groups", "repositories", "email", "ai", "agent-keys", "audit"] as const;
+const SECTIONS = ["users", "groups", "repositories", "email", "ai", "agent-keys", "audit", "system"] as const;
 type Section = (typeof SECTIONS)[number];
 
 export const Route = createFileRoute("/_app/admin")({
@@ -62,6 +63,7 @@ function Admin() {
                   { key: "ai", label: t("ai.title"), icon: Sparkles },
                   { key: "agent-keys", label: t("admin.agentKeys"), icon: KeyRound },
                   { key: "audit", label: t("admin.audit"), icon: ScrollText },
+                  { key: "system", label: t("admin.system"), icon: Activity },
                 ]}
                 linkProps={(key) => ({ to: "/admin", search: { section: key as Section } })}
               >
@@ -77,6 +79,7 @@ function Admin() {
                 {section === "ai" && <AIPanel />}
                 {section === "agent-keys" && <AgentKeysPanel />}
                 {section === "audit" && <AuditLogPanel />}
+                {section === "system" && <SystemPanel />}
               </SettingsLayout>
             )}
           </div>
