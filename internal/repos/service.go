@@ -54,18 +54,20 @@ func (s *Service) Register() {
 	s.Jobs.Register(JobSync, func(ctx context.Context, j jobs.Job) (any, error) {
 		var p struct {
 			RepoID string `json:"repo_id"`
+			Force  bool   `json:"force"`
 		}
 		if err := j.Decode(&p); err != nil {
 			return nil, jobs.Permanent(err)
 		}
-		return nil, s.Sync(ctx, p.RepoID)
+		return nil, s.sync(ctx, p.RepoID, p.Force)
 	})
 }
 
 // Mirror returns the bare mirror for r.
 func (s *Service) Mirror(r Repo) *gitmirror.Mirror {
 	url := r.CloneURL
-	return &gitmirror.Mirror{Git: s.Git, Path: filepath.Join(s.DataDir, "mirrors", r.ForgeHostID, r.ID+".git"), URL: url, Branch: r.TargetBranch}
+	return &gitmirror.Mirror{Git: s.Git, Path: filepath.Join(s.DataDir, "mirrors", r.ForgeHostID, r.ID+".git"), URL: url, Branch: r.TargetBranch,
+		Cred: func(ctx context.Context) (*gitmirror.Credential, error) { return s.credential(ctx, r) }}
 }
 
 // ConnectInput describes a repository to connect.
@@ -231,7 +233,11 @@ func (s *Service) webhookSecret(ctx context.Context, r Repo) (string, error) {
 
 // Sync fetches the mirror, reloads .kmdn.yml and branch protection, and
 // updates health. It runs as a job.
-func (s *Service) Sync(ctx context.Context, repoID string) error {
+func (s *Service) Sync(ctx context.Context, repoID string) error { return s.sync(ctx, repoID, false) }
+
+// sync fetches the mirror; force also rechecks branch protection (a
+// maintainer's "Refresh").
+func (s *Service) sync(ctx context.Context, repoID string, force bool) error {
 	r, err := Get(ctx, s.DB, repoID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -261,7 +267,7 @@ func (s *Service) Sync(ctx context.Context, repoID string) error {
 		kyml = ParseKmdnYML(b)
 	}
 	prot := r.Protection
-	if r.LastFetchAt == nil || time.Since(*r.LastFetchAt) > 5*time.Minute || r.HeadSHA != head {
+	if force || r.LastFetchAt == nil || time.Since(*r.LastFetchAt) > 5*time.Minute || r.HeadSHA != head {
 		if p, err := adapter.BranchProtection(ctx, r.ForgeRepo(), r.TargetBranch); err == nil {
 			prot = p
 		} else {
@@ -294,7 +300,12 @@ func (s *Service) setHealth(ctx context.Context, r Repo, health, detail string) 
 
 // EnqueueSync schedules a sync (deduplicated per repo).
 func (s *Service) EnqueueSync(ctx context.Context, repoID string) (string, error) {
-	return s.Jobs.Enqueue(ctx, s.DB, JobSync, map[string]string{"repo_id": repoID}, jobs.EnqueueOptions{Key: repoID})
+	return s.Jobs.Enqueue(ctx, s.DB, JobSync, map[string]any{"repo_id": repoID}, jobs.EnqueueOptions{Key: repoID})
+}
+
+// EnqueueFullSync schedules a sync that also rechecks branch protection.
+func (s *Service) EnqueueFullSync(ctx context.Context, repoID string) (string, error) {
+	return s.Jobs.Enqueue(ctx, s.DB, JobSync, map[string]any{"repo_id": repoID, "force": true}, jobs.EnqueueOptions{Key: repoID})
 }
 
 // credential returns git credentials for reads (lazy blob fetches).
@@ -339,7 +350,7 @@ func (s *Service) TreeAt(ctx context.Context, r Repo, sha string) ([]Node, error
 		if e.Type != "blob" || !sc.Contains(e.Path) {
 			continue
 		}
-		out = append(out, Node{Path: e.Path, Name: path.Base(e.Path), Type: "file", Markdown: IsMarkdown(e.Path), Size: e.Size})
+		out = append(out, Node{Path: e.Path, Name: path.Base(e.Path), Type: "file", Markdown: IsMarkdown(e.Path), Size: max(e.Size, 0)})
 		for d := path.Dir(e.Path); d != "." && d != sc.Root && !dirs[d]; d = path.Dir(d) {
 			dirs[d] = true
 		}
@@ -420,7 +431,7 @@ func (s *Service) Templates(ctx context.Context, r Repo) ([]Node, error) {
 	out := []Node{}
 	for _, e := range entries {
 		if e.Type == "blob" && IsMarkdown(e.Path) {
-			out = append(out, Node{Path: e.Path, Name: path.Base(e.Path), Type: "file", Markdown: true, Size: e.Size})
+			out = append(out, Node{Path: e.Path, Name: path.Base(e.Path), Type: "file", Markdown: true, Size: max(e.Size, 0)})
 		}
 	}
 	return out, nil

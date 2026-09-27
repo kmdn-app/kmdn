@@ -195,8 +195,19 @@ type Mirror struct {
 	Path   string // bare repository directory
 	URL    string
 	Branch string
+	// Cred supplies credentials for commands that read file contents
+	// (history with rename following, blame): the partial clone fetches
+	// those blobs on demand. Optional (public or local remotes).
+	Cred func(ctx context.Context) (*Credential, error)
 
 	mu sync.Mutex // serializes fetches and ref updates
+}
+
+func (m *Mirror) credential(ctx context.Context) (*Credential, error) {
+	if m.Cred == nil {
+		return nil, nil
+	}
+	return m.Cred(ctx)
 }
 
 // Exists reports whether the bare repository is initialized.
@@ -256,12 +267,15 @@ type Entry struct {
 	Type string `json:"type"` // blob | tree | commit
 	Mode string `json:"mode"`
 	SHA  string `json:"sha"`
-	Size int64  `json:"size"` // -1 for trees
+	Size int64  `json:"size"` // -1: unknown (listings skip it; see Tree)
 }
 
 // Tree lists entries recursively under prefix at rev ("" lists the whole tree).
 func (m *Mirror) Tree(ctx context.Context, rev, prefix string) ([]Entry, error) {
-	args := []string{"ls-tree", "-r", "-t", "-z", "--long", rev}
+	// No --long: sizes need the blobs, which a partial (blob:none) mirror
+	// fetches lazily, and a listing must not download every file (nor ask
+	// for credentials). Entry.Size is -1.
+	args := []string{"ls-tree", "-r", "-t", "-z", rev}
 	if prefix = strings.Trim(prefix, "/"); prefix != "" {
 		args = append(args, "--", prefix+"/")
 	}
@@ -279,14 +293,10 @@ func (m *Mirror) Tree(ctx context.Context, rev, prefix string) ([]Entry, error) 
 			continue
 		}
 		f := strings.Fields(string(rec[:tab]))
-		if len(f) < 4 {
+		if len(f) < 3 {
 			continue
 		}
-		size := int64(-1)
-		if f[3] != "-" {
-			size, _ = strconv.ParseInt(f[3], 10, 64)
-		}
-		entries = append(entries, Entry{Mode: f[0], Type: f[1], SHA: f[2], Size: size, Path: string(rec[tab+1:])})
+		entries = append(entries, Entry{Mode: f[0], Type: f[1], SHA: f[2], Size: -1, Path: string(rec[tab+1:])})
 	}
 	return entries, nil
 }
@@ -368,10 +378,16 @@ type Person struct {
 func (m *Mirror) Log(ctx context.Context, rev, path string, n int) ([]Commit, error) {
 	// Each record: \x1e fields(\x1f-separated) \x1d, then --name-only lines.
 	args := []string{"log", fmt.Sprintf("-n%d", n), "--format=%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b%x1d", rev}
+	var cred *Credential
 	if path != "" {
 		args = append(args, "--follow", "--name-only", "--", path)
+		// --follow compares contents to find renames.
+		var err error
+		if cred, err = m.credential(ctx); err != nil {
+			return nil, err
+		}
 	}
-	out, err := m.Git.run(ctx, m.Path, nil, nil, args...)
+	out, err := m.Git.run(ctx, m.Path, cred, nil, args...)
 	if err != nil {
 		return nil, notFoundIf(err)
 	}
@@ -486,7 +502,11 @@ type BlameLine struct {
 
 // Blame returns per-line attribution of path at rev.
 func (m *Mirror) Blame(ctx context.Context, rev, path string) ([]BlameLine, error) {
-	out, err := m.Git.run(ctx, m.Path, nil, nil, "blame", "--porcelain", rev, "--", path)
+	cred, err := m.credential(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out, err := m.Git.run(ctx, m.Path, cred, nil, "blame", "--porcelain", rev, "--", path)
 	if err != nil {
 		return nil, notFoundIf(err)
 	}

@@ -109,3 +109,29 @@ jobs:
           curl -sf localhost:18080/ | grep -q '<div id="root">'
           docker exec kmdn kmdn doctor -offline
           docker exec kmdn git --version
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: make build
+      - run: pnpm --filter @kmdn/e2e exec playwright install --with-deps chromium
+      - run: pnpm --filter @kmdn/e2e e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7

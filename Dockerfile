@@ -10,6 +10,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY web/package.json web/
 COPY packages/doc-engine/package.json packages/doc-engine/
 COPY packages/api-client/package.json packages/api-client/
+COPY e2e/package.json e2e/
 RUN pnpm install --frozen-lockfile
 COPY web web
 COPY packages packages
