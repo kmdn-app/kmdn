@@ -51,6 +51,10 @@ type HTTP struct {
 	Svc            *Service
 	Secure         bool // set cookies with Secure (base_url is https)
 	TrustedProxies []*net.IPNet
+	// BaseURL is the relying party for passkeys.
+	BaseURL string
+
+	passkeys ceremonies
 
 	requestByEmail *api.Limiter
 	requestByIP    *api.Limiter
@@ -161,6 +165,7 @@ func (h *HTTP) Routes(r chi.Router) {
 		r.Get("/me/sessions", h.sessions)
 		r.Delete("/me/sessions/{id}", h.revokeSession)
 	})
+	h.passkeyRoutes(r)
 }
 
 type meResponse struct {

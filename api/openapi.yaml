@@ -79,6 +79,29 @@ paths:
               schema: { $ref: "#/components/schemas/User" }
         "401": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
+  /auth/passkey/options:
+    post:
+      tags: [auth]
+      operationId: passkeySignInOptions
+      summary: Start a passkey sign-in (discoverable credentials, no email)
+      responses:
+        "200": { description: WebAuthn request options, content: { application/json: { schema: { $ref: "#/components/schemas/PasskeyCeremony" } } } }
+        "429": { $ref: "#/components/responses/Problem" }
+  /auth/passkey/verify:
+    post:
+      tags: [auth]
+      operationId: passkeySignIn
+      summary: Finish a passkey sign-in; session cookies set
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PasskeyResponse" } } }
+      responses:
+        "200":
+          description: Signed in
+          content: { application/json: { schema: { type: object, required: [user], properties: { user: { $ref: "#/components/schemas/User" } } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
   /auth/logout:
     post:
       tags: [auth]
@@ -116,6 +139,54 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Me" }
         "422": { $ref: "#/components/responses/Problem" }
+  /me/passkeys:
+    get:
+      tags: [auth]
+      operationId: listPasskeys
+      responses:
+        "200":
+          description: The caller's passkeys
+          content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Passkey" } } } } } }
+  /me/passkeys/register/options:
+    post:
+      tags: [auth]
+      operationId: passkeyRegisterOptions
+      summary: Start adding a passkey
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { name: { type: string, maxLength: 60 } } } } }
+      responses:
+        "200": { description: WebAuthn creation options, content: { application/json: { schema: { $ref: "#/components/schemas/PasskeyCeremony" } } } }
+        "422": { $ref: "#/components/responses/Problem" }
+  /me/passkeys/register/verify:
+    post:
+      tags: [auth]
+      operationId: passkeyRegister
+      summary: Finish adding a passkey
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PasskeyResponse" } } }
+      responses:
+        "201": { description: Added, content: { application/json: { schema: { $ref: "#/components/schemas/Passkey" } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /me/passkeys/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [auth]
+      operationId: renamePasskey
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 60 } } } } }
+      responses:
+        "204": { description: Renamed }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [auth]
+      operationId: deletePasskey
+      responses:
+        "204": { description: Removed }
+        "404": { $ref: "#/components/responses/Problem" }
   /me/sessions:
     get:
       tags: [me]
@@ -3354,6 +3425,31 @@ components:
         last_used_ip: { type: string }
         status: { type: string, enum: [active, revoked, expired] }
         usage: { type: array, items: { type: integer }, description: "Calls per UTC day, the last 14 days, oldest first" }
+    Passkey:
+      type: object
+      required: [id, name, created_at, synced]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time }
+        synced: { type: boolean, description: "A multi-device (backed-up) credential" }
+    PasskeyCeremony:
+      type: object
+      required: [ceremony, options]
+      properties:
+        ceremony: { type: string, description: "Send back with the credential (single use, 5 minutes)" }
+        options:
+          type: object
+          required: [publicKey]
+          properties:
+            publicKey: { type: object, additionalProperties: true, description: "PublicKeyCredentialCreationOptionsJSON or PublicKeyCredentialRequestOptionsJSON" }
+    PasskeyResponse:
+      type: object
+      required: [ceremony, credential]
+      properties:
+        ceremony: { type: string }
+        credential: { type: object, additionalProperties: true, description: "The PublicKeyCredential as JSON (base64url fields)" }
     AuditEntry:
       type: object
       required: [id, at, actor_type, action]

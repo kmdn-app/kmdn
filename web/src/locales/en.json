@@ -10,7 +10,7 @@
     "emailPlaceholder": "name@company.com",
     "sendLink": "Email me a sign-in link",
     "sending": "Sending…",
-    "passkey": "Sign in with passkey",
+    "passkey": "Sign in with a passkey",
     "orContinue": "or continue with",
     "forgeNote": "GitHub and GitLab sign-in only work for accounts already linked to a profile.",
     "checkTitle": "Check your email",
@@ -32,7 +32,8 @@
       "taken": "That forge account is linked to another kmdn user.",
       "generic": "Sign-in with the forge failed. Try again."
     },
-    "or": "or"
+    "or": "or",
+    "passkeyFailed": "Signing in with the passkey failed. Try again, or use an email link."
   },
   "verify": {
     "signingIn": "Signing you in…",
@@ -267,7 +268,20 @@
       "forge": "The forge didn't complete the sign-in. Try again.",
       "expired": "The link request expired. Try again.",
       "generic": "Linking failed. Try again."
-    }
+    },
+    "passkeys": "Passkeys",
+    "passkeysDesc": "Sign in with your device's fingerprint, face or PIN instead of an email link. Passkeys synced by your password manager work on your other devices too.",
+    "passkeyName": "Passkey name",
+    "addPasskey": "Add a passkey",
+    "passkeyAdded": "Passkey added. You can sign in with it next time.",
+    "passkeyAddedOn": "Added {{date}}",
+    "lastUsed": "Last used",
+    "neverUsed": "Never used",
+    "synced": "Synced",
+    "rename": "Rename",
+    "remove": "Remove",
+    "noPasskeys": "No passkeys yet.",
+    "passkeysUnsupported": "This browser doesn't support passkeys."
   },
   "invite": {
     "invalid": "This invite link is invalid or has expired.",
