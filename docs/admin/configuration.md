@@ -137,6 +137,7 @@ kmdn serve   [-config kmdn.yaml]   run the server
 kmdn init    [-config kmdn.yaml]   write a config skeleton with a new secret key
 kmdn migrate [status|up]           show or apply database migrations
 kmdn admin rotate-secret-key -new KEY
+kmdn admin rotate-org-key -org SLUG
                                    re-encrypt stored credentials with a new key
 kmdn doctor  [-offline]            check git, the data dir, the database, the
                                    secret key, SMTP, forges and the AI provider
@@ -156,5 +157,6 @@ kmdn version                       print version information
 | `backup` | `.tar.zst`, or `.tar.gz` if the file name says so. `-skip-db` for PostgreSQL. `-include-secrets` keeps the secret key and passwords in the config copy. |
 | `restore` | Refuses while kmdn is running, or over an existing database without `-force`. Writes the config to `<data dir>/kmdn.yaml.restored`. |
 | `admin rotate-secret-key` | Re-encrypts every stored secret. Update `secret_key` afterwards. |
+| `admin rotate-org-key` | Gives one organization a new key and re-encrypts its secrets (forge tokens, webhook secrets, hook URLs). |
 
 On Upsun, prefix commands with `upsun ssh -- deploy/upsun/kmdn`.

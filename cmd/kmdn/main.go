@@ -19,6 +19,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/doctor"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/telemetry"
@@ -32,6 +33,7 @@ Usage:
   kmdn init    [-config kmdn.yaml]   write a config skeleton with a new secret key
   kmdn migrate [status|up]           show or apply database migrations
   kmdn admin rotate-secret-key -new KEY
+  kmdn admin rotate-org-key -org SLUG
                                      re-encrypt stored credentials with a new key
   kmdn doctor  [-offline]            check git, the data dir, the database, the
                                      secret key, SMTP, forges and the AI provider
@@ -90,14 +92,21 @@ func run(args []string, stdout, stderr io.Writer) error {
 		}
 		return migrate(*cfgPath, sub, stdout)
 	case "admin":
-		if len(rest) == 0 || rest[0] != "rotate-secret-key" {
-			return errors.New("usage: kmdn admin rotate-secret-key -new <base64 32-byte key>")
+		switch {
+		case len(rest) > 0 && rest[0] == "rotate-secret-key":
+			newKey := fs.String("new", "", "new secret key (32 bytes, base64)")
+			if err := fs.Parse(rest[1:]); err != nil {
+				return err
+			}
+			return rotateSecretKey(*cfgPath, *newKey, stdout)
+		case len(rest) > 0 && rest[0] == "rotate-org-key":
+			slug := fs.String("org", "", "the organization's slug")
+			if err := fs.Parse(rest[1:]); err != nil {
+				return err
+			}
+			return rotateOrgKey(*cfgPath, *slug, stdout)
 		}
-		newKey := fs.String("new", "", "new secret key (32 bytes, base64)")
-		if err := fs.Parse(rest[1:]); err != nil {
-			return err
-		}
-		return rotateSecretKey(*cfgPath, *newKey, stdout)
+		return errors.New("usage: kmdn admin rotate-secret-key -new <base64 32-byte key> | kmdn admin rotate-org-key -org <slug>")
 	case "doctor":
 		offline := fs.Bool("offline", false, "skip network checks (SMTP, forges, AI provider)")
 		if err := fs.Parse(rest); err != nil {
@@ -292,6 +301,45 @@ func rotateSecretKey(cfgPath, newKey string, out io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(out, "Re-encrypted %d secret(s). Set secret_key (or %s) to the new key before restarting kmdn.\n", n, config.EnvName("secret_key"))
+	return nil
+}
+
+// rotateOrgKey gives one org a new key and re-wraps its secrets.
+func rotateOrgKey(cfgPath, slug string, out io.Writer) error {
+	if slug == "" {
+		return errors.New("-org is required")
+	}
+	cfg, err := config.Load(cfgPath, os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	kek, err := cfg.SecretKeyBytes()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	db, err := store.Open(ctx, cfg.DB.URL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	o, err := orgs.BySlug(ctx, db, slug)
+	if err != nil {
+		return fmt.Errorf("organization %q: %w", slug, err)
+	}
+	sec, err := secrets.New(db, kek)
+	if err != nil {
+		return err
+	}
+	n, err := sec.RotateOrgKey(ctx, o.ID)
+	if errors.Is(err, secrets.ErrNoOrgKey) {
+		fmt.Fprintf(out, "%s has no secrets yet; nothing to rotate.\n", slug)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Gave %s a new key and re-encrypted %d secret(s).\n", slug, n)
 	return nil
 }
 

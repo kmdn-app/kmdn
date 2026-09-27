@@ -179,14 +179,14 @@ func (s *Service) Connect(ctx context.Context, by auth.Principal, in ConnectInpu
 	err = s.DB.InTx(ctx, func(tx *store.Tx) error {
 		var tokenRef, hookRef any
 		if in.Token != "" {
-			ref, err := s.Secrets.Put(ctx, tx, "repo_token", []byte(in.Token))
+			ref, err := s.Secrets.PutOrg(ctx, tx, in.OrgID, "repo_token", []byte(in.Token))
 			if err != nil {
 				return err
 			}
 			tokenRef = ref
 		}
 		hookSecret := auth.Token(24)
-		ref, err := s.Secrets.Put(ctx, tx, "repo_webhook_secret", []byte(hookSecret))
+		ref, err := s.Secrets.PutOrg(ctx, tx, in.OrgID, "repo_webhook_secret", []byte(hookSecret))
 		if err != nil {
 			return err
 		}
