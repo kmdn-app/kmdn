@@ -64,7 +64,9 @@ One prompt, `answer_from_docs(question, repo?)`, that instructs the client model
 
 ## Admin console
 
-Admin → **Agent keys**: table (name, scope chips, created by/at, expires, last used, status, Revoke), "Create agent key" dialog, one-time reveal state with copy + config snippet, per-key usage sparkline (calls/day) and a link to that key's audit entries.
+Admin → **Agent keys**: list (name, scope chips, created by/at, expires, last used + IP, status, Revoke), "Create agent key" dialog, one-time reveal state with copy + config snippet, per-key usage sparkline (calls/day, 14 days) and the key's latest calls from the audit log (tool, repo, path or query).
+
+Implementation notes: the server is stateless (a fresh MCP server per request, scoped to the key) and answers with JSON (no SSE). `resources/list` pages through the key's markdown pages 500 at a time; `read_doc_at` only accepts commits from the page's own history. The SDK's localhost DNS-rebinding guard is off because kmdn usually runs behind a local reverse proxy; bearer keys and a same-origin check for browsers protect the endpoint instead.
 
 ## Not in v1
 

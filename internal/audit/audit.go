@@ -64,8 +64,18 @@ func Write(ctx context.Context, q store.Querier, e Entry) error {
 
 // Recent returns the latest entries, newest first (used by tests and the admin console).
 func Recent(ctx context.Context, q store.Querier, limit int) ([]Record, error) {
-	rows, err := store.Query(ctx, q, `SELECT id, at, actor_type, COALESCE(actor_id, ''), ip, action, COALESCE(target_type, ''), COALESCE(target_id, ''), COALESCE(repo_id, ''), data
+	return list(ctx, q, `SELECT id, at, actor_type, COALESCE(actor_id, ''), ip, action, COALESCE(target_type, ''), COALESCE(target_id, ''), COALESCE(repo_id, ''), data
 		FROM audit_log ORDER BY at DESC, id DESC LIMIT ?`, limit)
+}
+
+// ByActor returns an actor's most recent entries (an agent key's calls).
+func ByActor(ctx context.Context, q store.Querier, actorType, actorID string, limit int) ([]Record, error) {
+	return list(ctx, q, `SELECT id, at, actor_type, COALESCE(actor_id, ''), ip, action, COALESCE(target_type, ''), COALESCE(target_id, ''), COALESCE(repo_id, ''), data
+		FROM audit_log WHERE actor_type = ? AND actor_id = ? ORDER BY at DESC, id DESC LIMIT ?`, actorType, actorID, limit)
+}
+
+func list(ctx context.Context, q store.Querier, query string, args ...any) ([]Record, error) {
+	rows, err := store.Query(ctx, q, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +91,9 @@ func Recent(ctx context.Context, q store.Querier, limit int) ([]Record, error) {
 		r.At = store.FromMillis(at)
 		_ = json.Unmarshal([]byte(data), &r.Data)
 		out = append(out, r)
+	}
+	if out == nil {
+		out = []Record{}
 	}
 	return out, rows.Err()
 }
