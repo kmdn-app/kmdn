@@ -1,9 +1,10 @@
 import { ApiError, type Api } from "@kmdn/api-client";
+import type { ChangeSet } from "@codemirror/state";
 import { realtime } from "./realtime";
 
 const buffers = new Map<string, Set<() => void>>();
 const unacknowledged = new Map<string, symbol>();
-type FailedSource = { message: string; source?: string; base?: string };
+type FailedSource = { message: string; source?: string; base?: string; changes?: ChangeSet };
 const failures = new Map<string, Map<string, FailedSource>>();
 
 export function getSourceBufferError(revision: string, path: string): FailedSource | undefined {
@@ -11,11 +12,11 @@ export function getSourceBufferError(revision: string, path: string): FailedSour
 }
 
 /** A failed flush must remain visible to Save after its editor has closed. */
-export function setSourceBufferError(revision: string, path: string, message?: string, source?: string, base?: string): void {
+export function setSourceBufferError(revision: string, path: string, message?: string, source?: string, base?: string, changes?: ChangeSet): void {
   let paths = failures.get(revision);
   if (message) {
     if (!paths) failures.set(revision, (paths = new Map()));
-    paths.set(path, { message, source: source ?? paths.get(path)?.source, base: base ?? paths.get(path)?.base });
+    paths.set(path, { message, source: source ?? paths.get(path)?.source, base: base ?? paths.get(path)?.base, changes: changes ?? paths.get(path)?.changes });
   } else {
     paths?.delete(path);
     if (!paths?.size) failures.delete(revision);

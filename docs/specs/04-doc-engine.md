@@ -79,6 +79,8 @@ The Yjs document holds the ProseMirror tree (`Y.XmlFragment`) and bounded author
 4. **Presence**: remote cursors in source mode are mapped from ProseMirror positions to markdown offsets via the block source map; approximate inside re-serialized blocks.
 5. **Suggesting in source mode**: edits made while Suggesting is on are converted to insertion/deletion marks on the resulting tree diff.
 
+Failed drafts retain their separate edit ranges across remount; if mapping remote changes exceeds the work budget, the draft stays editable and Save stays blocked with instructions to copy the source and reload.
+
 Risk: cursor jumps under heavy concurrent edits in the same block. Mitigation: never rewrite the block that contains the local cursor while the user is actively typing (within the debounce window); apply it after.
 
 ## Server host (Go ↔ JS bridge)

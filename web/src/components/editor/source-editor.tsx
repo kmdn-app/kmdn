@@ -8,6 +8,7 @@ import { tags } from "@lezer/highlight";
 import { SourceSync, textChange, type SourceMap } from "@kmdn/doc-engine";
 import type { RoomProvider } from "@/lib/realtime";
 import { getSourceBufferError, markSourceUpdate, registerSourceBuffer, setSourceBufferError } from "@/lib/source-buffers";
+import { sourceChanges } from "@/lib/source-changes";
 
 const remote = Annotation.define<boolean>();
 
@@ -86,30 +87,50 @@ export function SourceEditor({ provider, revisionID, path, editable }: { provide
     void loadSourceMap(revisionID, path).then((sm) => {
       if (cancelled || !host.current) return;
       const sync = new SourceSync(provider.doc, sm);
-      let source = sync.text();
-      let base = editorText(source);
       const recovery = getSourceBufferError(revisionID, path);
+      let source = recovery?.base ?? sync.text();
+      let base = editorText(source);
       let draft = recovery?.source ?? source;
-      const recoveryBase = editorText(recovery?.base ?? source);
-      const restore = textChange(recoveryBase, editorText(draft));
-      let pending = restore ? ChangeSet.of([restore], recoveryBase.length) : ChangeSet.empty(recoveryBase.length);
-      const arrived = textChange(recoveryBase, base);
-      if (arrived) pending = pending.map(ChangeSet.of([arrived], recoveryBase.length));
-      if (recovery?.base !== undefined && recovery.base !== source) draft = applySourceChanges(source, pending);
+      let pending = recovery?.changes ?? sourceChanges(base, editorText(draft));
       let timer: ReturnType<typeof setTimeout> | undefined;
+      let rebaseError: Error | undefined;
       let failedHere = recovery?.source !== undefined;
       if (recovery) setError(recovery.message);
       const failed = (reason: unknown) => {
         const message = reason instanceof RangeError ? "This source is too large to sync. Shorten it before saving, or copy it before leaving this page." : reason instanceof Error ? reason.message : "Source edits could not be synced. Copy them before leaving this page.";
-        setSourceBufferError(revisionID, path, message, draft, source);
+        setSourceBufferError(revisionID, path, message, draft, source, pending);
         failedHere = true;
         if (!cancelled) setError(message);
         return new Error(message);
       };
+      const receive = () => {
+        try {
+          const nextSource = sync.text();
+          const next = editorText(nextSource);
+          // With no local edits there are no positions to preserve.
+          const theirs = pending.empty
+            ? ChangeSet.of(textChange(base, next) ?? [], base.length)
+            : sourceChanges(base, next);
+          const visible = theirs.map(pending, true);
+          const mapped = pending.map(theirs);
+          const nextDraft = applySourceChanges(nextSource, mapped);
+          source = nextSource;
+          base = next;
+          pending = mapped;
+          draft = nextDraft;
+          rebaseError = undefined;
+          return visible;
+        } catch (reason) {
+          rebaseError = failed(reason);
+          return undefined;
+        }
+      };
+      receive();
       const flush = () => {
         if (timer) clearTimeout(timer);
         timer = undefined;
         try {
+          if (rebaseError) throw rebaseError;
           if (!pending.empty || failedHere) {
             const text = draft;
             sync.apply(text);
@@ -159,25 +180,9 @@ export function SourceEditor({ provider, revisionID, path, editable }: { provide
       const unregister = registerSourceBuffer(revisionID, flush);
       const onUpdate = (_u: Uint8Array, origin: unknown) => {
         if (origin === sync.origin) return;
-        let next: string;
-        try {
-          source = sync.text();
-          next = editorText(source);
-        } catch (reason) {
-          failed(reason);
-          return;
-        }
-        const change = textChange(base, next);
-        if (!change) {
-          draft = applySourceChanges(source, pending);
-          return;
-        }
-        const theirs = ChangeSet.of([change], base.length);
-        // Their change, placed after ours; ours, moved past theirs.
-        v.dispatch({ changes: theirs.map(pending, true), annotations: remote.of(true) });
-        pending = pending.map(theirs);
-        draft = applySourceChanges(source, pending);
-        base = next;
+        const changes = receive();
+        if (!changes) return;
+        if (!changes.empty) v.dispatch({ changes, annotations: remote.of(true) });
         if (!pending.empty) tryFlush();
       };
       provider.doc.on("update", onUpdate);
