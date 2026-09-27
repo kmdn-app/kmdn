@@ -19,6 +19,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/events"
 	"github.com/kmdn-app/kmdn/internal/forge"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/ids"
@@ -45,6 +46,7 @@ type Service struct {
 	Adapters *Adapters
 	// Policy says which clone URLs and how many repos an org may have.
 	Policy  *policy.Policy
+	Events  events.Sink
 	DataDir string
 	BaseURL string
 	Log     *slog.Logger
@@ -258,6 +260,7 @@ func (s *Service) Connect(ctx context.Context, by auth.Principal, in ConnectInpu
 			s.Log.Warn("gitlab webhook registration failed; kmdn will poll", "repo", r.Slug, "error", err)
 		}
 	}
+	s.Events.Emit(ctx, events.Event{Type: events.RepoConnected, OrgID: r.OrgID, UserID: by.User.ID, Data: map[string]any{"repo_id": r.ID, "slug": r.Slug}})
 	return r, jobID, nil
 }
 
@@ -640,6 +643,7 @@ func (s *Service) Disconnect(ctx context.Context, by auth.Principal, r Repo) err
 		return err
 	}
 	_ = removeAll(s.Mirror(r).Path)
+	s.Events.Emit(ctx, events.Event{Type: events.RepoRemoved, OrgID: r.OrgID, UserID: by.User.ID, Data: map[string]any{"repo_id": r.ID, "slug": r.Slug}})
 	return nil
 }
 

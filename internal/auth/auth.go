@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/audit"
+	"github.com/kmdn-app/kmdn/internal/events"
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/policy"
@@ -48,6 +49,7 @@ type Service struct {
 	SessionTTL time.Duration
 	// Policy caps an org's members: auto-join stops at the limit.
 	Policy *policy.Policy
+	Events events.Sink
 	// AutoJoinDomains lets people with these email domains create an account
 	// by signing in. Off (empty) by default.
 	AutoJoinDomains []string
@@ -252,8 +254,12 @@ func (s *Service) userForSignIn(ctx context.Context, q store.Querier, email stri
 	// People on an org's domain join it when they sign in (not when the org
 	// already has them, deactivated or not).
 	if org != "" && s.seatFree(ctx, q, org, u) {
-		if err := orgs.Join(ctx, q, org, u.ID); err != nil {
+		added, err := orgs.Join(ctx, q, org, u.ID)
+		if err != nil {
 			return u, err
+		}
+		if added {
+			s.Events.Emit(ctx, events.Event{Type: events.MemberAdded, OrgID: org, UserID: u.ID, Data: map[string]any{"via": "domain"}})
 		}
 	}
 	return u, nil

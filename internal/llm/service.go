@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/audit"
+	"github.com/kmdn-app/kmdn/internal/events"
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/settings"
@@ -101,6 +102,8 @@ type Service struct {
 	OrgAllows func(ctx context.Context, orgID string) bool
 	// OrgBudget is an org's monthly token budget (0: none of its own).
 	OrgBudget func(ctx context.Context, orgID string) int
+	// Events receives the tokens each run used, per org.
+	Events events.Sink
 	// HTTP overrides the providers' client (tests).
 	HTTP *http.Client
 	Log  *slog.Logger
@@ -333,10 +336,16 @@ func (s *Service) FinishRun(ctx context.Context, id string, u Usage, tools []str
 	}
 	// Assistant conversations are audited (tools called, tokens); summaries,
 	// judgments and embeddings are only metered.
-	var task, userID, repoID, revID, model string
-	if err := store.QueryRow(ctx, s.DB, `SELECT task, COALESCE(user_id, ''), COALESCE(repo_id, ''), COALESCE(revision_id, ''), model FROM assistant_runs WHERE id = ?`, id).
-		Scan(&task, &userID, &repoID, &revID, &model); err != nil || task != TaskChat {
+	var task, userID, repoID, revID, model, orgID string
+	if err := store.QueryRow(ctx, s.DB, `SELECT task, COALESCE(user_id, ''), COALESCE(repo_id, ''), COALESCE(revision_id, ''), model, COALESCE(org_id, '') FROM assistant_runs WHERE id = ?`, id).
+		Scan(&task, &userID, &repoID, &revID, &model, &orgID); err != nil {
 		return err
+	}
+	if orgID != "" && u.Total() > 0 {
+		s.Events.Emit(ctx, events.Event{Type: events.AIUsage, OrgID: orgID, UserID: userID, Data: map[string]any{"tokens": u.Total(), "task": task, "model": model, "run_id": id}})
+	}
+	if task != TaskChat {
+		return nil
 	}
 	return audit.Write(ctx, s.DB, audit.Entry{ActorType: audit.ActorAssistant, ActorID: userID, Action: "assistant.run", TargetType: "assistant_run", TargetID: id, RepoID: repoID,
 		Data: map[string]any{"tools": tools, "tokens": u.Total(), "model": model, "status": status, "revision_id": revID}})

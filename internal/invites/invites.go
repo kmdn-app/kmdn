@@ -17,6 +17,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/events"
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/orghttp"
@@ -38,6 +39,7 @@ type Service struct {
 	BaseURL string
 	// Policy caps an org's members (pending invitations count).
 	Policy *policy.Policy
+	Events events.Sink
 }
 
 // seatFree fails with a policy.ErrLimit when the org is at its member limit.
@@ -218,8 +220,11 @@ func (s *Service) accept(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	var u users.User
+	var orgID string
+	joined := false
 	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
 		inv, err := s.find(ctx, tx, chi.URLParam(r, "token"))
+		orgID = inv.orgID
 		if err != nil {
 			return err
 		}
@@ -245,6 +250,7 @@ func (s *Service) accept(w http.ResponseWriter, r *http.Request) {
 			if err := s.seatFree(ctx, tx, inv.orgID, true); err != nil {
 				return err
 			}
+			joined = true
 			if err := orgs.AddMember(ctx, tx, inv.orgID, u.ID, orgs.Member, inv.inviter); err != nil {
 				return err
 			}
@@ -272,6 +278,9 @@ func (s *Service) accept(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		api.Error(w, r, err)
 		return
+	}
+	if joined {
+		s.Events.Emit(ctx, events.Event{Type: events.MemberAdded, OrgID: orgID, UserID: u.ID, Data: map[string]any{"via": "invite"}})
 	}
 	if err := s.Auth.SignIn(w, r, u, "invite"); err != nil {
 		api.Error(w, r, err)
