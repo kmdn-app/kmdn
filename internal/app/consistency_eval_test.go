@@ -217,10 +217,14 @@ func TestConsistencyQuality(t *testing.T) {
 			}
 		}
 	}
+	// A planted duplicate copies a section into a page of another topic. The
+	// corpus restates each fact word for word on many pages of its topic, so
+	// the copy counts as found when it's paired with any page of the source's
+	// topic, not only the page it was copied from.
 	dupFound := 0
 	for _, d := range corpus.Duplicates {
 		for _, f := range findings {
-			if f.Kind == consistency.Duplicate && ((f.A.Path == d[0] && f.B.Path == d[1]) || (f.A.Path == d[1] && f.B.Path == d[0])) {
+			if f.Kind == consistency.Duplicate && ((f.A.Path == d[1] && samePrefix(f.B.Path, d[0])) || (f.B.Path == d[1] && samePrefix(f.A.Path, d[0]))) {
 				dupFound++
 				break
 			}

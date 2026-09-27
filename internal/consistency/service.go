@@ -310,7 +310,7 @@ type decision struct {
 	lastErr error
 }
 
-// decide turns candidate pairs into findings: near-identical pairs are
+// decide turns candidate pairs into findings: pairs with the same text are
 // duplicates outright, the rest are judged (cached verdicts are free) up to
 // maxCalls model calls, several at a time. keep holds the pairs whose
 // findings stay as they are: ignored ones and ones left undecided (capped
@@ -331,9 +331,11 @@ func (s *Service) decide(ctx context.Context, repoID string, pairs []pair, maxCa
 			continue
 		}
 		f := Finding{PairKey: key, A: side(p.a), B: side(p.b), Similarity: float64(p.sim)}
-		if p.sim >= s.dup() {
+		// Only identical text skips the model: near-identical text is where
+		// contradictions hide ("14 days" in one copy, "7 days" in the other).
+		if p.sim >= s.dup() && fold(p.a.Text) == fold(p.b.Text) {
 			f.Kind = Duplicate
-			f.Explanation = fmt.Sprintf("These passages are nearly the same (%.0f%% similar): one page could link to the other.", float64(p.sim)*100)
+			f.Explanation = "These passages say the same thing word for word: one page could link to the other."
 			found[i] = &f
 			continue
 		}
