@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/settings"
@@ -262,9 +263,19 @@ func (s *Service) FinishRun(ctx context.Context, id string, u Usage, tools []str
 		tools = []string{}
 	}
 	tj, _ := json.Marshal(tools)
-	_, err := store.Exec(ctx, s.DB, `UPDATE assistant_runs SET input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?, tools = ?, status = ?, error = ?, finished_at = ? WHERE id = ?`,
-		u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, string(tj), status, errText, store.Millis(time.Now()), id)
-	return err
+	if _, err := store.Exec(ctx, s.DB, `UPDATE assistant_runs SET input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?, tools = ?, status = ?, error = ?, finished_at = ? WHERE id = ?`,
+		u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, string(tj), status, errText, store.Millis(time.Now()), id); err != nil {
+		return err
+	}
+	// Assistant conversations are audited (tools called, tokens); summaries,
+	// judgments and embeddings are only metered.
+	var task, userID, repoID, revID, model string
+	if err := store.QueryRow(ctx, s.DB, `SELECT task, COALESCE(user_id, ''), COALESCE(repo_id, ''), COALESCE(revision_id, ''), model FROM assistant_runs WHERE id = ?`, id).
+		Scan(&task, &userID, &repoID, &revID, &model); err != nil || task != TaskChat {
+		return err
+	}
+	return audit.Write(ctx, s.DB, audit.Entry{ActorType: audit.ActorAssistant, ActorID: userID, Action: "assistant.run", TargetType: "assistant_run", TargetID: id, RepoID: repoID,
+		Data: map[string]any{"tools": tools, "tokens": u.Total(), "model": model, "status": status, "revision_id": revID}})
 }
 
 // Complete is a metered one-shot call for a task (titles, summaries).

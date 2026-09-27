@@ -2,8 +2,12 @@ package admin
 
 import (
 	"database/sql"
+	"encoding/csv"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +26,7 @@ import (
 type People struct {
 	DB   *store.DB
 	Auth *auth.Service
+	Log  *slog.Logger
 }
 
 func (h *People) Routes(r chi.Router) {
@@ -40,6 +45,7 @@ func (h *People) Routes(r chi.Router) {
 		r.Put("/admin/groups/{id}/members/{user}", h.addGroupMember)
 		r.Delete("/admin/groups/{id}/members/{user}", h.removeGroupMember)
 		r.Get("/admin/audit", h.auditLog)
+		r.Get("/admin/audit/export", h.auditExport)
 	})
 }
 
@@ -284,8 +290,15 @@ func (h *People) updateGroup(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
+	h.audit(r, "group.updated", "group", id, map[string]any{"name": b.Name})
 	g, _ := groups.Get(r.Context(), h.DB, id)
 	api.JSON(w, http.StatusOK, g)
+}
+
+// audit records an admin's action.
+func (h *People) audit(r *http.Request, action, targetType, targetID string, data map[string]any) {
+	p, _ := auth.FromContext(r.Context())
+	_ = audit.Write(r.Context(), h.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, Action: action, TargetType: targetType, TargetID: targetID, Data: data})
 }
 
 func (h *People) deleteGroup(w http.ResponseWriter, r *http.Request) {
@@ -328,6 +341,7 @@ func (h *People) addGroupMember(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
+	h.audit(r, "group.member_added", "group", gid, map[string]any{"user_id": uid})
 	h.groupMembers(w, r)
 }
 
@@ -336,17 +350,119 @@ func (h *People) removeGroupMember(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
+	h.audit(r, "group.member_removed", "group", chi.URLParam(r, "id"), map[string]any{"user_id": chi.URLParam(r, "user")})
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// auditFilter reads the audit log filters: actor_type, actor_id, action
+// (exact, or a family ending in "."), repo, from and to (YYYY-MM-DD, UTC,
+// both inclusive) and cursor.
+func auditFilter(r *http.Request) (audit.Filter, error) {
+	q := r.URL.Query()
+	f := audit.Filter{ActorType: q.Get("actor_type"), ActorID: q.Get("actor_id"), Action: q.Get("action"), RepoID: q.Get("repo")}
+	for _, d := range []struct {
+		key string
+		to  *time.Time
+		add int
+	}{{"from", &f.From, 0}, {"to", &f.To, 1}} {
+		if v := q.Get(d.key); v != "" {
+			t, err := time.Parse(time.DateOnly, v)
+			if err != nil {
+				return f, api.Invalid(d.key, "Use a date like 2026-09-27.")
+			}
+			*d.to = t.AddDate(0, 0, d.add)
+		}
+	}
+	if c := q.Get("cursor"); c != "" {
+		ms, id, ok := strings.Cut(c, "_")
+		n, err := strconv.ParseInt(ms, 10, 64)
+		if !ok || err != nil {
+			return f, api.Invalid("cursor", "Invalid cursor.")
+		}
+		f.Before = &audit.Record{ID: id, At: store.FromMillis(n)}
+	}
+	return f, nil
+}
+
 func (h *People) auditLog(w http.ResponseWriter, r *http.Request) {
-	list, err := audit.Recent(r.Context(), h.DB, 200)
+	f, err := auditFilter(r)
 	if err != nil {
 		api.Error(w, r, err)
 		return
 	}
-	if list == nil {
-		list = []audit.Record{}
+	f.Limit = 100
+	list, err := audit.Query(r.Context(), h.DB, f)
+	if err != nil {
+		api.Error(w, r, err)
+		return
 	}
-	api.JSON(w, http.StatusOK, map[string]any{"items": list})
+	out := map[string]any{"items": list}
+	if len(list) == f.Limit {
+		last := list[len(list)-1]
+		out["next_cursor"] = strconv.FormatInt(store.Millis(last.At), 10) + "_" + last.ID
+	}
+	if r.URL.Query().Get("cursor") == "" {
+		actions, err := audit.Actions(r.Context(), h.DB)
+		if err != nil {
+			api.Error(w, r, err)
+			return
+		}
+		out["actions"] = actions
+	}
+	api.JSON(w, http.StatusOK, out)
+}
+
+// auditExport streams every matching entry as NDJSON or CSV.
+func (h *People) auditExport(w http.ResponseWriter, r *http.Request) {
+	f, err := auditFilter(r)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	format := r.URL.Query().Get("format")
+	if format != "csv" && format != "ndjson" {
+		api.Error(w, r, api.Invalid("format", "format is csv or ndjson."))
+		return
+	}
+	name := "kmdn-audit-" + time.Now().UTC().Format("20060102-150405")
+	var cw *csv.Writer
+	enc := json.NewEncoder(w)
+	if format == "csv" {
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`.csv"`)
+		cw = csv.NewWriter(w)
+		_ = cw.Write([]string{"id", "at", "actor_type", "actor_id", "actor_name", "ip", "action", "target_type", "target_id", "repo_id", "repo_name", "data"})
+	} else {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`.ndjson"`)
+	}
+	p, _ := auth.FromContext(r.Context())
+	_ = audit.Write(r.Context(), h.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, Action: "audit.exported", Data: map[string]any{"format": format, "filter": r.URL.RawQuery}})
+	f.Limit = 1000
+	for {
+		list, err := audit.Query(r.Context(), h.DB, f)
+		if err != nil {
+			h.Log.Error("audit export", "err", err)
+			return // headers are sent: the file ends early
+		}
+		for _, e := range list {
+			if cw != nil {
+				data, _ := json.Marshal(e.Data)
+				if e.Data == nil {
+					data = []byte("{}")
+				}
+				_ = cw.Write([]string{e.ID, e.At.UTC().Format(time.RFC3339Nano), e.ActorType, e.ActorID, e.ActorName, e.IP, e.Action, e.TargetType, e.TargetID, e.RepoID, e.RepoName, string(data)})
+			} else {
+				_ = enc.Encode(e)
+			}
+		}
+		if cw != nil {
+			cw.Flush()
+		}
+		if len(list) < f.Limit {
+			return
+		}
+		last := list[len(list)-1].Record
+		f.Before = &last
+	}
 }

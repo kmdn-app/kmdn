@@ -1046,5 +1046,26 @@
     "revoke": "Revoke",
     "revokeTitle": "Revoke {{name}}?",
     "revokeDesc": "Agents using this key lose access right away. This can't be undone; create a new key if you need one."
+  },
+  "auditLog": {
+    "action": "Action",
+    "anyAction": "Any action",
+    "family": "All {{family}}.*",
+    "actor": "Actor",
+    "anyone": "Anyone",
+    "actors": {
+      "user": "Person",
+      "system": "System",
+      "agent_key": "Agent key",
+      "assistant": "Assistant"
+    },
+    "repo": "Repository",
+    "anyRepo": "Any repository",
+    "from": "From",
+    "to": "To",
+    "clear": "Clear filters",
+    "details": "Details",
+    "none": "Nothing matches these filters.",
+    "more": "Load more"
   }
 }

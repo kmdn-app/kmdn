@@ -8,6 +8,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/api"
+	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -105,6 +106,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.audit(r, "hook.created", h, map[string]any{"kind": h.Kind, "url_host": h.URLHost, "events": h.Events})
 	out := map[string]any{"hook": h}
 	if secret != "" {
 		out["secret"] = secret // shown once
@@ -127,7 +129,14 @@ func (s *Service) update(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	s.audit(r, "hook.updated", h, map[string]any{"url_host": h.URLHost, "events": h.Events, "active": h.Active})
 	api.JSON(w, http.StatusOK, h)
+}
+
+// audit records a webhook change (never the URL's path or the secret).
+func (s *Service) audit(r *http.Request, action string, h Hook, data map[string]any) {
+	p, _ := auth.FromContext(r.Context())
+	_ = audit.Write(r.Context(), s.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, Action: action, TargetType: "hook", TargetID: h.ID, RepoID: h.repoID, Data: data})
 }
 
 func (s *Service) delete(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +148,7 @@ func (s *Service) delete(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
+	s.audit(r, "hook.deleted", h, map[string]any{"url_host": h.URLHost})
 	w.WriteHeader(http.StatusNoContent)
 }
 

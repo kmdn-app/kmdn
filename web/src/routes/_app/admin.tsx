@@ -22,6 +22,7 @@ import { reposQuery, useRepos } from "@/lib/repos";
 import { cn } from "@/lib/utils";
 import { SmtpForm } from "@/components/smtp-form";
 import { AgentKeysPanel } from "@/components/admin/agent-keys";
+import { AuditLogPanel } from "@/components/admin/audit-log";
 
 type AdminUser = components["schemas"]["AdminUser"];
 type ForgeHost = components["schemas"]["ForgeHost"];
@@ -75,7 +76,7 @@ function Admin() {
                 {section === "email" && <EmailPanel />}
                 {section === "ai" && <AIPanel />}
                 {section === "agent-keys" && <AgentKeysPanel />}
-                {section === "audit" && <AuditPanel />}
+                {section === "audit" && <AuditLogPanel />}
               </SettingsLayout>
             )}
           </div>
@@ -668,39 +669,6 @@ function EmailPanel() {
     <Panel title={t("admin.email")} desc={t("admin.emailDesc")}>
       <div className="rounded-xl border bg-card shadow-xs">
         {smtp.data && me && <SmtpForm key={smtp.dataUpdatedAt} saved={smtp.data} defaultTestTo={me.email} onDone={() => toast.success(t("settings.saved"))} submitLabel={t("settings.save")} />}
-      </div>
-    </Panel>
-  );
-}
-
-function AuditPanel() {
-  const { t } = useTranslation();
-  const audit = useQuery({ queryKey: ["audit"], queryFn: async () => (await unwrap(api.GET("/admin/audit"))).items });
-  return (
-    <Panel title={t("admin.audit")} desc={t("admin.auditDesc")}>
-      <div className="overflow-x-auto rounded-xl border">
-        <table className="w-full text-[13.5px]">
-          <thead className="text-left text-[13px] text-muted-foreground">
-            <tr className="border-b">
-              <th className="px-3 py-2.5 font-medium">{t("admin.time")}</th>
-              <th className="px-3 py-2.5 font-medium">{t("admin.action")}</th>
-              <th className="px-3 py-2.5 font-medium max-md:hidden">{t("admin.target")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(audit.data ?? []).map((e) => (
-              <tr key={e.id} className="border-b last:border-0">
-                <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                  <Time iso={e.at} />
-                </td>
-                <td className="px-3 py-2">
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{e.action}</code>
-                </td>
-                <td className="px-3 py-2 text-muted-foreground max-md:hidden">{[e.target_type, e.target_id].filter(Boolean).join(" ")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </Panel>
   );

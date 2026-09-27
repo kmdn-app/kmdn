@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/store"
 )
@@ -267,8 +268,40 @@ func Record(ctx context.Context, q store.Querier, revisionID, actorType, actorID
 		ids.New("rve"), revisionID, actorType, actorID, kind, string(b), now); err != nil {
 		return err
 	}
-	_, err := store.Exec(ctx, q, `UPDATE revisions SET updated_at = ? WHERE id = ?`, now, revisionID)
-	return err
+	if _, err := store.Exec(ctx, q, `UPDATE revisions SET updated_at = ? WHERE id = ?`, now, revisionID); err != nil {
+		return err
+	}
+	return auditEvent(ctx, q, revisionID, actorType, actorID, kind, b)
+}
+
+// audited maps revision events to audit log actions (docs/specs/13-operations.md#audit-log).
+// Publishing is audited by the publisher, with the commit.
+var audited = map[string]string{
+	"submitted":            "revision.submitted",
+	"approval":             "revision.approved",
+	"changes_requested":    "revision.changes_requested",
+	"withdrawn":            "revision.withdrawn",
+	"closed":               "revision.closed",
+	"reopened":             "revision.reopened",
+	"restored":             "revision.checkpoint_restored",
+	"suggestions_accepted": "revision.suggestions_accepted",
+	"suggestions_rejected": "revision.suggestions_rejected",
+}
+
+func auditEvent(ctx context.Context, q store.Querier, revisionID, actorType, actorID, kind string, data []byte) error {
+	action, ok := audited[kind]
+	if !ok {
+		return nil
+	}
+	var repoID string
+	var number int
+	if err := store.QueryRow(ctx, q, `SELECT repo_id, number FROM revisions WHERE id = ?`, revisionID).Scan(&repoID, &number); err != nil {
+		return err
+	}
+	d := map[string]any{}
+	_ = json.Unmarshal(data, &d)
+	d["number"] = number
+	return audit.Write(ctx, q, audit.Entry{ActorType: actorType, ActorID: actorID, Action: action, TargetType: "revision", TargetID: revisionID, RepoID: repoID, Data: d})
 }
 
 // Events returns the revision's log, oldest first.
