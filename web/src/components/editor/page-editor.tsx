@@ -99,7 +99,14 @@ export function PageEditor({
   }, [upload]);
   const extensions = useMemo(
     () => [
-      ...withViews(schemaExtensions({ resolveImage, conflictLabels: { published: t("updates.sides.published"), revision: t("updates.sides.revision") } }), nodeViewExtensions),
+      ...withViews(schemaExtensions({ resolveImage, conflictLabels: {
+          published: t("updates.sides.published"),
+          revision: t("updates.sides.revision"),
+          title: t("updates.conflict.title"),
+          keepPublished: t("updates.conflict.keepPublished"),
+          keepRevision: t("updates.conflict.keepRevision"),
+          keepBoth: t("updates.conflict.keepBoth"),
+        } }), nodeViewExtensions),
       Collaboration.configure({ document: provider.doc, field: CONTENT }),
       CollaborationCaret.configure({ provider, user: { name: user.name, color: userColor(user.id), id: user.id } }),
       Placeholder.configure({ placeholder: t("editor.placeholder") }),

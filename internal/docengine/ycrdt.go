@@ -362,3 +362,21 @@ func (e *Engine) Merge3(ctx context.Context, base, ours, theirs string) (MergeRe
 	err = json.Unmarshal([]byte(s), &m)
 	return m, err
 }
+
+// YConflicts counts the page's unresolved conflict blocks.
+func (e *Engine) YConflicts(ctx context.Context, state []byte) (int, error) {
+	if len(state) > MaxUpdateBytes {
+		return 0, ErrTooLarge
+	}
+	return run(ctx, e, func(v *vm) (int, error) {
+		f, err := v.fn("yConflicts")
+		if err != nil {
+			return 0, err
+		}
+		out, err := f(goja.Undefined(), bin(v, state))
+		if err != nil {
+			return 0, err
+		}
+		return int(out.ToInteger()), nil
+	})
+}

@@ -1320,6 +1320,27 @@ paths:
                   reopened: { type: boolean, description: "Sent back to Editing because of conflicts" }
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/conflicts/resolve:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [revisions]
+      operationId: resolvePageConflict
+      summary: Settle a page Published deleted while the revision edits it (keep or accept the deletion)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, choice]
+              properties:
+                path: { type: string }
+                choice: { type: string, enum: [keep, delete] }
+      responses:
+        "204": { description: Resolved }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /revisions/{revision}/suggestions:
     parameters:
       - { $ref: "#/components/parameters/RevisionID" }
@@ -2003,6 +2024,7 @@ components:
         content_hash: { type: string }
         materialized_at: { type: string, format: date-time }
         has_conflicts: { type: boolean }
+        conflict: { type: string, enum: [deleted_upstream], description: "A page-level conflict; absent for conflict blocks in the page" }
         additions: { type: integer }
         deletions: { type: integer }
         updated_at: { type: string, format: date-time }

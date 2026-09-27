@@ -865,6 +865,13 @@ func (r *Room) materialize(ctx context.Context) {
 		r.markDirty()
 		return
 	}
+	// Resolving a conflict may leave the markdown as it was (the revision's
+	// side is what it materializes to): check the blocks themselves.
+	if n, err := r.hub.Engine.YConflicts(ctx, state); err == nil {
+		if err := r.hub.Revisions.SetConflicts(ctx, r.revID, p, n > 0); err != nil {
+			r.hub.Log.Error("record conflicts", "err", err, "doc", r.docID)
+		}
+	}
 	if r.hub.Publish != nil {
 		r.hub.Publish("revision:"+r.revID, map[string]any{"type": "file_content", "revision": r.revID, "path": p})
 	}

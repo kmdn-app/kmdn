@@ -21,6 +21,7 @@ func (s *Service) Routes(r chi.Router) {
 		r.Use(auth.Require)
 		r.Get("/revisions/{revision}/updates", s.get)
 		r.Post("/revisions/{revision}/updates/{update}/apply", s.apply)
+		r.Post("/revisions/{revision}/conflicts/resolve", s.resolvePage)
 	})
 }
 
@@ -136,4 +137,36 @@ func (s *Service) apply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.JSON(w, http.StatusOK, res)
+}
+
+func (s *Service) resolvePage(w http.ResponseWriter, r *http.Request) {
+	rev, _, c, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Path   string `json:"path"`
+		Choice string `json:"choice"`
+	}
+	if err := api.Decode(r, &in); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	if in.Choice != "keep" && in.Choice != "delete" {
+		api.Error(w, r, api.Invalid("choice", "choice is keep or delete."))
+		return
+	}
+	if err := s.ResolvePage(r.Context(), rev, c, in.Path, in.Choice); err != nil {
+		var cf *revisions.ErrConflict
+		switch {
+		case errors.Is(err, revisions.ErrForbidden):
+			api.Error(w, r, api.Err(http.StatusForbidden, "forbidden", "You can't edit this revision right now."))
+		case errors.As(err, &cf):
+			api.Error(w, r, api.Err(http.StatusConflict, cf.Code, cf.Msg))
+		default:
+			api.Error(w, r, err)
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
