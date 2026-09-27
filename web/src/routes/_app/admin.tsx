@@ -732,6 +732,7 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
   return (
     <Panel title={t("ai.title")} desc={t("ai.desc")}>
       {st.disabled && <p className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-[13.5px]">{t("ai.disabledByConfig")}</p>}
+      {st.managed && <p className="rounded-lg border bg-muted/40 p-3 text-[13.5px]">{t("ai.managedByConfig")}</p>}
       <Card
         footer={
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
@@ -742,7 +743,7 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
       >
         <div className="grid gap-1.5">
           <Label>{t("ai.provider")}</Label>
-          <Select value={provider} onValueChange={setProvider}>
+          <Select value={provider} onValueChange={setProvider} disabled={st.managed}>
             <SelectTrigger className="w-72">
               <SelectValue />
             </SelectTrigger>
@@ -757,18 +758,18 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
           <>
             <div className="grid gap-1.5">
               <Label htmlFor="ai-url">{provider === "openai" ? t("ai.baseURL") : t("ai.baseURLOptional")}</Label>
-              <Input id="ai-url" value={baseURL} onChange={(e) => setBaseURL(e.target.value)} placeholder={provider === "openai" ? "https://api.openai.com/v1 · http://localhost:11434/v1" : "https://api.anthropic.com"} />
+              <Input id="ai-url" disabled={st.managed} value={baseURL} onChange={(e) => setBaseURL(e.target.value)} placeholder={provider === "openai" ? "https://api.openai.com/v1 · http://localhost:11434/v1" : "https://api.anthropic.com"} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="ai-key">{t("ai.key")}</Label>
-              <Input id="ai-key" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder={st.key_set ? t("ai.keySet") : provider === "openai" ? t("ai.keyOptional") : "sk-ant-…"} />
+              <Input id="ai-key" disabled={st.managed} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder={st.key_set ? t("ai.keySet") : provider === "openai" ? t("ai.keyOptional") : "sk-ant-…"} />
             </div>
             <div className="grid gap-2">
               <Label>{t("ai.models")}</Label>
               {st.tasks.map((task) => (
                 <div key={task} className="grid grid-cols-[160px_1fr] items-center gap-3 max-sm:grid-cols-1">
                   <span className="text-[13px] text-muted-foreground">{t(`ai.tasks.${task}`)}</span>
-                  <Input value={models[task] ?? ""} onChange={(e) => setModels((m) => ({ ...m, [task]: e.target.value }))} placeholder={defaults[task] ?? (task === "chat" ? t("ai.modelRequired") : t("ai.sameAsChat"))} className="font-mono text-[12.5px]" />
+                  <Input disabled={st.managed} aria-label={t(`ai.tasks.${task}`)} value={models[task] ?? ""} onChange={(e) => setModels((m) => ({ ...m, [task]: e.target.value }))} placeholder={defaults[task] ?? (task === "chat" ? t("ai.modelRequired") : t("ai.sameAsChat"))} className="font-mono text-[12.5px]" />
                 </div>
               ))}
             </div>
@@ -788,19 +789,20 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
                 <div className="text-[13.5px] font-medium">{t("ai.consistency")}</div>
                 <p className="text-[12.5px] text-muted-foreground">{t("ai.consistencyHint")}</p>
               </div>
+              {st.embeddings.managed && <p className="text-[12.5px] text-muted-foreground">{t("ai.embeddingsManaged")}</p>}
               <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
                 <div className="grid gap-1.5">
                   <Label htmlFor="ai-emb-url">{t("ai.embeddingsURL")}</Label>
-                  <Input id="ai-emb-url" value={embURL} onChange={(e) => setEmbURL(e.target.value)} placeholder="https://api.openai.com/v1 · http://localhost:11434/v1" />
+                  <Input id="ai-emb-url" disabled={st.embeddings.managed} value={embURL} onChange={(e) => setEmbURL(e.target.value)} placeholder="https://api.openai.com/v1 · http://localhost:11434/v1" />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="ai-emb-model">{t("ai.embeddingsModel")}</Label>
-                  <Input id="ai-emb-model" value={embModel} onChange={(e) => setEmbModel(e.target.value)} placeholder="text-embedding-3-small · nomic-embed-text" className="font-mono text-[12.5px]" />
+                  <Input id="ai-emb-model" disabled={st.embeddings.managed} value={embModel} onChange={(e) => setEmbModel(e.target.value)} placeholder="text-embedding-3-small · nomic-embed-text" className="font-mono text-[12.5px]" />
                 </div>
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="ai-emb-key">{t("ai.embeddingsKey")}</Label>
-                <Input id="ai-emb-key" type="password" autoComplete="off" value={embKey} onChange={(e) => setEmbKey(e.target.value)} placeholder={st.embeddings.key_set ? t("ai.keySet") : t("ai.keyOptional")} />
+                <Input id="ai-emb-key" disabled={st.embeddings.managed} type="password" autoComplete="off" value={embKey} onChange={(e) => setEmbKey(e.target.value)} placeholder={st.embeddings.key_set ? t("ai.keySet") : t("ai.keyOptional")} />
               </div>
               <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
                 <div className="grid gap-1.5">

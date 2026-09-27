@@ -2776,7 +2776,7 @@ components:
         created_at: { type: string, format: date-time }
     AISettings:
       type: object
-      required: [provider, key_set, models, defaults, tasks, embeddings, user_daily_tokens, instance_monthly_tokens, consistency, disabled]
+      required: [provider, key_set, models, defaults, tasks, embeddings, user_daily_tokens, instance_monthly_tokens, consistency, disabled, managed]
       properties:
         provider: { type: string }
         base_url: { type: string }
@@ -2786,11 +2786,12 @@ components:
         tasks: { type: array, items: { type: string } }
         embeddings:
           type: object
-          required: [key_set]
+          required: [key_set, managed]
           properties:
             base_url: { type: string }
             model: { type: string }
             key_set: { type: boolean }
+            managed: { type: boolean, description: "Fixed by the server config (assistant.embeddings.*, KMDN_ASSISTANT_EMBEDDINGS_*): read-only here" }
         user_daily_tokens: { type: integer }
         instance_monthly_tokens: { type: integer }
         consistency:
@@ -2800,6 +2801,7 @@ components:
             scan_every_days: { type: integer, description: "0: scans only run on demand" }
             scan_max_calls: { type: integer, description: "LLM judgments per scan" }
         disabled: { type: boolean, description: "assistant.enabled is false in the server config" }
+        managed: { type: boolean, description: "The provider, key, base URL and models are fixed by the server config (assistant.provider, KMDN_ASSISTANT_*): read-only here; saving changes budgets and scan settings only" }
         check:
           type: object
           required: [ok, message, at]

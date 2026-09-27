@@ -111,6 +111,9 @@ func (s *Service) embedder(ctx context.Context, st Settings, key string) (Embedd
 	if st.Embeddings.BaseURL == "" || st.Embeddings.Model == "" {
 		return nil, "", ErrNotConfigured
 	}
+	if key == "" && s.embeddingsManaged() {
+		key = s.Env.Embeddings.APIKey
+	}
 	if key == "" && st.Embeddings.KeyRef != "" {
 		b, err := s.Secrets.Get(ctx, s.DB, st.Embeddings.KeyRef)
 		if err != nil {

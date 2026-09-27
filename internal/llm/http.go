@@ -36,9 +36,11 @@ func (s *Service) status(w http.ResponseWriter, r *http.Request) {
 // view is the settings without secrets.
 func (s *Service) view(st Settings) map[string]any {
 	return map[string]any{
-		"provider": st.Provider, "base_url": st.BaseURL, "key_set": st.KeyRef != "",
+		"provider": st.Provider, "base_url": st.BaseURL, "key_set": st.KeyRef != "" || (s.managed() && s.Env.APIKey != ""),
 		"models": st.Models, "defaults": DefaultModels, "tasks": Tasks,
-		"embeddings":              map[string]any{"base_url": st.Embeddings.BaseURL, "model": st.Embeddings.Model, "key_set": st.Embeddings.KeyRef != ""},
+		"embeddings": map[string]any{"base_url": st.Embeddings.BaseURL, "model": st.Embeddings.Model,
+			"key_set": st.Embeddings.KeyRef != "" || (s.embeddingsManaged() && s.Env.Embeddings.APIKey != ""), "managed": s.embeddingsManaged()},
+		"managed":                 s.managed(),
 		"user_daily_tokens":       st.UserDailyTokens,
 		"instance_monthly_tokens": st.InstanceMonthlyTokens,
 		"consistency":             st.Consistency,
@@ -47,6 +49,7 @@ func (s *Service) view(st Settings) map[string]any {
 	}
 }
 
+// get returns the effective settings (the server config's provider on top).
 func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 	st, err := s.Settings(r.Context())
 	if err != nil {
@@ -99,46 +102,18 @@ func (s *Service) put(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
-	st, err := s.Settings(r.Context())
+	// Saved as the console's settings; fields the server config fixes are
+	// left as they are.
+	st, err := s.stored(r.Context())
 	if err != nil {
 		api.Error(w, r, err)
 		return
 	}
-	switch in.Provider {
-	case "", ProviderAnthropic, ProviderOpenAI:
-	default:
-		api.Error(w, r, api.Invalid("provider", "provider is anthropic, openai or empty (off)."))
-		return
-	}
-	base := strings.TrimSpace(in.BaseURL)
-	if base != "" && !strings.HasPrefix(base, "https://") && !strings.HasPrefix(base, "http://") {
-		api.Error(w, r, api.Invalid("base_url", "Use an http or https URL."))
-		return
-	}
-	if in.Provider == ProviderOpenAI && base == "" {
-		api.Error(w, r, api.Invalid("base_url", "An OpenAI-compatible provider needs its base URL (for example https://api.openai.com/v1)."))
-		return
-	}
-	for task := range in.Models {
-		if !contains(Tasks, task) {
-			api.Error(w, r, api.Invalid("models", "Unknown task: "+task))
-			return
-		}
-	}
-	st.Provider, st.BaseURL = in.Provider, base
-	if in.Models != nil {
-		st.Models = map[string]string{}
-		for k, v := range in.Models {
-			if v = strings.TrimSpace(v); v != "" {
-				st.Models[k] = v
-			}
-		}
-	}
-	if st.KeyRef, err = s.setKey(r, st.KeyRef, in.APIKey, "ai_key"); err != nil {
+	if err := s.applyProvider(r, &st, in); err != nil {
 		api.Error(w, r, err)
 		return
 	}
-	if e := in.Embeddings; e != nil {
+	if e := in.Embeddings; e != nil && !s.embeddingsManaged() {
 		st.Embeddings.BaseURL, st.Embeddings.Model = strings.TrimSpace(e.BaseURL), strings.TrimSpace(e.Model)
 		if st.Embeddings.KeyRef, err = s.setKey(r, st.Embeddings.KeyRef, e.APIKey, "ai_embeddings_key"); err != nil {
 			api.Error(w, r, err)
@@ -160,8 +135,8 @@ func (s *Service) put(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	st.Check = nil
-	if st.Provider != "" {
-		c := s.RunCheck(r.Context(), st, "")
+	if eff := s.overlay(st); eff.Provider != "" {
+		c := s.RunCheck(r.Context(), eff, "")
 		st.Check = &c
 	}
 	if err := settings.Set(r.Context(), s.DB, settingsKey, st); err != nil {
@@ -170,28 +145,67 @@ func (s *Service) put(w http.ResponseWriter, r *http.Request) {
 	}
 	// Secrets changed are recorded, never their values.
 	p, _ := auth.FromContext(r.Context())
+	eff := s.overlay(st)
 	_ = audit.Write(r.Context(), s.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, Action: "ai.settings_updated", TargetType: "settings", TargetID: settingsKey,
-		Data: map[string]any{"provider": st.Provider, "key_changed": in.APIKey != nil, "embeddings_key_changed": in.Embeddings != nil && in.Embeddings.APIKey != nil, "check_ok": st.Check != nil && st.Check.OK}})
-	api.JSON(w, http.StatusOK, s.view(st))
+		Data: map[string]any{"provider": eff.Provider, "key_changed": in.APIKey != nil && !s.managed(), "embeddings_key_changed": in.Embeddings != nil && in.Embeddings.APIKey != nil && !s.embeddingsManaged(), "check_ok": st.Check != nil && st.Check.OK}})
+	api.JSON(w, http.StatusOK, s.view(eff))
+}
+
+// applyProvider sets the provider, base URL, key and models from the
+// console, unless the server config fixes them.
+func (s *Service) applyProvider(r *http.Request, st *Settings, in putInput) error {
+	if s.managed() {
+		return nil
+	}
+	switch in.Provider {
+	case "", ProviderAnthropic, ProviderOpenAI:
+	default:
+		return api.Invalid("provider", "provider is anthropic, openai or empty (off).")
+	}
+	base := strings.TrimSpace(in.BaseURL)
+	if base != "" && !strings.HasPrefix(base, "https://") && !strings.HasPrefix(base, "http://") {
+		return api.Invalid("base_url", "Use an http or https URL.")
+	}
+	if in.Provider == ProviderOpenAI && base == "" {
+		return api.Invalid("base_url", "An OpenAI-compatible provider needs its base URL (for example https://api.openai.com/v1).")
+	}
+	for task := range in.Models {
+		if !contains(Tasks, task) {
+			return api.Invalid("models", "Unknown task: "+task)
+		}
+	}
+	st.Provider, st.BaseURL = in.Provider, base
+	if in.Models != nil {
+		st.Models = map[string]string{}
+		for k, v := range in.Models {
+			if v = strings.TrimSpace(v); v != "" {
+				st.Models[k] = v
+			}
+		}
+	}
+	var err error
+	st.KeyRef, err = s.setKey(r, st.KeyRef, in.APIKey, "ai_key")
+	return err
 }
 
 func (s *Service) check(w http.ResponseWriter, r *http.Request) {
-	st, err := s.Settings(r.Context())
+	st, err := s.stored(r.Context())
 	if err != nil {
 		api.Error(w, r, err)
 		return
 	}
-	if st.Provider == "" {
+	eff := s.overlay(st)
+	if eff.Provider == "" {
 		api.Error(w, r, api.Err(http.StatusConflict, "not_configured", "Pick a provider first."))
 		return
 	}
-	c := s.RunCheck(r.Context(), st, "")
+	c := s.RunCheck(r.Context(), eff, "")
 	st.Check = &c
 	if err := settings.Set(r.Context(), s.DB, settingsKey, st); err != nil {
 		api.Error(w, r, err)
 		return
 	}
-	api.JSON(w, http.StatusOK, s.view(st))
+	api.JSON(w, http.StatusOK, s.view(s.overlay(st)))
 }
 
 // UsageRow is tokens and runs for a user or a task.

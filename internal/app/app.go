@@ -166,7 +166,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 			return a.Collab.PutAnchor(ctx, repo, rev, c, p, threadID, pos)
 		},
 	}
-	a.LLM = &llm.Service{DB: db, Secrets: sec, Disabled: !cfg.Assistant.Enabled, Log: log}
+	a.LLM = &llm.Service{DB: db, Secrets: sec, Disabled: !cfg.Assistant.Enabled, Env: llmEnv(cfg.Assistant), Log: log}
 	a.LLM.Routes(r)
 	a.Notify = &notify.Service{DB: db, Jobs: a.Jobs, PublishUser: a.Realtime.PublishUser, BaseURL: a.Repos.BaseURL, Log: log,
 		Present: func(revID, userID string) bool {
@@ -309,6 +309,7 @@ func (a *App) Run(ctx context.Context) error {
 	if _, err := a.Setup.Prepare(ctx); err != nil {
 		return err
 	}
+	go a.LLM.CheckEnv(ctx)
 	go a.periodic(ctx, time.Hour, "auth.purge")
 	go a.periodic(ctx, time.Hour, consistency.JobSchedule)
 	// Events recorded without a revision change (updates prepared, threads)
@@ -434,4 +435,15 @@ func pushSubject(base string) string {
 		return "mailto:kmdn@localhost"
 	}
 	return "mailto:kmdn@" + u.Hostname()
+}
+
+// llmEnv is the AI provider fixed by the server config, if any.
+func llmEnv(c config.Assistant) *llm.Env {
+	if c.Provider == "" && c.Embeddings.Model == "" {
+		return nil
+	}
+	e := &llm.Env{Provider: c.Provider, APIKey: c.APIKey, BaseURL: c.BaseURL,
+		Models: map[string]string{llm.TaskChat: c.Model, llm.TaskReviewSummary: c.ReviewModel, llm.TaskShortText: c.ShortModel}}
+	e.Embeddings.BaseURL, e.Embeddings.APIKey, e.Embeddings.Model = c.Embeddings.BaseURL, c.Embeddings.APIKey, c.Embeddings.Model
+	return e
 }
