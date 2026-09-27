@@ -29,7 +29,7 @@ import { TopBar } from "@/components/shell/top-bar";
 import { OP_MARK } from "@/components/shell/file-tree";
 import { Avatar } from "@/components/avatar";
 import { Time } from "@/components/time";
-import { StatePill } from "@/components/revision/revision-ui";
+import { ActivityItem, StatePill } from "@/components/revision/revision-ui";
 import { RevisionSuggestions } from "@/components/revision/suggestions-panel";
 import { ReviewActions, ReviewersSection } from "@/components/revision/review-actions";
 import { UpdatesBanner } from "@/components/revision/updates";
@@ -585,14 +585,7 @@ function Activity({ rev }: { rev: RevisionView }) {
           .slice()
           .reverse()
           .map((e) => (
-            <li key={e.id} className="relative text-[0.84375rem]">
-              <span className="absolute top-2 -left-[1.4375rem] size-1.5 rounded-full bg-border ring-4 ring-background" />
-              <span className="font-medium">{e.actor_name || t("revision.someone")}</span>{" "}
-              {t(`revision.events.${e.kind}`, { defaultValue: e.kind, path: String((e.data as { path?: string }).path ?? ""), from: String((e.data as { from_path?: string }).from_path ?? "") })}{" "}
-              <span className="text-muted-foreground">
-                · <Time iso={e.created_at} />
-              </span>
-            </li>
+            <ActivityItem key={e.id} event={e} />
           ))}
       </ol>
     </section>
