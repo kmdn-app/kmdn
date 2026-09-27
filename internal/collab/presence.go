@@ -30,7 +30,10 @@ func (h *Hub) Presence(revID string) []PresenceUser {
 		r.mu.Lock()
 		p := r.path
 		for peer := range r.peers {
+			peer.mu.Lock()
 			u := peer.caller.User
+			editing := peer.rw
+			peer.mu.Unlock()
 			pu := byUser[u.ID]
 			if pu == nil {
 				pu = &PresenceUser{ID: u.ID, Name: u.Name}
@@ -39,9 +42,7 @@ func (h *Hub) Presence(revID string) []PresenceUser {
 			if len(pu.Paths) == 0 || pu.Paths[len(pu.Paths)-1] != p {
 				pu.Paths = append(pu.Paths, p)
 			}
-			peer.mu.Lock()
-			pu.Editing = pu.Editing || peer.rw
-			peer.mu.Unlock()
+			pu.Editing = pu.Editing || editing
 		}
 		r.mu.Unlock()
 	}
