@@ -250,6 +250,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.MCP.Routes(r)
 	a.Server.Mount("/mcp", a.MCP.Handler(a.AuthH.TrustedProxies))
 	(&admin.People{DB: db, Auth: a.Auth, Log: log}).Routes(r)
+	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL}
 	a.Invites.Routes(r)
 	(&linking.Service{DB: db, Secrets: sec, AuthH: a.AuthH, BaseURL: a.Repos.BaseURL, HTTP: a.Repos.Adapters.HTTP}).Routes(r)

@@ -12,9 +12,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/kmdn-app/kmdn/internal/app"
+	"github.com/kmdn-app/kmdn/internal/backup"
 	"github.com/kmdn-app/kmdn/internal/config"
+	"github.com/kmdn-app/kmdn/internal/doctor"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -30,6 +33,12 @@ Usage:
   kmdn migrate [status|up]           show or apply database migrations
   kmdn admin rotate-secret-key -new KEY
                                      re-encrypt stored credentials with a new key
+  kmdn doctor  [-offline]            check git, the data dir, the database, the
+                                     secret key, SMTP, forges and the AI provider
+  kmdn backup  [-out FILE.tar.zst] [-skip-db] [-include-secrets]
+                                     back up the database, uploads and config
+                                     (safe while the server runs)
+  kmdn restore -in FILE [-force]     restore a backup (stop the server first)
   kmdn version                       print version information
 
 Every config key can be set with an env var, e.g. KMDN_SERVER_BASE_URL.
@@ -89,6 +98,30 @@ func run(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		return rotateSecretKey(*cfgPath, *newKey, stdout)
+	case "doctor":
+		offline := fs.Bool("offline", false, "skip network checks (SMTP, forges, AI provider)")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		return runDoctor(*cfgPath, !*offline, stdout)
+	case "backup":
+		out := fs.String("out", "", "archive to write (.tar.zst, or .tar.gz); default kmdn-backup-<time>.tar.zst")
+		skipDB := fs.Bool("skip-db", false, "leave the database out (Postgres: back it up with pg_dump)")
+		secretsToo := fs.Bool("include-secrets", false, "keep secret_key and passwords in the config copy")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		return runBackup(*cfgPath, *out, *skipDB, *secretsToo, stdout)
+	case "restore":
+		in := fs.String("in", "", "archive to restore")
+		force := fs.Bool("force", false, "replace an existing database")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if *in == "" {
+			return errors.New("usage: kmdn restore -in <backup.tar.zst> [-force]")
+		}
+		return runRestore(*cfgPath, *in, *force, stdout)
 	case "version", "--version", "-v":
 		v := version.Get()
 		fmt.Fprintf(stdout, "kmdn %s (%s) %s\n", v.Version, v.Commit, v.Go)
@@ -159,6 +192,76 @@ func migrate(cfgPath, sub string, out io.Writer) error {
 	default:
 		return fmt.Errorf("unknown migrate subcommand %q (use status or up)", sub)
 	}
+}
+
+// configPath is the -config flag, or ./kmdn.yaml when it exists.
+func configPath(p string) string {
+	if p != "" {
+		return p
+	}
+	if _, err := os.Stat("kmdn.yaml"); err == nil {
+		return "kmdn.yaml"
+	}
+	return ""
+}
+
+func runDoctor(cfgPath string, network bool, out io.Writer) error {
+	cfg, err := config.Load(cfgPath, os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	checks := (&doctor.Doctor{Config: cfg, Network: network}).Run(context.Background())
+	marks := map[string]string{doctor.OK: "ok  ", doctor.Warn: "warn", doctor.Fail: "FAIL"}
+	for _, c := range checks {
+		fmt.Fprintf(out, "%s  %-22s %s\n", marks[c.Status], c.Name, c.Detail)
+	}
+	if doctor.Failed(checks) {
+		return errors.New("some checks failed")
+	}
+	return nil
+}
+
+func runBackup(cfgPath, out string, skipDB, withSecrets bool, w io.Writer) error {
+	cfg, err := config.Load(cfgPath, os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	if out == "" {
+		out = "kmdn-backup-" + time.Now().UTC().Format("20060102-150405") + ".tar.zst"
+	}
+	m, err := backup.Backup(context.Background(), backup.Options{Config: cfg, ConfigPath: configPath(cfgPath), Out: out, SkipDB: skipDB, IncludeSecrets: withSecrets})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "Wrote %s: database %s, %d upload(s), config %v (secrets included: %v).\n", out, orNone(m.DB), m.Uploads, m.Config, m.Secrets)
+	if !withSecrets {
+		fmt.Fprintln(w, "The secret key isn't in the backup: keep it safe, stored credentials can't be decrypted without it.")
+	}
+	return nil
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return "skipped"
+	}
+	return s
+}
+
+func runRestore(cfgPath, in string, force bool, w io.Writer) error {
+	cfg, err := config.Load(cfgPath, os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	r, err := backup.Restore(context.Background(), backup.RestoreOptions{Config: cfg, In: in, Force: force})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "Restored %s (kmdn %s, %s): database %s, %d upload(s).\n", in, r.Manifest.Version, r.Manifest.CreatedAt.Format(time.RFC3339), orNone(r.Manifest.DB), r.Manifest.Uploads)
+	if r.ConfigCopy != "" {
+		fmt.Fprintf(w, "The backed-up config is in %s (your current config is untouched).\n", r.ConfigCopy)
+	}
+	fmt.Fprintf(w, "%d repository mirror(s) will be cloned again when kmdn starts.\n", r.Repos)
+	return nil
 }
 
 func rotateSecretKey(cfgPath, newKey string, out io.Writer) error {

@@ -366,7 +366,8 @@
     "time": "Time",
     "action": "Action",
     "target": "Target",
-    "agentKeys": "Agent keys"
+    "agentKeys": "Agent keys",
+    "system": "System"
   },
   "editor": {
     "label": "Page content",
@@ -1067,5 +1068,31 @@
     "details": "Details",
     "none": "Nothing matches these filters.",
     "more": "Load more"
+  },
+  "system": {
+    "title": "System",
+    "desc": "This instance's version, database and background jobs, and the doctor's checks.",
+    "version": "Version",
+    "go": "Go",
+    "database": "Database",
+    "dataDir": "Data directory",
+    "repos": "Repositories",
+    "people": "People",
+    "started": "Running since",
+    "doctor": "Doctor",
+    "doctorDesc": "Checks git, the data directory, the database, the secret key, SMTP, forges and the AI provider (same as kmdn doctor).",
+    "run": "Run checks",
+    "runAgain": "Run again",
+    "jobs": "Background jobs",
+    "idle": "Nothing queued.",
+    "kind": "Kind",
+    "pending": "Queued",
+    "running": "Running",
+    "failed": "Failed",
+    "failedJobs": "Failed jobs",
+    "attempts_one": "{{count}} attempt",
+    "attempts_other": "{{count}} attempts",
+    "retry": "Retry",
+    "retried": "Queued again."
   }
 }
