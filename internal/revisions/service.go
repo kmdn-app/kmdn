@@ -111,7 +111,7 @@ func (s *Service) AccessFor(ctx context.Context, rev Revision, c Caller) (Access
 	}
 	contrib := c.Role.AtLeast(access.Contributor)
 	maint := c.Role.AtLeast(access.Maintainer)
-	reviewer = reviewer && maint // a reviewer who lost the role can't act as one
+	reviewer = reviewer && contrib // assigned participants need current contributor access
 	a := Access{Member: member, Reviewer: reviewer, CanManage: (member && contrib) || maint}
 	switch rev.State {
 	case Editing:
