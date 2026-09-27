@@ -132,6 +132,83 @@ func TestOpenAIStream(t *testing.T) {
 	}
 }
 
+func TestOpenAIResponsesStream(t *testing.T) {
+	var body map[string]any
+	var path string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &body)
+		if strings.Contains(string(b), "Too long") {
+			sseWrite(w,
+				"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"Part\"}",
+				"event: response.incomplete\ndata: {\"type\":\"response.incomplete\",\"response\":{\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"},\"usage\":{\"input_tokens\":5,\"output_tokens\":7}}}",
+			)
+			return
+		}
+		if strings.Contains(string(b), "Fail") {
+			sseWrite(w, "event: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"code\":\"server_error\",\"message\":\"The server had an error\"}}}")
+			return
+		}
+		sseWrite(w,
+			"event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"status\":\"in_progress\"}}",
+			"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"reasoning\",\"id\":\"rs_1\"}}",
+			"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"On it\"}",
+			"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_a\",\"name\":\"search\",\"arguments\":\"\"}}",
+			"event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_1\",\"delta\":\"{\\\"query\\\":\"}",
+			"event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_a\",\"name\":\"search\",\"arguments\":\"{\\\"query\\\":\\\"laptop\\\"}\"}}",
+			"event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":50,\"input_tokens_details\":{\"cached_tokens\":20},\"output_tokens\":9}}}",
+		)
+	}))
+	defer srv.Close()
+	p := &OpenAI{BaseURL: srv.URL + "/v1", Key: "sk-local", API: "responses"}
+	res, err := Collect(context.Background(), p, ChatRequest{
+		Model: "gpt-x", System: []System{{Text: "Be brief."}}, MaxTokens: 400, ToolChoice: "search",
+		Messages: []Message{
+			Text(RoleUser, "Laptops?"),
+			{Role: RoleAssistant, Content: []Block{{Type: BlockText, Text: "Looking."}, {Type: BlockToolUse, ID: "call_0", Name: "search", Input: json.RawMessage(`{"query":"x"}`)}}},
+			{Role: RoleUser, Content: []Block{{Type: BlockToolResult, ToolUseID: "call_0", Content: "nothing"}}},
+		},
+		Tools: []Tool{{Name: "search", Description: "Search", Schema: json.RawMessage(`{"type":"object"}`)}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != "/v1/responses" || body["instructions"] != "Be brief." || body["store"] != false || body["max_output_tokens"] != float64(400+reasoningHeadroom) {
+		t.Fatalf("request: %s %v", path, body)
+	}
+	tool := body["tools"].([]any)[0].(map[string]any)
+	if tool["type"] != "function" || tool["name"] != "search" || tool["parameters"] == nil || body["tool_choice"].(map[string]any)["name"] != "search" {
+		t.Fatalf("tools: %v %v", body["tools"], body["tool_choice"])
+	}
+	var kinds []string
+	for _, it := range body["input"].([]any) {
+		m := it.(map[string]any)
+		kinds = append(kinds, fmt.Sprint(m["type"], "/", m["role"]))
+	}
+	in := body["input"].([]any)
+	if strings.Join(kinds, ",") != "<nil>/user,<nil>/assistant,function_call/<nil>,function_call_output/<nil>" || in[2].(map[string]any)["call_id"] != "call_0" || in[3].(map[string]any)["output"] != "nothing" {
+		t.Fatalf("input: %v", body["input"])
+	}
+	if res.StopReason != StopToolUse || res.TextOf() != "On it" || len(res.Content) != 2 || string(res.Content[1].Input) != `{"query":"laptop"}` || res.Content[1].ID != "call_a" {
+		t.Fatalf("result: %+v", res)
+	}
+	if res.Usage != (Usage{InputTokens: 30, OutputTokens: 9, CacheReadTokens: 20}) {
+		t.Fatalf("usage: %+v", res.Usage)
+	}
+
+	res, err = Collect(context.Background(), p, ChatRequest{Model: "gpt-x", Messages: []Message{Text(RoleUser, "Too long")}}, nil)
+	if err != nil || res.StopReason != StopMaxTokens || res.TextOf() != "Part" {
+		t.Fatalf("incomplete: %+v %v", res, err)
+	}
+	if _, err := Collect(context.Background(), p, ChatRequest{Model: "gpt-x", Messages: []Message{Text(RoleUser, "Fail")}}, nil); err == nil || !strings.Contains(err.Error(), "The server had an error") {
+		t.Fatalf("failed: %v", err)
+	}
+	if !(&OpenAI{BaseURL: "https://api.openai.com/v1"}).responses() || (&OpenAI{BaseURL: "http://localhost:11434/v1"}).responses() || (&OpenAI{BaseURL: "https://api.openai.com/v1", API: "chat"}).responses() {
+		t.Fatal("API choice")
+	}
+}
+
 func TestOpenAIMaxTokens(t *testing.T) {
 	for base, want := range map[string]string{
 		"https://api.openai.com/v1":    "max_completion_tokens=4496",
