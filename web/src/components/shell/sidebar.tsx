@@ -23,7 +23,7 @@ import { useTheme } from "@/lib/theme";
 import type { ThemeChoice } from "@/theme";
 import { FileTree, OP_MARK } from "./file-tree";
 import { NewRevisionDialog, RevisionPicker, StateDot, StatePill } from "@/components/revision/revision-ui";
-import { useRevisionFiles, useRevisions, useRevisionTree, type RevisionView } from "@/lib/revisions";
+import { usePresence, useRevisionFiles, useRevisions, useRevisionTree, type RevisionView } from "@/lib/revisions";
 import { cn } from "@/lib/utils";
 import { usePalette } from "./command-palette";
 import { ForgeIcon } from "./forge-icon";
@@ -157,6 +157,8 @@ function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; r
   const { t } = useTranslation();
   const files = useRevisionFiles(rev);
   const tree = useRevisionTree(rev);
+  const presence = usePresence(rev);
+  const online = new Set((presence.data ?? []).map((p) => p.id));
   const [allOpen, setAllOpen] = useState(false);
   return (
     <>
@@ -208,7 +210,10 @@ function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; r
       <Section title={t("revision.people")}>
         {rev.members.map((m) => (
           <div key={m.user_id} className={itemCls}>
-            <Avatar name={m.name} id={m.user_id} size="sm" />
+            <span className="relative">
+              <Avatar name={m.name} id={m.user_id} size="sm" />
+              {online.has(m.user_id) && <span className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-success ring-2 ring-sidebar" title={t("presence.online")} />}
+            </span>
             <span className="min-w-0 flex-1 truncate">{m.name}</span>
             {m.role === "owner" && <span className="text-[11px] text-muted-foreground">{t("revision.owner")}</span>}
           </div>

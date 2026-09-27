@@ -81,6 +81,8 @@ export function useRevisionEvents(repo: RepoView, rev: RevisionView | undefined)
         void qc.invalidateQueries({ queryKey: ["revisions", repo.id] });
       } else if (ev.type === "file_content") {
         void qc.invalidateQueries({ queryKey: ["revision-files", id] });
+      } else if (ev.type === "presence") {
+        qc.setQueryData(["presence", id], ev.users as PresenceUser[]);
       }
     });
   }, [qc, repo.id, id, n]);
@@ -118,4 +120,16 @@ export async function uploadAsset(revisionID: string, page: string, file: File):
 /** URL of an image as the revision sees it (its uploads, then the base). */
 export function revisionRawUrl(revisionID: string, path: string) {
   return `/api/v1/revisions/${encodeURIComponent(revisionID)}/raw/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+export type PresenceUser = components["schemas"]["PresenceUser"];
+
+/** Who has pages of the revision open (kept live by useRevisionEvents). */
+export function usePresence(rev: RevisionView | undefined) {
+  return useQuery({
+    queryKey: ["presence", rev?.id],
+    queryFn: async () => (await unwrap(api.GET("/revisions/{revision}/presence", { params: { path: { revision: rev!.id } } }))).items,
+    enabled: !!rev,
+    staleTime: Infinity,
+  });
 }

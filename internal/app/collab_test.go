@@ -168,11 +168,21 @@ func TestCollaborativeEditingOverWebSocket(t *testing.T) {
 		t.Fatalf("manifest before any edit: %v", files)
 	}
 
+	// Revision-wide presence: Sam, editing docs/index.md.
+	if _, pr := samC.do("GET", "/revisions/"+revID+"/presence", nil); toJSON(pr["items"]) != `[{"editing":true,"id":"`+sam.ID+`","name":"Sam","paths":["docs/index.md"]}]` {
+		t.Fatalf("presence: %v", pr)
+	}
+	vw.control(map[string]any{"op": "subscribe-events", "scope": "revision:" + revID})
+	vw.op("events-subscribed")
+
 	// Now the viewer can follow along, read-only.
 	vw.control(map[string]any{"op": "subscribe", "channel": 4, "room": room})
 	if s := vw.op("subscribed"); s["mode"] != "ro" || s["reason"] != "viewer" {
 		t.Fatalf("viewer subscribed: %v", s)
 	}
+	vw.next("presence event with both", func(f frame) bool {
+		return f.kind == realtime.KindEvent && strings.Contains(string(f.payload), `"type":"presence"`) && strings.Contains(string(f.payload), `"Vic"`) && strings.Contains(string(f.payload), `"Sam"`)
+	})
 	sw.send(realtime.KindAwareness, 1, awareness(4242, 1, `{"user":{"name":"Sam"}}`))
 	f := vw.next("awareness", func(f frame) bool {
 		return f.kind == realtime.KindAwareness && strings.Contains(string(f.payload), "Sam")

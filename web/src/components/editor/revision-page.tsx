@@ -7,6 +7,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { DocView } from "@/components/doc/doc-view";
 import { LinksPanel } from "@/components/links-panel";
+import { PresenceStack } from "@/components/revision/presence";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, errorMessage, useMe } from "@/lib/api";
@@ -85,6 +86,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
             }
             actions={
               <>
+                {rev.data && <PresenceStack repo={repo} rev={rev.data} path={path} />}
                 {rev.data && <RevisionPill rev={rev.data} />}
                 <SaveState status={status} />
                 <Button asChild size="sm" variant="outline">

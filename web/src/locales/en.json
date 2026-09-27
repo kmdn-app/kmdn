@@ -548,5 +548,12 @@
       "missing_page": "page not found",
       "missing_anchor": "section not found"
     }
+  },
+  "presence": {
+    "label_one": "{{count}} person in this revision",
+    "label_other": "{{count}} people in this revision",
+    "here": "on this page",
+    "viewing": "viewing",
+    "online": "In the revision now"
   }
 }
