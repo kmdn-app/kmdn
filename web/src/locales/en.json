@@ -134,7 +134,18 @@
     "noRepos": "No repositories yet",
     "noReposAdmin": "Connect a GitHub or GitLab repository to start editing its markdown.",
     "noReposMember": "Ask an admin to connect a repository or give you access to one.",
-    "connect": "Connect a repository"
+    "connect": "Connect a repository",
+    "ask": "What do you want to change?",
+    "askPlaceholder": "Describe a change, or ask anything about {{name}}…",
+    "askHint": "The assistant answers, or proposes a revision",
+    "reviews": "Waiting for your review",
+    "reviewsDesc": "Revisions that asked you to review",
+    "noReviews": "Nothing is waiting for you.",
+    "mine": "Your revisions",
+    "mineDesc": "Revisions you created or joined",
+    "noMine": "You're not in any open revision.",
+    "all": "All",
+    "recentDesc": "Latest changes to Published"
   },
   "errors": {
     "generic": "Something went wrong. Try again.",

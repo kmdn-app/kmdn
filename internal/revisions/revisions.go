@@ -141,7 +141,10 @@ func ByNumber(ctx context.Context, q store.Querier, repoID string, n int) (Revis
 type Filter struct {
 	States []State
 	Member string // only revisions this user edits
-	Limit  int
+	// Reviewer: only revisions in review that ask this user to review and
+	// that they haven't approved in the current round.
+	Reviewer string
+	Limit    int
 }
 
 // List returns a repo's revisions, most recently updated first.
@@ -156,6 +159,12 @@ func List(ctx context.Context, q store.Querier, repoID string, f Filter) ([]Revi
 	}
 	if f.Member != "" {
 		where, args = append(where, "id IN (SELECT revision_id FROM revision_members WHERE user_id = ?)"), append(args, f.Member)
+	}
+	if f.Reviewer != "" {
+		where = append(where, "state = ?",
+			"id IN (SELECT revision_id FROM revision_reviewers WHERE user_id = ? AND removed_at IS NULL)",
+			"NOT EXISTS (SELECT 1 FROM approvals a WHERE a.revision_id = revisions.id AND a.user_id = ? AND a.review_round = revisions.review_round AND a.dismissed_at IS NULL)")
+		args = append(args, string(InReview), f.Reviewer, f.Reviewer)
 	}
 	limit := f.Limit
 	if limit <= 0 || limit > 200 {

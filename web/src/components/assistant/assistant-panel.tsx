@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage, unwrap, useAssistantStatus, useMe } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
+import { openPanel } from "@/lib/media";
 import { atLeast, fileHref, rawUrl, type RepoView } from "@/lib/repos";
 import type { RevisionView } from "@/lib/revisions";
 import { cn } from "@/lib/utils";
@@ -149,6 +150,14 @@ function MessageItem({ m, repo, revision, canStart, onAccept, accepting }: { m: 
  * (docs/specs/08-assistant.md#surfaces). Answers cite pages; asking for a
  * change proposes a revision.
  */
+const THREAD_EVENT = "kmdn:assistant-thread";
+
+/** Opens the right panel on a Q&A thread, e.g. one just started from the repo home. */
+export function showAssistantThread(id: string) {
+  window.dispatchEvent(new CustomEvent<string>(THREAD_EVENT, { detail: id }));
+  openPanel();
+}
+
 export function AssistantPanel({ repo, path, revision }: { repo: RepoView; path?: string; revision?: RevisionView }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
@@ -167,6 +176,11 @@ export function AssistantPanel({ repo, path, revision }: { repo: RepoView; path?
     enabled: !!revision,
   });
   const [threadID, setThreadID] = useState<string | null>(null);
+  useEffect(() => {
+    const show = (e: Event) => setThreadID((e as CustomEvent<string>).detail);
+    window.addEventListener(THREAD_EVENT, show);
+    return () => window.removeEventListener(THREAD_EVENT, show);
+  }, []);
   const current = revision ? (shared.data?.thread.id ?? null) : threadID === "new" ? null : (threadID ?? threads.data?.[0]?.id ?? null);
   const qa = useQuery({
     queryKey: ["assistant-thread", current],

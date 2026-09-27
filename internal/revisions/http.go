@@ -176,6 +176,9 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("mine") == "true" {
 		f.Member = c.User.ID
 	}
+	if r.URL.Query().Get("reviewing") == "true" {
+		f.Reviewer = c.User.ID
+	}
 	list, err := List(r.Context(), s.DB, repo.ID, f)
 	if err != nil {
 		api.Error(w, r, err)
