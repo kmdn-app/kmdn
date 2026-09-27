@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
+import { useInitialPanelTab } from "@/components/shell/right-panel";
 import { DocView } from "@/components/doc/doc-view";
 import { LinksPanel } from "@/components/links-panel";
 import { PresenceStack } from "@/components/revision/presence";
@@ -68,6 +69,9 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
   const onEditor = useCallback((e: Editor | null) => setEditor(e), []);
   const provider = useRoom(rev.data?.id, path);
   const status = useRoomStatus(provider);
+  const suggestionCount = usePendingSuggestions(provider);
+  const openThreads = (threadsQ.data ?? []).filter((x) => x.state === "open").length;
+  const initialTab = useInitialPanelTab(path, threadsQ.isSuccess && (!provider || !!status?.synced || !!status?.error), openThreads + suggestionCount > 0);
   const revID = rev.data?.id;
   const upload = useMemo(
     () =>
@@ -100,7 +104,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
       panel={
         rev.data
           ? {
-              initial: pending || activeThread ? "comments" : "links",
+              initial: pending || activeThread ? "comments" : initialTab,
               links: <LinksPanel repo={repo} path={path} revision={rev.data} />,
               comments: (
                 <CommentsPanel

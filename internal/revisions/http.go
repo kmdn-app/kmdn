@@ -26,9 +26,14 @@ type View struct {
 	Access    Access     `json:"access"`
 	Members   []Member   `json:"members"`
 	Reviewers []Reviewer `json:"reviewers"`
-	Files     int        `json:"file_count"`
+	// Participants took part without being editors or reviewers.
+	Participants []Participant `json:"participants"`
+	Files        int           `json:"file_count"`
 	// UnsavedChanges: the content differs from the last Save all commit.
 	UnsavedChanges bool `json:"unsaved_changes"`
+	// PendingSuggestions: suggestions still to accept or reject (they block
+	// approving and publishing).
+	PendingSuggestions int `json:"pending_suggestions"`
 }
 
 // Routes registers revision endpoints.
@@ -132,11 +137,21 @@ func (s *Service) view(r *http.Request, rev Revision, c Caller) (View, error) {
 	if err := store.QueryRow(r.Context(), s.DB, `SELECT COUNT(*) FROM revision_files WHERE revision_id = ?`, rev.ID).Scan(&n); err != nil {
 		return View{}, err
 	}
+	ps, err := Participants(r.Context(), s.DB, rev.ID)
+	if err != nil {
+		return View{}, err
+	}
 	unsaved, err := Unsaved(r.Context(), s.DB, rev.ID)
 	if err != nil {
 		return View{}, err
 	}
-	return View{Revision: rev, Access: a, Members: ms, Reviewers: rs, Files: n, UnsavedChanges: unsaved}, nil
+	pending := 0
+	if s.PendingSuggestions != nil && rev.State.Open() && rev.State != Publishing {
+		if pending, err = s.PendingSuggestions(r.Context(), rev); err != nil {
+			return View{}, err
+		}
+	}
+	return View{Revision: rev, Access: a, Members: ms, Reviewers: rs, Participants: ps, Files: n, UnsavedChanges: unsaved, PendingSuggestions: pending}, nil
 }
 
 func (s *Service) respond(w http.ResponseWriter, r *http.Request, status int, rev Revision, c Caller) {

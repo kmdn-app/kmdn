@@ -212,14 +212,14 @@ function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; r
         })}
       </Section>
       <Section title={t("revision.people")}>
-        {rev.members.map((m) => (
+        {revisionPeople(rev).map((m) => (
           <div key={m.user_id} className={itemCls}>
             <span className="relative">
               <Avatar name={m.name} id={m.user_id} size="sm" />
               {online.has(m.user_id) && <span className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-success ring-2 ring-sidebar" title={t("presence.online")} />}
             </span>
             <span className="min-w-0 flex-1 truncate">{m.name}</span>
-            {m.role === "owner" && <span className="text-[0.6875rem] text-muted-foreground">{t("revision.owner")}</span>}
+            {m.label && <span className="text-[0.6875rem] text-muted-foreground">{t(m.label)}</span>}
           </div>
         ))}
       </Section>
@@ -378,4 +378,19 @@ function InboxLink({ className, onNavigate }: { className: string; onNavigate?: 
       {unread > 0 && <span className="rounded-full bg-primary px-1.5 text-[0.65625rem] leading-4 font-semibold text-primary-foreground tabular-nums">{unread > 99 ? "99+" : unread}</span>}
     </Link>
   );
+}
+
+/** Everyone in a revision, once each: editors, then reviewers, then people who took part. */
+function revisionPeople(rev: RevisionView): { user_id: string; name: string; label?: string }[] {
+  const out: { user_id: string; name: string; label?: string }[] = [];
+  const seen = new Set<string>();
+  const add = (user_id: string, name: string, label?: string) => {
+    if (seen.has(user_id)) return;
+    seen.add(user_id);
+    out.push({ user_id, name, label });
+  };
+  for (const m of rev.members) add(m.user_id, m.name, m.role === "owner" ? "revision.owner" : undefined);
+  for (const r of rev.reviewers) add(r.user_id, r.name, "revision.reviewer");
+  for (const p of rev.participants) add(p.user_id, p.name, "revision.participant");
+  return out;
 }

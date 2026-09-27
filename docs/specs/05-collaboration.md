@@ -70,7 +70,7 @@ The marks and attributes are the whole record: author and time live in the CRDT 
 
 **Accept** removes the marks (insertion kept, deletion text removed, joins joined). **Reject** does the opposite. Both run on the server (`POST /revisions/{id}/suggestions/resolve`, by id, by author, or all), so editors can resolve while they're read-only In review. Accepted text keeps its Yjs items (marks change in place), so it's still attributed to the suggestion's author. Accept/reject is allowed for revision editors and assigned reviewers (editors keep it while In review) and for a suggestion's own author. Bulk "Accept all from <author>" exists.
 
-The materialized markdown used for diff and publish treats pending suggestions as **not applied**: the serializer rejects them all first (insertions excluded, deletions kept, splits joined back). Publishing is blocked while suggestions are pending. Source mode is read-only on a page with pending suggestions. Edits made outside the editor (link updates, the assistant) diff against the settled page, so blocks they don't touch keep their suggestions.
+The materialized markdown used for diff and publish treats pending suggestions as **not applied**: the serializer rejects them all first (insertions excluded, deletions kept, splits joined back). Approving and publishing are blocked while suggestions are pending. Source mode is read-only on a page with pending suggestions. Edits made outside the editor (link updates, the assistant) diff against the settled page, so blocks they don't touch keep their suggestions.
 
 ## Saving and checkpoints
 

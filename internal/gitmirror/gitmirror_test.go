@@ -185,3 +185,49 @@ func TestAskpass(t *testing.T) {
 		t.Fatalf("%q", b.String())
 	}
 }
+
+// Commits kmdn makes (publishes) credit the people in their trailers.
+func TestBotCommitsCreditCoAuthors(t *testing.T) {
+	ctx := context.Background()
+	rem := newRemote(t)
+	rem.write("docs/a.md", "# A\n\nOne.\n")
+	c1 := rem.commit("Create A")
+	rem.write("docs/a.md", "# A\n\nOne.\n\nTwo.\n")
+	rem.git("add", "-A")
+	rem.git("commit", "--quiet", "--author", "kmdn[bot] <1+kmdn[bot]@users.noreply.github.com>", "-m",
+		"Add two\n\nKmdn-Revision: https://kmdn.example/r/2\nCo-authored-by: Tom Okafor <tom@northwind.dev>\nCo-authored-by: Sam Lindqvist <sam@northwind.dev>\nReviewed-by: Maya Chen <maya@northwind.dev>")
+	c2 := rem.git("rev-parse", "HEAD")
+	rem.write("docs/a.md", "# A\n\nOne.\n\nTwo.\n\nThree.\n")
+	rem.git("add", "-A")
+	rem.git("commit", "--quiet", "--author", "kmdn <kmdn@kmdn.example>", "-m", "Add three (no trailers)")
+
+	g := &Git{}
+	if err := g.CheckVersion(ctx); err != nil {
+		t.Skip(err)
+	}
+	m := &Mirror{Git: g, Path: filepath.Join(t.TempDir(), "a.git"), URL: rem.url(), Branch: "main"}
+	if err := m.Init(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	head, _ := m.Head(ctx)
+	blame, err := m.Blame(ctx, head, "docs/a.md")
+	if err != nil || len(blame) != 7 {
+		t.Fatalf("blame: %+v %v", blame, err)
+	}
+	if b := blame[0]; b.SHA != c1 || b.Author != "Priya Raman" || len(b.CoAuthors) != 0 {
+		t.Fatalf("a person's commit: %+v", b)
+	}
+	if b := blame[4]; b.SHA != c2 || b.Author != "Tom Okafor" || b.Email != "tom@northwind.dev" || strings.Join(b.CoAuthors, ",") != "Sam Lindqvist" {
+		t.Fatalf("kmdn's commit: %+v", b)
+	}
+	if b := blame[6]; b.Author != "kmdn" {
+		t.Fatalf("kmdn's commit without trailers stays kmdn's: %+v", b)
+	}
+	log, err := m.Log(ctx, head, "docs/a.md", 10)
+	if err != nil || len(log) != 3 {
+		t.Fatalf("log: %+v %v", log, err)
+	}
+	if c := log[1]; c.AuthorName != "Tom Okafor" || len(c.CoAuthors) != 1 || c.CoAuthors[0].Name != "Sam Lindqvist" || c.ReviewedBy[0].Name != "Maya Chen" {
+		t.Fatalf("history credit: %+v", c)
+	}
+}

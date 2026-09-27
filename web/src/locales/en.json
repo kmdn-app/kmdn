@@ -528,6 +528,13 @@
     "reviewSoon": "Review and publishing arrive in the next milestone.",
     "editDetails": "Edit title and description",
     "startedBy": "started by {{name}}",
+    "reviewer": "Reviewer",
+    "participant": "Took part",
+    "participated": "Took part · {{what}}",
+    "did": {
+      "edited": "edited",
+      "commented": "commented"
+    },
     "changeRequest": {
       "pr": "Pull request",
       "prDraft": "Draft pull request",
@@ -794,6 +801,10 @@
     "acceptAll": "Accept all",
     "rejectAll": "Reject all",
     "acceptFrom": "Accept all from {{name}}",
+    "toAddress": "Suggestions to address",
+    "toAddressHint": "Accept or reject each one: approval and publishing wait until none are pending.",
+    "blocking_one": "{{count}} pending suggestion: accept or reject it before approving",
+    "blocking_other": "{{count}} pending suggestions: accept or reject them before approving",
     "add": "Add {{text}}",
     "delete": "Delete {{text}}",
     "replace": "Replace {{from}} with {{to}}",

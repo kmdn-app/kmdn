@@ -30,6 +30,7 @@ import { OP_MARK } from "@/components/shell/file-tree";
 import { Avatar } from "@/components/avatar";
 import { Time } from "@/components/time";
 import { StatePill } from "@/components/revision/revision-ui";
+import { RevisionSuggestions } from "@/components/revision/suggestions-panel";
 import { ReviewActions, ReviewersSection } from "@/components/revision/review-actions";
 import { UpdatesBanner } from "@/components/revision/updates";
 import { ReviewSummary } from "@/components/revision/review-summary";
@@ -88,6 +89,7 @@ function Overview() {
                   <UpdatesBanner rev={r} />
                   <Pages repo={repo} rev={r} />
                   <ReviewSummary repo={repo} rev={r} />
+                  <RevisionSuggestions repo={repo} rev={r} />
                   <Checks repo={repo} rev={r} />
                   <RevisionConsistency repo={repo} rev={r} />
                   <ReviewersSection repo={repo} rev={r} />
@@ -533,6 +535,16 @@ function People({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
             )}
           </div>
         ))}
+        {rev.participants.map((p) => (
+          <div key={p.user_id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
+            <Avatar name={p.name} id={p.user_id} />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[0.84375rem] font-medium">{p.name}</div>
+              <div className="truncate text-[0.75rem] text-muted-foreground">{p.email}</div>
+            </div>
+            <span className="text-[0.75rem] text-muted-foreground">{t("revision.participated", { what: p.did.split(",").map((d) => t(`revision.did.${d}`)).join(", ") })}</span>
+          </div>
+        ))}
         {manage && (
           <div className="relative border-t px-4 py-2.5">
             <div className="flex items-center gap-2">
@@ -746,6 +758,14 @@ function Checks({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
     <section>
       <SectionTitle title={t("revision.checks")} />
       <div className="overflow-hidden rounded-xl border text-[0.84375rem]">
+        {rev.pending_suggestions > 0 && (
+          <p className="flex items-start gap-2 border-b px-4 py-2.5">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+            <a href="#suggestions" className="hover:underline">
+              {t("suggestions.blocking", { count: rev.pending_suggestions })}
+            </a>
+          </p>
+        )}
         {conflicted.map((f) => (
           <p key={"c" + f.path} className="flex items-start gap-2 border-b px-4 py-2.5">
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />

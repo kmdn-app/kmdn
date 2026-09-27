@@ -108,3 +108,50 @@ func TestSuggestions(t *testing.T) {
 		t.Fatalf("events: %d", events)
 	}
 }
+
+// Pending suggestions block approval (and publishing) until someone accepts
+// or rejects them.
+func TestPendingSuggestionsBlockApproval(t *testing.T) {
+	a, admin := newApp(t, nil)
+	ctx := context.Background()
+	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
+	signIn(t, a, admin, maya)
+	repoID := connectLocal(t, a, admin, map[string]string{"docs/index.md": "# Handbook\n\nStart here.\n"})
+	sam, _ := users.Create(ctx, a.DB, "sam@northwind.dev", "Sam", false)
+	_ = access.Grant(ctx, a.DB, repoID, "user", sam.ID, access.Contributor)
+	samC := &tc{t: t, base: admin.base, c: newClient()}
+	signIn(t, a, samC, sam)
+	a.Collab.Options.QuietPeriod = 0
+	_, rev := samC.do("POST", "/repos/"+repoID+"/revisions", map[string]any{"title": "Start", "path": "docs/index.md"})
+	revID := rev["id"].(string)
+	rv, _ := revisions.Get(ctx, a.DB, revID)
+	repo, _ := repos.Get(ctx, a.DB, repoID)
+	caller := revisions.Caller{User: sam, Role: access.Contributor}
+	if err := a.Collab.Apply(ctx, repo, rv, caller, "docs/index.md", "# Handbook\n\nStart here.\n\nMore.\n", "human"); err != nil {
+		t.Fatal(err)
+	}
+	doc := fmt.Sprintf(`{"type":"doc","content":[
+		{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Handbook"}]},
+		{"type":"paragraph","content":[{"type":"text","text":"Start here"},{"type":"text","text":" now","marks":[{"type":"insertion","attrs":{"id":"s1","author":%q}}]},{"type":"text","text":"."}]},
+		{"type":"paragraph","content":[{"type":"text","text":"More."}]}]}`, sam.ID)
+	if err := a.Collab.ApplyDoc(ctx, repo, rv, caller, "docs/index.md", json.RawMessage(doc), "human"); err != nil {
+		t.Fatal(err)
+	}
+	a.Collab.FlushRevision(ctx, revID)
+	if code, r := samC.do("POST", "/revisions/"+revID+"/submit", map[string]any{"reviewers": []string{maya.ID}}); code != 200 || r["state"] != "in_review" {
+		t.Fatalf("submit: %d %v", code, r)
+	}
+	if _, v := admin.do("GET", "/revisions/"+revID, nil); v["pending_suggestions"] != float64(1) {
+		t.Fatalf("pending_suggestions: %v", v["pending_suggestions"])
+	}
+	if code, body := admin.do("POST", "/revisions/"+revID+"/approve", nil); code != 409 || body["code"] != "suggestions_pending" {
+		t.Fatalf("approve with a pending suggestion: %d %v", code, body)
+	}
+	// The reviewer accepts it; now she can approve.
+	if code, r := admin.do("POST", "/revisions/"+revID+"/suggestions/resolve", map[string]any{"path": "docs/index.md", "action": "accept"}); code != 200 || r["resolved"] != float64(1) {
+		t.Fatalf("accept: %d %v", code, r)
+	}
+	if code, r := admin.do("POST", "/revisions/"+revID+"/approve", nil); code != 200 || r["state"] != "approved" || r["pending_suggestions"] != float64(0) {
+		t.Fatalf("approve: %d %v", code, r)
+	}
+}
