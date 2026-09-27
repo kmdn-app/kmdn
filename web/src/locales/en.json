@@ -744,7 +744,8 @@
       "rawBlock": "raw block",
       "horizontalRule": "divider",
       "table": "table"
-    }
+    },
+    "viaAssistant": "Assistant for {{name}}"
   },
   "updates": {
     "banner_one": "Published changed {{count}} page in this revision",
@@ -959,6 +960,11 @@
     "startRevision": "Start a revision: {{title}}",
     "start": "Start revision",
     "started": "Started {{title}}",
-    "movesNotice": "This conversation moves into the revision, where its collaborators can see it."
+    "movesNotice": "This conversation moves into the revision, where its collaborators can see it.",
+    "shared": "Shared with everyone in revision #{{number}}",
+    "introRevision": "Ask the assistant to change this revision's pages: its edits are suggestions to accept or reject.",
+    "readOnly": "Only people who can edit this revision can ask the assistant here.",
+    "confirm": "Confirm",
+    "done": "Done"
   }
 }

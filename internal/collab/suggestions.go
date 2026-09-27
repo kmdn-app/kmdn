@@ -214,3 +214,26 @@ func (h *Hub) resolveSuggestions(w http.ResponseWriter, r *http.Request) {
 	}
 	api.JSON(w, http.StatusOK, map[string]any{"resolved": n})
 }
+
+// Suggest proposes markdown as a page's content, as suggestions by attrs
+// (the assistant's edits, on c's behalf; the client is labeled kind).
+func (h *Hub) Suggest(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, markdown string, attrs docengine.SuggestAttrs, kind string) (bool, error) {
+	h.init()
+	room, err := h.room(ctx, repo, rev, p, true, c.User.ID)
+	if err != nil {
+		return false, err
+	}
+	state := room.merged(ctx)
+	if state == nil {
+		return false, errors.New("collab: document unavailable")
+	}
+	client := uint64(rand.Uint32())
+	update, err := h.Engine.YSuggest(ctx, state, markdown, attrs, uint32(client))
+	if err != nil {
+		return false, err
+	}
+	if len(update) <= 2 {
+		return false, nil
+	}
+	return true, room.ingest(ctx, update, []uint64{client}, c, nil, kind)
+}

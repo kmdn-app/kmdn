@@ -14,6 +14,7 @@ import { CONTENT, applyDoc, readDoc, writeDoc } from "./ydoc";
 import { nodeHash } from "./hash";
 import { hasSuggestions, listSuggestions, resolveSuggestions, settledHash } from "./suggestions";
 import { merge3 } from "./merge";
+import { suggestEdit, type EditAttrs } from "./suggest-edit";
 import { extractLinks, rewriteLinks } from "./links";
 import type { DocNode, SourceMap } from "./schema";
 
@@ -92,6 +93,24 @@ const api = {
     // A settled target (no suggestions of its own) leaves blocks whose
     // published content it doesn't change alone, suggestions included.
     d.transact(() => applyDoc(d.getXmlFragment(CONTENT), target, hasSuggestions(target) ? nodeHash : settledHash));
+    return buf(out);
+  },
+  /**
+   * The update that proposes turning the page into `markdown` as
+   * suggestions by `attrsJSON` ({id, author, at?, assistant?}), written by
+   * clientID (the assistant's edit_file). Returns an empty update when
+   * nothing changes.
+   */
+  ySuggest: (update: ArrayBuffer, markdown: string, attrsJSON: string, clientID: number): ArrayBuffer => {
+    const d = load(update);
+    d.clientID = clientID;
+    let out: Uint8Array = new Uint8Array([0, 0]);
+    d.on("update", (u: Uint8Array) => {
+      out = u;
+    });
+    const frag = d.getXmlFragment(CONTENT);
+    const next = suggestEdit(readDoc(frag), parse(markdown).doc, JSON.parse(attrsJSON) as EditAttrs);
+    d.transact(() => applyDoc(frag, next, nodeHash));
     return buf(out);
   },
   /** How many unresolved conflict blocks the page holds. */

@@ -274,7 +274,7 @@ export function setSuggesting(editor: { storage: { suggesting: { enabled: boolea
   editor.storage.suggesting.enabled = on;
 }
 
-export type EditorSuggestion = SuggestionInfo & { from: number; to: number };
+export type EditorSuggestion = SuggestionInfo & { from: number; to: number; assistant?: boolean };
 
 /**
  * Pending suggestions in the editor's document, in order, with the range
@@ -282,10 +282,10 @@ export type EditorSuggestion = SuggestionInfo & { from: number; to: number };
  */
 export function editorSuggestions(doc: PMNode): EditorSuggestion[] {
   const byID = new Map<string, EditorSuggestion>();
-  const get = (a: { id: string; author: string; at?: number }, from: number, to: number) => {
+  const get = (a: { id: string; author: string; at?: number; assistant?: boolean }, from: number, to: number) => {
     let x = byID.get(a.id);
     if (!x) {
-      x = { id: a.id, author: a.author, at: a.at, inserted: "", deleted: "", kinds: [], from, to };
+      x = { id: a.id, author: a.author, at: a.at, inserted: "", deleted: "", kinds: [], from, to, ...(a.assistant ? { assistant: true } : {}) };
       byID.set(a.id, x);
     }
     x.to = Math.max(x.to, to);

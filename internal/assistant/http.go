@@ -28,6 +28,7 @@ func (s *Service) Routes(r chi.Router) {
 		r.Delete("/assistant/threads/{thread}", s.deleteThread)
 		r.Post("/assistant/threads/{thread}/messages", s.postMessage)
 		r.Post("/assistant/threads/{thread}/proposals/{call}/accept", s.acceptProposal)
+		r.Get("/revisions/{revision}/assistant", s.revisionThread)
 	})
 }
 
@@ -138,13 +139,52 @@ func (s *Service) getThread(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
+	api.JSON(w, http.StatusOK, map[string]any{"thread": t, "messages": views(msgs), "running": s.Running(t.ID)})
+}
+
+// views are the messages the UI shows, with confirmed proposals marked.
+func views(msgs []Message) []MessageView {
+	accepted := map[string]bool{}
+	for _, m := range msgs {
+		if strings.HasPrefix(m.RunID, acceptedPrefix) {
+			accepted[strings.TrimPrefix(m.RunID, acceptedPrefix)] = true
+		}
+	}
 	out := make([]MessageView, 0, len(msgs))
 	for _, m := range msgs {
-		if v := view(m); len(v.Parts) > 0 {
+		if v := viewWith(m, accepted); len(v.Parts) > 0 {
 			out = append(out, v)
 		}
 	}
-	api.JSON(w, http.StatusOK, map[string]any{"thread": t, "messages": out, "running": s.Running(t.ID)})
+	return out
+}
+
+// revisionThread returns (creating it the first time) a revision's shared
+// thread, and whether the caller can prompt in it.
+func (s *Service) revisionThread(w http.ResponseWriter, r *http.Request) {
+	p, _ := auth.FromContext(r.Context())
+	rev, err := revisions.Get(r.Context(), s.DB, chi.URLParam(r, "revision"))
+	if err != nil {
+		api.Error(w, r, api.ErrNotFound)
+		return
+	}
+	role, err := access.Effective(r.Context(), s.DB, p.User, rev.RepoID)
+	if err != nil || role == access.None {
+		api.Error(w, r, api.ErrNotFound)
+		return
+	}
+	t, err := RevisionThread(r.Context(), s.DB, rev.RepoID, rev.ID)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	msgs, err := Messages(r.Context(), s.DB, t.ID)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	acc, _ := s.Revisions.AccessFor(r.Context(), rev, revisions.Caller{User: p.User, Role: role})
+	api.JSON(w, http.StatusOK, map[string]any{"thread": t, "messages": views(msgs), "running": s.Running(t.ID), "can_prompt": acc.CanEdit && s.LLM.Enabled(r.Context())})
 }
 
 func (s *Service) deleteThread(w http.ResponseWriter, r *http.Request) {
@@ -199,20 +239,32 @@ func (s *Service) postMessage(w http.ResponseWriter, r *http.Request) {
 	api.JSON(w, http.StatusAccepted, map[string]any{"message": view(m), "queued": s.Running(t.ID)})
 }
 
-// acceptProposal starts the revision a Q&A thread proposed, adds its pages,
-// and moves the conversation into the revision's shared thread.
+// acceptProposal carries out a proposal: in Q&A, starts the revision,
+// adds its pages and moves the conversation into its shared thread; in a
+// revision, applies a rename or delete the assistant proposed.
 func (s *Service) acceptProposal(w http.ResponseWriter, r *http.Request) {
 	t, u, ok := s.thread(w, r)
 	if !ok {
 		return
 	}
-	if t.OwnerID != u.ID {
-		api.Error(w, r, api.ErrNotFound)
-		return
-	}
 	msgs, err := Messages(r.Context(), s.DB, t.ID)
 	if err != nil {
 		api.Error(w, r, err)
+		return
+	}
+	callID := chi.URLParam(r, "call")
+	for _, m := range msgs {
+		if m.RunID == acceptedPrefix+callID {
+			api.Error(w, r, api.Err(http.StatusConflict, "already_done", "That's already done."))
+			return
+		}
+	}
+	if t.RevisionID != "" {
+		s.acceptFileOp(w, r, t, u, msgs, callID)
+		return
+	}
+	if t.OwnerID != u.ID {
+		api.Error(w, r, api.ErrNotFound)
 		return
 	}
 	p, found := findProposal(msgs, chi.URLParam(r, "call"))
@@ -268,7 +320,50 @@ func (s *Service) acceptProposal(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	_, _ = AddMessage(r.Context(), s.DB, t.ID, Message{Role: llm.RoleAssistant, Content: []llm.Block{{Type: llm.BlockText, Text: "Started revision #" + itoa(rev.Number) + ": " + rev.Title + ". The conversation continues there."}}})
+	_, _ = AddMessage(r.Context(), s.DB, t.ID, Message{Role: llm.RoleAssistant, RunID: acceptedPrefix + callID, Content: []llm.Block{{Type: llm.BlockText, Text: "Started revision #" + itoa(rev.Number) + ": " + rev.Title + ". The conversation continues there."}}})
 	s.emit(t.ID, map[string]any{"kind": "message"})
 	api.JSON(w, http.StatusCreated, map[string]any{"revision": rev, "thread": shared})
+}
+
+func (s *Service) acceptFileOp(w http.ResponseWriter, r *http.Request, t Thread, u users.User, msgs []Message, callID string) {
+	var name string
+	var input []byte
+	for _, m := range msgs {
+		for _, b := range m.Content {
+			if b.Type == llm.BlockToolUse && b.ID == callID && fileOps[b.Name] {
+				name, input = b.Name, b.Input
+			}
+		}
+	}
+	if name == "" {
+		api.Error(w, r, api.ErrNotFound)
+		return
+	}
+	rev, err := revisions.Get(r.Context(), s.DB, t.RevisionID)
+	if err != nil {
+		api.Error(w, r, api.ErrNotFound)
+		return
+	}
+	repo, err := repos.Get(r.Context(), s.DB, rev.RepoID)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	role, _ := access.Effective(r.Context(), s.DB, u, repo.ID)
+	done, err := applyFileOp(r.Context(), s, repo, rev, revisions.Caller{User: u, Role: role}, name, input)
+	if err != nil {
+		var cf *revisions.ErrConflict
+		switch {
+		case errors.Is(err, revisions.ErrForbidden):
+			api.Error(w, r, api.Err(http.StatusForbidden, "forbidden", "You can't change this revision's pages right now."))
+		case errors.As(err, &cf):
+			api.Error(w, r, api.Err(http.StatusConflict, cf.Code, cf.Msg))
+		default:
+			api.Error(w, r, err)
+		}
+		return
+	}
+	m, _ := AddMessage(r.Context(), s.DB, t.ID, Message{Role: llm.RoleAssistant, RunID: acceptedPrefix + callID, Content: []llm.Block{{Type: llm.BlockText, Text: done + " (confirmed by " + u.Name + ")"}}})
+	s.emit(t.ID, map[string]any{"kind": "message"})
+	api.JSON(w, http.StatusOK, map[string]any{"message": view(m)})
 }

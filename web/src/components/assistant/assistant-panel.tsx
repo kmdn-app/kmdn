@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ArrowUp, FilePen, Loader2, Plus, Sparkles, Wrench } from "lucide-react";
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage, unwrap, useMe } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
 import { atLeast, fileHref, rawUrl, type RepoView } from "@/lib/repos";
+import type { RevisionView } from "@/lib/revisions";
 import { cn } from "@/lib/utils";
 
 type AssistantMessage = components["schemas"]["AssistantMessage"];
@@ -48,11 +49,13 @@ function useThreadStream(threadID: string | null) {
         case "message":
           setLive((l) => ({ ...l, text: "" }));
           void qc.invalidateQueries({ queryKey: ["assistant-thread", threadID] });
+          void qc.invalidateQueries({ queryKey: ["revision-assistant"] });
           break;
         case "done":
         case "error":
           setLive({ text: "", tools: [], running: false });
           void qc.invalidateQueries({ queryKey: ["assistant-thread", threadID] });
+          void qc.invalidateQueries({ queryKey: ["revision-assistant"] });
           break;
       }
     });
@@ -60,7 +63,7 @@ function useThreadStream(threadID: string | null) {
   return live;
 }
 
-function MessageItem({ m, repo, canStart, onAccept, accepting }: { m: AssistantMessage; repo: RepoView; canStart: boolean; onAccept: (callID: string) => void; accepting: boolean }) {
+function MessageItem({ m, repo, revision, canStart, onAccept, accepting }: { m: AssistantMessage; repo: RepoView; revision?: RevisionView; canStart: boolean; onAccept: (callID: string) => void; accepting: boolean }) {
   const { t } = useTranslation();
   const ctx = useMemo(() => ({ path: "_.md", pageHref: (p: string) => fileHref(repo, p), imageSrc: (p: string) => rawUrl(repo, p) }), [repo]);
   if (m.role === "user") {
@@ -81,6 +84,35 @@ function MessageItem({ m, repo, canStart, onAccept, accepting }: { m: AssistantM
               {p.label}
             </div>
           );
+        if (p.type === "edit")
+          return (
+            <Link
+              key={i}
+              to="/$owner/$repo/$"
+              params={{ owner: repo.owner, repo: repo.name, _splat: p.path ?? "" }}
+              search={revision ? { revision: revision.number } : {}}
+              className="flex items-center gap-1.5 justify-self-start rounded-md border px-2 py-1 text-[12px] hover:bg-accent"
+            >
+              <FilePen className="size-3.5 text-muted-foreground" />
+              {p.label}
+            </Link>
+          );
+        if (p.type === "file_op")
+          return (
+            <div key={i} className="grid gap-2 rounded-xl border bg-card p-3 text-[13px]">
+              <span className="font-medium">{p.label}</span>
+              {p.accepted ? (
+                <span className="text-[12px] text-success">{t("assistant.done")}</span>
+              ) : (
+                canStart && (
+                  <Button size="sm" variant="outline" className="justify-self-start" disabled={accepting} onClick={() => onAccept(p.call_id!)}>
+                    {accepting && <Loader2 className="animate-spin" />}
+                    {t("assistant.confirm")}
+                  </Button>
+                )
+              )}
+            </div>
+          );
         if (p.type === "proposal" && p.proposal)
           return (
             <div key={i} className="grid gap-2 rounded-xl border bg-card p-3">
@@ -96,7 +128,7 @@ function MessageItem({ m, repo, canStart, onAccept, accepting }: { m: AssistantM
                   </span>
                 ))}
               </div>
-              {canStart && (
+              {canStart && !p.accepted && (
                 <Button size="sm" className="justify-self-start" disabled={accepting} onClick={() => onAccept(p.call_id!)}>
                   {accepting && <Loader2 className="animate-spin" />}
                   {t("assistant.start")}
@@ -120,7 +152,7 @@ function MessageItem({ m, repo, canStart, onAccept, accepting }: { m: AssistantM
  * (docs/specs/08-assistant.md#surfaces). Answers cite pages; asking for a
  * change proposes a revision.
  */
-export function AssistantPanel({ repo, path }: { repo: RepoView; path?: string }) {
+export function AssistantPanel({ repo, path, revision }: { repo: RepoView; path?: string; revision?: RevisionView }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
   const qc = useQueryClient();
@@ -129,15 +161,23 @@ export function AssistantPanel({ repo, path }: { repo: RepoView; path?: string }
   const threads = useQuery({
     queryKey: ["assistant-threads", repo.id],
     queryFn: async () => (await unwrap(api.GET("/repos/{repo}/assistant/threads", { params: { path: { repo: repo.id } } }))).items,
-    enabled: !!status.data?.enabled,
+    enabled: !!status.data?.enabled && !revision,
+  });
+  // In a revision: its one shared thread.
+  const shared = useQuery({
+    queryKey: ["revision-assistant", revision?.id],
+    queryFn: () => unwrap(api.GET("/revisions/{revision}/assistant", { params: { path: { revision: revision!.id } } })),
+    enabled: !!revision,
   });
   const [threadID, setThreadID] = useState<string | null>(null);
-  const current = threadID === "new" ? null : (threadID ?? threads.data?.[0]?.id ?? null);
-  const thread = useQuery({
+  const current = revision ? (shared.data?.thread.id ?? null) : threadID === "new" ? null : (threadID ?? threads.data?.[0]?.id ?? null);
+  const qa = useQuery({
     queryKey: ["assistant-thread", current],
     queryFn: () => unwrap(api.GET("/assistant/threads/{thread}", { params: { path: { thread: current! } } })),
-    enabled: !!current,
+    enabled: !!current && !revision,
   });
+  const thread = revision ? shared : qa;
+  const canPrompt = revision ? !!shared.data?.can_prompt : true;
   const live = useThreadStream(current);
   const [text, setText] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -156,14 +196,19 @@ export function AssistantPanel({ repo, path }: { repo: RepoView; path?: string }
     onSuccess: () => {
       setText("");
       void qc.invalidateQueries({ queryKey: ["assistant-thread", current] });
+      void qc.invalidateQueries({ queryKey: ["revision-assistant"] });
     },
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
   });
   const accept = useMutation({
     mutationFn: (callID: string) => unwrap(api.POST("/assistant/threads/{thread}/proposals/{call}/accept", { params: { path: { thread: current!, call: callID } } })),
     onSuccess: (r) => {
-      toast.success(t("assistant.started", { title: r.revision.title }));
-      void navigate({ to: "/$owner/$repo/revisions/$number", params: { owner: repo.owner, repo: repo.name, number: String(r.revision.number) } });
+      void qc.invalidateQueries({ queryKey: ["revision-assistant"] });
+      void qc.invalidateQueries({ queryKey: ["revision-files"] });
+      if ("revision" in r && r.revision) {
+        toast.success(t("assistant.started", { title: r.revision.title }));
+        void navigate({ to: "/$owner/$repo/revisions/$number", params: { owner: repo.owner, repo: repo.name, number: String(r.revision.number) } });
+      }
     },
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
   });
@@ -183,6 +228,9 @@ export function AssistantPanel({ repo, path }: { repo: RepoView; path?: string }
   }
   return (
     <div className="-m-3.5 flex h-[calc(100%+1.75rem)] flex-col">
+      {revision ? (
+        <div className="border-b px-3.5 py-2.5 text-[12px] text-muted-foreground">{t("assistant.shared", { number: revision.number })}</div>
+      ) : (
       <div className="flex items-center gap-1.5 border-b px-3 py-2">
         <Select value={current ?? "new"} onValueChange={(v) => setThreadID(v)}>
           <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label={t("assistant.conversations")}>
@@ -201,16 +249,17 @@ export function AssistantPanel({ repo, path }: { repo: RepoView; path?: string }
           <Plus />
         </Button>
       </div>
+      )}
       <div className="min-h-0 flex-1 overflow-auto px-3.5 py-3">
-        {!current && (
+        {!current && !revision && (
           <div className="grid justify-items-center gap-2 py-10 text-center text-[13px] text-muted-foreground">
             <Sparkles className="size-5" />
-            <p>{t("assistant.intro")}</p>
+            <p>{revision ? t("assistant.introRevision") : t("assistant.intro")}</p>
           </div>
         )}
         <div className="grid gap-4">
           {msgs.map((m) => (
-            <MessageItem key={m.id} m={m} repo={repo} canStart={atLeast(repo.role, "contributor")} onAccept={(id) => accept.mutate(id)} accepting={accept.isPending} />
+            <MessageItem key={m.id} m={m} repo={repo} revision={revision} canStart={revision ? canPrompt : atLeast(repo.role, "contributor")} onAccept={(id) => accept.mutate(id)} accepting={accept.isPending} />
           ))}
           {running && (
             <div className="grid gap-1.5">
@@ -233,7 +282,9 @@ export function AssistantPanel({ repo, path }: { repo: RepoView; path?: string }
         </div>
         <div ref={endRef} />
       </div>
+      {!canPrompt && <p className="border-t p-3 text-[12.5px] text-muted-foreground">{t("assistant.readOnly")}</p>}
       <form
+        hidden={!canPrompt}
         className="border-t p-3"
         onSubmit={(e) => {
           e.preventDefault();

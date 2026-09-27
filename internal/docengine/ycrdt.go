@@ -398,3 +398,23 @@ func (e *Engine) PlainText(ctx context.Context, markdown string) (string, error)
 		return out.String(), nil
 	})
 }
+
+// SuggestAttrs identifies a suggestion the server writes (the assistant's edits).
+type SuggestAttrs struct {
+	ID        string `json:"id"`
+	Author    string `json:"author"`
+	At        int64  `json:"at,omitempty"`
+	Assistant bool   `json:"assistant,omitempty"`
+}
+
+// YSuggest returns the update proposing markdown as the page's content, as
+// suggestions, written by clientID.
+func (e *Engine) YSuggest(ctx context.Context, state []byte, markdown string, attrs SuggestAttrs, clientID uint32) ([]byte, error) {
+	if len(markdown) > e.opts.MaxInputBytes {
+		return nil, ErrTooLarge
+	}
+	aj, _ := json.Marshal(attrs)
+	return e.binCall(ctx, "ySuggest", len(state), func(v *vm) []goja.Value {
+		return []goja.Value{bin(v, state), v.rt.ToValue(markdown), v.rt.ToValue(string(aj)), v.rt.ToValue(clientID)}
+	})
+}

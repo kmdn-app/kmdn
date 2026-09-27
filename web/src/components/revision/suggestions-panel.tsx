@@ -36,7 +36,7 @@ function Card({ s, name, canResolve, busy, onResolve, onFocus }: { s: EditorSugg
     <div role="button" tabIndex={0} onClick={onFocus} onKeyDown={(e) => e.key === "Enter" && onFocus()} className="grid gap-1.5 rounded-lg border border-dashed bg-card p-3 text-left">
       <div className="flex items-center gap-2 text-[12.5px]">
         <Avatar name={name} id={s.author} size="xs" />
-        <span className="font-medium">{name}</span>
+        <span className="font-medium">{s.assistant ? t("suggestions.viaAssistant", { name }) : name}</span>
         {s.at && <Time iso={new Date(s.at).toISOString()} className="text-muted-foreground" />}
         {canResolve && (
           <span className="ml-auto flex gap-0.5">

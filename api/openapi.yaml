@@ -1683,6 +1683,27 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/assistant:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [assistant]
+      operationId: getRevisionAssistant
+      summary: The revision's shared assistant thread (created on first use) and whether the caller can prompt
+      responses:
+        "200":
+          description: Thread
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [thread, messages, running, can_prompt]
+                properties:
+                  thread: { $ref: "#/components/schemas/AssistantThread" }
+                  messages: { type: array, items: { $ref: "#/components/schemas/AssistantMessage" } }
+                  running: { type: boolean }
+                  can_prompt: { type: boolean }
+        "404": { $ref: "#/components/responses/Problem" }
   /assistant/threads/{thread}/proposals/{call}/accept:
     parameters:
       - { name: thread, in: path, required: true, schema: { type: string } }
@@ -1690,8 +1711,17 @@ paths:
     post:
       tags: [assistant]
       operationId: acceptAssistantProposal
-      summary: Start the revision the assistant proposed and move the conversation into it
+      summary: Carry out a proposal (Q&A starts the revision and moves the conversation; in a revision thread it applies a rename or delete)
       responses:
+        "200":
+          description: The file operation was applied
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { $ref: "#/components/schemas/AssistantMessage" }
         "201":
           description: The revision and its shared thread
           content:
@@ -2220,7 +2250,10 @@ components:
             type: object
             required: [type]
             properties:
-              type: { type: string, enum: [text, tool, proposal] }
+              type: { type: string, enum: [text, tool, proposal, edit, file_op] }
+              path: { type: string }
+              to: { type: string }
+              accepted: { type: boolean }
               text: { type: string }
               tool: { type: string }
               label: { type: string }

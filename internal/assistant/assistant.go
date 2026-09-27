@@ -41,6 +41,7 @@ type Service struct {
 	Search    *search.Index
 	Links     *links.Service
 	Engine    *docengine.Engine
+	Docs      Docs
 	// Publish sends live events (realtime.Hub.Publish).
 	Publish func(scope string, event map[string]any)
 	Log     *slog.Logger
@@ -146,11 +147,23 @@ func (s *Service) run(ctx context.Context, t Thread, msgs []Message) {
 	defer cancel()
 
 	tools := append([]llm.Tool{}, readTools...)
+	e := env{s: s, repo: repo, caller: revisions.Caller{User: u, Role: role}}
+	system := s.system(repo, u, role, last.Context)
 	if t.RevisionID == "" {
 		tools = append(tools, proposeTool)
+		system[len(system)-1].Text += qaNote + "\n"
+	} else {
+		rev, err := revisions.Get(ctx, s.DB, t.RevisionID)
+		if err != nil {
+			s.errorMessage(ctx, t, runID, "This revision is gone.")
+			_ = s.LLM.FinishRun(ctx, runID, llm.Usage{}, nil, "error", err.Error())
+			return
+		}
+		e.rev = &rev
+		tools = append(tools, writeTools...)
+		system = append(system, llm.System{Text: s.revisionContext(ctx, rev)})
 	}
-	req := llm.ChatRequest{Model: model, System: s.system(repo, u, role, last.Context), Tools: tools, MaxTokens: 4096, Messages: conversation(msgs, t.RevisionID != "")}
-	e := env{s: s, repo: repo}
+	req := llm.ChatRequest{Model: model, System: system, Tools: tools, MaxTokens: 8192, Messages: conversation(msgs, t.RevisionID != "")}
 	var usage llm.Usage
 	var called []string
 	status, errText := "done", ""
@@ -271,10 +284,12 @@ How to answer:
 	return []llm.System{{Text: stable, Cache: true}, {Text: s.turn(u, role, cx)}}
 }
 
+// qaNote tells a Q&A thread how to hand changes off.
+const qaNote = "When they ask for a change, call propose_revision with a title, what will change and the pages; don't write out the edit first. They confirm and continue in the revision."
+
 func (s *Service) turn(u users.User, role access.Role, cx Context) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "You're talking with %s (%s role on this repository). Today is %s.\n", u.Name, role, time.Now().UTC().Format("Monday 2 January 2006"))
-	b.WriteString("When they ask for a change, call propose_revision with a title, what will change and the pages; don't write out the edit first. They confirm and continue in the revision.\n")
 	if cx.Path != "" {
 		fmt.Fprintf(&b, "They're reading %s.\n", cx.Path)
 	}
@@ -321,4 +336,25 @@ func findProposal(msgs []Message, callID string) (Proposal, bool) {
 		}
 	}
 	return Proposal{}, false
+}
+
+// revisionContext describes the revision a shared thread works in.
+func (s *Service) revisionContext(ctx context.Context, rev revisions.Revision) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "You're working in revision #%d “%s” (%s), shared with its collaborators: several people may write here; each message says who.\n", rev.Number, rev.Title, strings.ReplaceAll(string(rev.State), "_", " "))
+	if files, err := revisions.Files(ctx, s.DB, rev.ID); err == nil && len(files) > 0 {
+		b.WriteString("Pages in the revision:\n")
+		for _, f := range files {
+			if f.FromPath != "" {
+				fmt.Fprintf(&b, "- %s (%s from %s)\n", f.Path, f.Op, f.FromPath)
+			} else {
+				fmt.Fprintf(&b, "- %s (%s)\n", f.Path, f.Op)
+			}
+		}
+	}
+	b.WriteString(`Everything you change is a suggestion people accept or reject; nothing is applied silently.
+- Read a page before editing it. Use edit_file with small, exact find/replace edits (find must match the page's markdown exactly once); use new_markdown only to rewrite a page.
+- create_file adds a page; rename_file and delete_file are proposals the person confirms.
+- Say briefly what you changed and where when you're done.`)
+	return b.String()
 }
