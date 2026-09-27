@@ -536,7 +536,9 @@
       "change_request_closed": "The pull request was closed without merging",
       "thread_opened": "commented on {{path}}",
       "suggestions_accepted": "accepted suggestions in {{path}}",
-      "suggestions_rejected": "rejected suggestions in {{path}}"
+      "suggestions_rejected": "rejected suggestions in {{path}}",
+      "update_available": "Published changed pages in this revision",
+      "updates_applied": "applied updates from Published"
     },
     "updateLinks_one": "Update {{count}} link in {{pages}} page",
     "updateLinks_other": "Update {{count}} links in {{pages}} pages",
@@ -730,5 +732,38 @@
       "horizontalRule": "divider",
       "table": "table"
     }
+  },
+  "updates": {
+    "banner_one": "Published changed {{count}} page in this revision",
+    "banner_other": "Published changed {{count}} pages in this revision",
+    "blocking": "Approving and publishing wait until the updates are applied.",
+    "review": "Review and apply",
+    "title": "Updates from Published",
+    "clean": "Merges cleanly",
+    "conflicts_one": "{{count}} conflict",
+    "conflicts_other": "{{count}} conflicts",
+    "kinds": {
+      "deleted_upstream": "Deleted on Published",
+      "deleted_both": "Deleted on both"
+    },
+    "note": "Applying saves a checkpoint first and resets approvals.",
+    "noteConflicts": "Applying saves a checkpoint first and resets approvals. Conflicts show both versions in the page, and a revision in review goes back to Editing until they're resolved.",
+    "notNow": "Not now",
+    "apply": "Apply updates",
+    "applied_one": "Applied updates to {{count}} page",
+    "applied_other": "Applied updates to {{count}} pages",
+    "appliedConflicts_one": "Updates applied with {{count}} conflict to resolve",
+    "appliedConflicts_other": "Updates applied with {{count}} conflicts to resolve",
+    "waitEditors": "An editor of this revision applies them.",
+    "waitReviewers": "An assigned reviewer applies them.",
+    "sides": {
+      "published": "Published",
+      "revision": "This revision"
+    },
+    "pages_one": "{{count}} page of this revision changed on Published.",
+    "pages_other": "{{count}} pages of this revision changed on Published.",
+    "conflictCount_one": "{{count}} conflict with this revision's edits.",
+    "conflictCount_other": "{{count}} conflicts with this revision's edits.",
+    "noConflicts": "Everything merges cleanly."
   }
 }

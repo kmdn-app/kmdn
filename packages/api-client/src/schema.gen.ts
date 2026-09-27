@@ -1362,6 +1362,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** The pending update from Published (null when there is none) */
+        get: operations["getRevisionUpdate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/updates/{update}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                update: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply the pending update (checkpoint, merge into each page, move the base) */
+        post: operations["applyRevisionUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/revisions/{revision}/suggestions": {
         parameters: {
             query?: never;
@@ -1785,6 +1824,31 @@ export interface components {
             from_path?: string;
             base: string;
             content: string;
+            additions: number;
+            deletions: number;
+            hunks: components["schemas"]["DiffHunk"][];
+        };
+        RevisionUpdate: {
+            id: string;
+            target_sha: string;
+            /** Format: date-time */
+            prepared_at: string;
+            conflicts: number;
+            last_commit?: {
+                sha: string;
+                author_name: string;
+                title: string;
+                /** Format: date-time */
+                date: string;
+            };
+            files: components["schemas"]["RevisionUpdateFile"][];
+        };
+        RevisionUpdateFile: {
+            path: string;
+            /** @enum {string} */
+            kind: "merge" | "deleted_upstream" | "deleted_both";
+            conflicts: number;
+            /** @description What Published changed */
             additions: number;
             deletions: number;
             hunks: components["schemas"]["DiffHunk"][];
@@ -4664,6 +4728,61 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    getRevisionUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending update and whether the caller can apply it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        update: components["schemas"]["RevisionUpdate"] | null;
+                        can_apply: boolean;
+                    };
+                };
+            };
+        };
+    };
+    applyRevisionUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                update: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What applying did */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        files: number;
+                        conflicts: number;
+                        /** @description Sent back to Editing because of conflicts */
+                        reopened: boolean;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     listSuggestions: {

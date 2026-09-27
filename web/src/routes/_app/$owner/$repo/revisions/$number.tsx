@@ -29,6 +29,7 @@ import { Avatar } from "@/components/avatar";
 import { Time } from "@/components/time";
 import { StatePill } from "@/components/revision/revision-ui";
 import { ReviewActions, ReviewersSection } from "@/components/revision/review-actions";
+import { UpdatesBanner } from "@/components/revision/updates";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -79,6 +80,7 @@ function Overview() {
               {r && (
                 <>
                   <Header repo={repo} rev={r} />
+                  <UpdatesBanner rev={r} />
                   <Pages repo={repo} rev={r} />
                   <Checks repo={repo} rev={r} />
                   <ReviewersSection repo={repo} rev={r} />

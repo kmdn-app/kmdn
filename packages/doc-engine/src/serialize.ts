@@ -1,5 +1,6 @@
 import { toMarkdown, type Options } from "mdast-util-to-markdown";
 import { withoutSuggestions } from "./suggestions";
+import { withoutConflicts } from "./merge";
 import { gfmToMarkdown } from "mdast-util-gfm";
 import { frontmatterToMarkdown } from "mdast-util-frontmatter";
 import { mathToMarkdown } from "mdast-util-math";
@@ -14,8 +15,9 @@ import { MARK_ORDER, defaultStyle, type BlockNode, type DocNode, type InlineNode
  * of a file never change. See docs/specs/04-doc-engine.md#markdown-fidelity-the-core-requirement.
  */
 export function serialize(doc: DocNode, sourceMap?: SourceMap): string {
-  // Pending suggestions aren't part of the page yet.
-  doc = withoutSuggestions(doc);
+  // Pending suggestions aren't part of the page yet; unresolved conflicts
+  // show the revision's side.
+  doc = withoutConflicts(withoutSuggestions(doc));
   const style = sourceMap?.style ?? defaultStyle;
   const nl = style.lineEnding;
   const blocks = doc.content;

@@ -76,11 +76,11 @@ On every target-branch update (webhook → fetch → new head `H`):
 2. If the intersection is empty, fast-forward: `base_sha = H`, no user action, nothing shown.
 3. Otherwise enqueue a **prepare-update job** per touched path:
    - `theirs = blob at H`, `base = base_md`, `ours = materialized revision markdown`.
-   - Run `docengine.Merge3(base, ours, theirs)`: a block-aware 3-way merge (blocks aligned by source map + content hashes, then line-level diff3 inside a changed block).
+   - Run `docengine.Merge3(base, ours, theirs)`: a block-aware 3-way merge (blocks aligned by content hash, then line-level diff3 inside a chunk both sides changed). Unlike git, changes to neighbouring blocks or lines merge; only changes to overlapping ranges (or two insertions at the same place) conflict.
    - Store the result as a **pending update** (`revision_updates` row): target sha, per-file merged markdown, list of incoming hunks, list of conflicts. Nothing touches the Y.Doc yet.
 4. Structural cases are recorded in the pending update:
    - File deleted on Published but edited in the revision → conflict "Deleted on Published" (Keep this revision / Accept deletion).
-   - File renamed on Published (git rename detection ≥ 50% similarity) → the revision's file follows the rename.
+   - File renamed on Published (git rename detection ≥ 50% similarity) → the revision's file follows the rename. *v1 doesn't detect renames yet: a rename shows as "Deleted on Published" for a page the revision edits.*
    - File created on Published at a path the revision also creates → conflict.
 5. If Published moves again before the update is applied, the pending update is recomputed against the new head (one pending update per revision at a time).
 
@@ -98,7 +98,8 @@ On every target-branch update (webhook → fetch → new head `H`):
 
 - Who: any revision editor while Editing; an assigned reviewer while In review or Approved.
 - A checkpoint is recorded, then kmdn applies `diff(ours, merged)` to each Y.Doc as one system transaction attributed to `kmdn-sync` on behalf of the person who applied it (never credited as authorship). If collaborators edited in the meantime, the diff is recomputed against the current state before applying.
-- Clean hunks go in directly. Conflicted regions become `conflict` nodes holding both versions.
+- Clean hunks go in directly. Conflicted regions become `conflict` nodes holding both versions (a Published side and a This revision side). Until resolved, the page materializes with the revision's side.
+- Blocks the merge doesn't change keep their pending suggestions; blocks it rewrites (or a paragraph with a pending split) lose them, as if rejected.
 - `base_sha = H`, `base_md` updated. Activity: "Tom applied updates from Published (2 pages, 1 conflict)".
 - Content changed, so approvals reset (see [07](07-review.md#who-can-do-what-by-state)).
 - If the update brought conflicts into an In review or Approved revision, it returns to **Editing** with `has_conflicts`.

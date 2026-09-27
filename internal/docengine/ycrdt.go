@@ -331,3 +331,34 @@ func (e *Engine) jsonCall(ctx context.Context, name string, state []byte) (strin
 		return out.String(), nil
 	})
 }
+
+// MergeResult is a page merged three ways (updates from Published): a JSON
+// document, with conflict nodes where both sides changed the same blocks.
+type MergeResult struct {
+	Doc       json.RawMessage `json:"doc"`
+	Conflicts int             `json:"conflicts"`
+}
+
+// Merge3 merges Published's changes (base → theirs) into a revision's page (base → ours).
+func (e *Engine) Merge3(ctx context.Context, base, ours, theirs string) (MergeResult, error) {
+	if len(base)+len(ours)+len(theirs) > 3*e.opts.MaxInputBytes {
+		return MergeResult{}, ErrTooLarge
+	}
+	s, err := run(ctx, e, func(v *vm) (string, error) {
+		f, err := v.fn("merge3")
+		if err != nil {
+			return "", err
+		}
+		out, err := f(goja.Undefined(), v.rt.ToValue(base), v.rt.ToValue(ours), v.rt.ToValue(theirs))
+		if err != nil {
+			return "", err
+		}
+		return out.String(), nil
+	})
+	if err != nil {
+		return MergeResult{}, err
+	}
+	var m MergeResult
+	err = json.Unmarshal([]byte(s), &m)
+	return m, err
+}

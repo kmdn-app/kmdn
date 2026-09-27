@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/setup"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/threads"
+	"github.com/kmdn-app/kmdn/internal/updates"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -57,6 +59,7 @@ type App struct {
 	Links     *links.Service
 	Publish   *publish.Service
 	Threads   *threads.Service
+	Updates   *updates.Service
 	Invites   *invites.Service
 }
 
@@ -145,6 +148,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		},
 	}
 	a.Threads.Routes(r)
+	a.Updates = &updates.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Engine: eng, Docs: collabDocs{a}, Jobs: a.Jobs, Publish: a.Realtime.Publish, Log: log}
+	a.Updates.Register()
+	a.Updates.Routes(r)
 	a.Links = &links.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Engine: eng, Jobs: a.Jobs, Log: log}
 	a.Links.Register()
 	a.Links.Routes(r, links.ApplierFunc(func(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, md, kind string) error {
@@ -221,6 +227,13 @@ func (d collabDocs) FlushRevision(ctx context.Context, revID string) {
 }
 func (d collabDocs) StateOf(ctx context.Context, revID, p string) (string, []byte, error) {
 	return d.a.Collab.StateOf(ctx, revID, p)
+}
+func (d collabDocs) ApplyDoc(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p string, doc json.RawMessage, kind string) error {
+	return d.a.Collab.ApplyDoc(ctx, repo, rev, c, p, doc, kind)
+}
+func (d collabDocs) CheckpointBeforeUpdate(ctx context.Context, rev revisions.Revision, by string) error {
+	_, err := d.a.Collab.Checkpoint(ctx, rev, by, "", collab.CheckpointPreUpdate)
+	return err
 }
 
 // originOf returns scheme://host of the base URL (the only allowed WebSocket Origin).
