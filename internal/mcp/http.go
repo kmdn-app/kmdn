@@ -17,6 +17,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/orghttp"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
 )
@@ -100,10 +101,11 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// Routes registers the admin console's agent key endpoints.
-func (s *Service) Routes(r chi.Router) {
+// OrgRoutes registers the org console's agent key endpoints (under
+// /orgs/{org}).
+func (s *Service) OrgRoutes(r chi.Router) {
 	r.Group(func(r chi.Router) {
-		r.Use(auth.RequireAdmin)
+		r.Use(orghttp.RequireAdmin)
 		r.Get("/admin/agent-keys", s.list)
 		r.Post("/admin/agent-keys", s.create)
 		r.Post("/admin/agent-keys/{id}/revoke", s.revoke)
@@ -112,7 +114,7 @@ func (s *Service) Routes(r chi.Router) {
 }
 
 func (s *Service) list(w http.ResponseWriter, r *http.Request) {
-	keys, err := ListKeys(r.Context(), s.DB)
+	keys, err := ListKeys(r.Context(), s.DB, orghttp.Current(r).ID)
 	if err != nil {
 		api.Error(w, r, err)
 		return
@@ -197,20 +199,26 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 			api.Error(w, r, err)
 			return
 		}
-		if len(list) != len(dedupe(in.RepoIDs)) {
-			api.Error(w, r, api.Invalid("repo_ids", "One of these repositories doesn't exist."))
+		inOrg := 0
+		for _, rp := range list {
+			if rp.OrgID == orghttp.Current(r).ID {
+				inOrg++
+			}
+		}
+		if inOrg != len(dedupe(in.RepoIDs)) {
+			api.Error(w, r, api.Invalid("repo_ids", "One of these repositories doesn't exist in this organization."))
 			return
 		}
 		in.RepoIDs = dedupe(in.RepoIDs)
 	}
-	k, token, err := CreateKey(r.Context(), s.DB, NewKey{Name: in.Name, Description: strings.TrimSpace(in.Description), AllRepos: in.AllRepos, RepoIDs: in.RepoIDs,
+	k, token, err := CreateKey(r.Context(), s.DB, NewKey{OrgID: orghttp.Current(r).ID, Name: in.Name, Description: strings.TrimSpace(in.Description), AllRepos: in.AllRepos, RepoIDs: in.RepoIDs,
 		ExpiresIn: time.Duration(days) * 24 * time.Hour, CreatedBy: p.User.ID})
 	if err != nil {
 		api.Error(w, r, err)
 		return
 	}
 	k.CreatorName, k.Usage = p.User.Name, make([]int, 14)
-	_ = audit.Write(r.Context(), s.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, Action: "agent_key.created", TargetType: "agent_key", TargetID: k.ID,
+	_ = audit.Write(r.Context(), s.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: k.OrgID, Action: "agent_key.created", TargetType: "agent_key", TargetID: k.ID,
 		Data: map[string]any{"name": k.Name, "all_repos": k.AllRepos, "repo_ids": k.RepoIDs, "expires_in_days": days}})
 	api.JSON(w, http.StatusCreated, map[string]any{"key": k, "token": token, "config": s.Config(k, token)})
 }
@@ -230,6 +238,10 @@ func dedupe(ids []string) []string {
 func (s *Service) revoke(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
 	id := chi.URLParam(r, "id")
+	if k, err := GetKey(r.Context(), s.DB, id); err != nil || k.OrgID != orghttp.Current(r).ID {
+		api.Error(w, r, api.Err(http.StatusConflict, "not_active", "This key doesn't exist or is already revoked."))
+		return
+	}
 	if err := RevokeKey(r.Context(), s.DB, id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			api.Error(w, r, api.Err(http.StatusConflict, "not_active", "This key doesn't exist or is already revoked."))
@@ -238,14 +250,14 @@ func (s *Service) revoke(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
-	_ = audit.Write(r.Context(), s.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, Action: "agent_key.revoked", TargetType: "agent_key", TargetID: id})
+	_ = audit.Write(r.Context(), s.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: orghttp.Current(r).ID, Action: "agent_key.revoked", TargetType: "agent_key", TargetID: id})
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // calls lists a key's recent MCP calls from the audit log.
 func (s *Service) calls(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, err := GetKey(r.Context(), s.DB, id); err != nil {
+	if k, err := GetKey(r.Context(), s.DB, id); err != nil || k.OrgID != orghttp.Current(r).ID {
 		api.Error(w, r, api.ErrNotFound)
 		return
 	}

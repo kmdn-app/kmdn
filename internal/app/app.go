@@ -264,15 +264,15 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Server.Mount("/ws", a.AuthH.Middleware(a.Realtime))
 	a.Server.Mount("/hooks", a.Repos.WebhookHandler())
 	a.MCP = &mcp.Service{DB: db, Repos: a.Repos, Search: &idx.Index, Links: a.Links, Engine: eng, BaseURL: a.Repos.BaseURL, Log: log}
-	a.MCP.Routes(r)
 	a.Server.Mount("/mcp", a.MCP.Handler(a.AuthH.TrustedProxies))
 	people := &admin.People{DB: db, Auth: a.Auth, Log: log}
 	people.Routes(r)
 	a.Orgs = &orghttp.Service{DB: db, AllowCreate: cfg.Orgs.AllowCreate, Log: log}
-	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes)
+
 	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL}
 	a.Invites.Routes(r)
+	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes, a.Invites.OrgRoutes, a.MCP.OrgRoutes)
 	(&linking.Service{DB: db, Secrets: sec, AuthH: a.AuthH, BaseURL: a.Repos.BaseURL, HTTP: a.Repos.Adapters.HTTP}).Routes(r)
 	if _, err := repos.EnsureGitHost(ctx, db); err != nil {
 		db.Close()

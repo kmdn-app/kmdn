@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/kmdn-app/kmdn/internal/config"
+	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -174,5 +176,74 @@ func TestSingleModeOrgs(t *testing.T) {
 	}
 	if _, l := root.do("GET", "/orgs/default/members", nil); len(l["items"].([]any)) != 2 {
 		t.Fatalf("every account is a member: %v", l)
+	}
+}
+
+// Invites bring people into one org; agent keys only see their org.
+func TestOrgInvitesAndKeys(t *testing.T) {
+	a, root := newApp(t, multiOrgs)
+	ctx := context.Background()
+	capture := &mail.Capture{}
+	a.Invites.Mail = capture
+	alice, _ := users.Create(ctx, a.DB, "alice@acme.dev", "Alice", false)
+	bob, _ := users.Create(ctx, a.DB, "bob@globex.dev", "Bob", false)
+	signIn(t, a, root, alice)
+	bobC := &tc{t: t, base: root.base, c: newClient()}
+	signIn(t, a, bobC, bob)
+	root.do("POST", "/orgs", map[string]any{"name": "Acme", "slug": "acme"})
+	bobC.do("POST", "/orgs", map[string]any{"name": "Globex", "slug": "globex"})
+	acmeRepo, _ := connectLocalIn(t, a, root, "acme", map[string]string{"docs/index.md": "# Acme\n"})
+	globexRepo, _ := connectLocalIn(t, a, bobC, "globex", map[string]string{"docs/index.md": "# Globex\n"})
+
+	// An existing account outside the org gets an email to accept, not a silent grant.
+	code, res := root.do("POST", "/orgs/acme/admin/invites", map[string]any{"email": "bob@globex.dev", "repo_id": acmeRepo, "role": "viewer"})
+	if code != 201 || res["status"] != "invited" {
+		t.Fatalf("invite bob: %d %v", code, res)
+	}
+	m, _ := capture.Last()
+	if !strings.Contains(m.Text, " on Acme.") {
+		t.Fatalf("invite mail names the org: %q", m.Text)
+	}
+	if code, _ := root.do("POST", "/orgs/acme/admin/invites", map[string]any{"email": "x@y.dev", "repo_id": globexRepo, "role": "viewer"}); code != 422 {
+		t.Fatalf("invite to another org's repo: %d", code)
+	}
+	if code, _ := bobC.do("GET", "/repos/"+acmeRepo, nil); code != 404 {
+		t.Fatalf("bob before accepting: %d", code)
+	}
+	token := inviteRe.FindStringSubmatch(m.Text)[1]
+	if code, d := bobC.do("GET", "/invites/"+token, nil); code != 200 || d["org_name"] != "Acme" || d["has_account"] != true {
+		t.Fatalf("details: %d %v", code, d)
+	}
+	if code, _ := bobC.do("POST", "/invites/"+token+"/accept", map[string]any{}); code != 200 {
+		t.Fatalf("accept: %d", code)
+	}
+	if code, r := bobC.do("GET", "/repos/"+acmeRepo, nil); code != 200 || r["role"] != "viewer" {
+		t.Fatalf("bob after accepting: %d %v", code, r)
+	}
+	// Bob kept his own org, as its owner.
+	if _, o := bobC.do("GET", "/orgs/globex", nil); o["role"] != "owner" {
+		t.Fatalf("bob in globex: %v", o)
+	}
+	if _, l := bobC.do("GET", "/orgs", nil); len(l["items"].([]any)) != 2 {
+		t.Fatalf("bob's orgs: %v", l)
+	}
+
+	// Agent keys.
+	if code, _ := root.do("POST", "/orgs/acme/admin/agent-keys", map[string]any{"name": "Bot", "repo_ids": []string{globexRepo}}); code != 422 {
+		t.Fatalf("key for another org's repo: %d", code)
+	}
+	code, created := root.do("POST", "/orgs/acme/admin/agent-keys", map[string]any{"name": "Bot", "all_repos": true})
+	if code != 201 {
+		t.Fatalf("create key: %d %v", code, created)
+	}
+	keyID := created["key"].(map[string]any)["id"].(string)
+	if _, l := bobC.do("GET", "/orgs/globex/admin/agent-keys", nil); len(l["items"].([]any)) != 0 {
+		t.Fatalf("globex sees acme's key: %v", l)
+	}
+	if code, _ := bobC.do("POST", "/orgs/globex/admin/agent-keys/"+keyID+"/revoke", nil); code != 409 {
+		t.Fatalf("globex revokes acme's key: %d", code)
+	}
+	if code, _ := bobC.do("GET", "/orgs/globex/admin/agent-keys/"+keyID+"/calls", nil); code != 404 {
+		t.Fatalf("globex reads acme's key calls: %d", code)
 	}
 }

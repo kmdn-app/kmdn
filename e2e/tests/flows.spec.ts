@@ -35,7 +35,7 @@ test.describe.serial("sign in, edit, review, publish", () => {
   test("a reviewer joins through an invite", async () => {
     const csrf = (await admin.cookies()).find((c) => c.name === "kmdn_csrf")!.value;
     const since = logOffset();
-    const res = await a.request.post("/api/v1/admin/invites", { data: { email: REVIEWER.email, repo_id: repoID, role: "maintainer" }, headers: { "X-Kmdn-CSRF": csrf } });
+    const res = await a.request.post("/api/v1/orgs/default/admin/invites", { data: { email: REVIEWER.email, repo_id: repoID, role: "maintainer" }, headers: { "X-Kmdn-CSRF": csrf } });
     expect(res.status()).toBe(201);
     await r.goto(await emailLink(REVIEWER.email, since, /https?:\/\/\S+\/invite\/[\w-]+/));
     await r.getByLabel("Your name").fill(REVIEWER.name);

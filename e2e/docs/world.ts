@@ -105,7 +105,7 @@ export async function invitePeople(maya: Client, repoID: string): Promise<Record
   for (const [who, role] of Object.entries(ROLES) as [Exclude<Person, "maya">, string][]) {
     const p = PEOPLE[who];
     const since = logSize();
-    await maya.call("POST", "/admin/invites", {
+    await maya.call("POST", "/orgs/default/admin/invites", {
       email: p.email,
       repo_id: repoID,
       role,

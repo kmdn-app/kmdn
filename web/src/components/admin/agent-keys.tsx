@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage, unwrap } from "@/lib/api";
+import { currentOrg } from "@/lib/orgs";
 import { useRepos } from "@/lib/repos";
 import { cn } from "@/lib/utils";
 
@@ -44,7 +45,7 @@ function CreateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpen
   const [shown, setShown] = useState<{ token: string; config: string; name: string } | null>(null);
   const create = useMutation({
     mutationFn: () =>
-      unwrap(api.POST("/admin/agent-keys", { body: { name, description: desc, all_repos: all, repo_ids: all ? [] : picked, expires_in_days: Number(days) as 0 | 30 | 90 | 365 } })),
+      unwrap(api.POST("/orgs/{org}/admin/agent-keys", { params: { path: { org: currentOrg() } }, body: { name, description: desc, all_repos: all, repo_ids: all ? [] : picked, expires_in_days: Number(days) as 0 | 30 | 90 | 365 } })),
     onSuccess: (d) => {
       setShown({ token: d.token, config: d.config, name: d.key.name });
       onCreated();
@@ -162,7 +163,7 @@ function CreateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpen
 
 function Calls({ id }: { id: string }) {
   const { t } = useTranslation();
-  const q = useQuery({ queryKey: ["agent-key-calls", id], queryFn: async () => (await unwrap(api.GET("/admin/agent-keys/{id}/calls", { params: { path: { id } } }))).items });
+  const q = useQuery({ queryKey: ["agent-key-calls", id], queryFn: async () => (await unwrap(api.GET("/orgs/{org}/admin/agent-keys/{id}/calls", { params: { path: { org: currentOrg(), id } } }))).items });
   if (!q.data) return <Loader2 className="m-3 size-4 animate-spin text-muted-foreground" />;
   if (q.data.length === 0) return <p className="px-4 py-3 text-[0.8125rem] text-muted-foreground">{t("agentKeys.noCalls")}</p>;
   return (
@@ -189,13 +190,13 @@ export function AgentKeysPanel() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { data: repos } = useRepos();
-  const q = useQuery({ queryKey: ["agent-keys"], queryFn: () => unwrap(api.GET("/admin/agent-keys")) });
+  const q = useQuery({ queryKey: ["agent-keys"], queryFn: () => unwrap(api.GET("/orgs/{org}/admin/agent-keys", { params: { path: { org: currentOrg() } } })) });
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<AgentKey | null>(null);
   const refresh = () => void qc.invalidateQueries({ queryKey: ["agent-keys"] });
   const revoke = useMutation({
-    mutationFn: (k: AgentKey) => unwrap(api.POST("/admin/agent-keys/{id}/revoke", { params: { path: { id: k.id } } })),
+    mutationFn: (k: AgentKey) => unwrap(api.POST("/orgs/{org}/admin/agent-keys/{id}/revoke", { params: { path: { org: currentOrg(), id: k.id } } })),
     onSuccess: () => (setRevoking(null), refresh()),
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
   });

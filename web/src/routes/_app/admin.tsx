@@ -185,7 +185,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
   const [repoID, setRepoID] = useState<string>("none");
   const [role, setRole] = useState<"viewer" | "contributor" | "maintainer" | "admin">("contributor");
   const invite = useMutation({
-    mutationFn: () => unwrap(api.POST("/admin/invites", { body: { email, ...(repoID !== "none" ? { repo_id: repoID, role } : {}) } })),
+    mutationFn: () => unwrap(api.POST("/orgs/{org}/admin/invites", { params: { path: { org: currentOrg() } }, body: { email, ...(repoID !== "none" ? { repo_id: repoID, role } : {}) } })),
     onSuccess: (r) => {
       toast.success(r.status === "invited" ? t("settings.invited", { email: r.email }) : t("settings.added"));
       setEmail("");

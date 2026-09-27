@@ -1009,8 +1009,10 @@ paths:
             text/csv: { schema: { type: string } }
             application/x-ndjson: { schema: { type: string } }
         "422": { $ref: "#/components/responses/Problem" }
-  /admin/agent-keys:
+  /orgs/{org}/admin/agent-keys:
     get:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: listAgentKeys
       summary: Agent keys for the MCP server, newest first, with 14 days of usage
@@ -1026,6 +1028,8 @@ paths:
                   items: { type: array, items: { $ref: "#/components/schemas/AgentKey" } }
                   endpoint: { type: string, description: "The MCP endpoint URL" }
     post:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: createAgentKey
       summary: Create an agent key (the token is returned once)
@@ -1055,19 +1059,23 @@ paths:
                   token: { type: string, description: "kmdn_ak_… (shown once)" }
                   config: { type: string, description: "A ready-to-paste MCP client configuration" }
         "422": { $ref: "#/components/responses/Problem" }
-  /admin/agent-keys/{id}/revoke:
+  /orgs/{org}/admin/agent-keys/{id}/revoke:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
     post:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: revokeAgentKey
       responses:
         "204": { description: Revoked }
         "409": { $ref: "#/components/responses/Problem" }
-  /admin/agent-keys/{id}/calls:
+  /orgs/{org}/admin/agent-keys/{id}/calls:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
     get:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: listAgentKeyCalls
       summary: The key's latest 50 MCP calls (from the audit log)
@@ -1142,8 +1150,10 @@ paths:
       responses:
         "204": { description: Queued }
         "409": { $ref: "#/components/responses/Problem" }
-  /admin/invites:
+  /orgs/{org}/admin/invites:
     post:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
       tags: [admin]
       operationId: inviteUser
       summary: Invite someone to the instance, optionally with a repository role
@@ -3668,9 +3678,10 @@ components:
         description: { type: string }
     AgentKey:
       type: object
-      required: [id, name, description, all_repos, repo_ids, created_at, status, usage]
+      required: [id, org_id, name, description, all_repos, repo_ids, created_at, status, usage]
       properties:
         id: { type: string }
+        org_id: { type: string }
         name: { type: string }
         description: { type: string }
         all_repos: { type: boolean }
@@ -3742,6 +3753,7 @@ components:
         role: { $ref: "#/components/schemas/Role" }
         expires_at: { type: string, format: date-time }
         instance_name: { type: string }
+        org_name: { type: string, description: "The organization the invite is for (the instance name in single mode)" }
         has_account: { type: boolean }
     LinkedAccount:
       type: object

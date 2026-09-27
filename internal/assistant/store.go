@@ -79,7 +79,8 @@ func RevisionThread(ctx context.Context, db *store.DB, repoID, revisionID string
 	}
 	now := time.Now()
 	t = Thread{ID: ids.New("ath"), RepoID: repoID, RevisionID: revisionID, CreatedAt: now, UpdatedAt: now}
-	_, err = store.Exec(ctx, db, `INSERT INTO assistant_threads (id, repo_id, revision_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`, t.ID, repoID, revisionID, store.Millis(now), store.Millis(now))
+	_, err = store.Exec(ctx, db, `INSERT INTO assistant_threads (id, org_id, repo_id, revision_id, created_at, updated_at)
+		SELECT ?, org_id, id, ?, ?, ? FROM repos WHERE id = ? ON CONFLICT DO NOTHING`, t.ID, revisionID, store.Millis(now), store.Millis(now), repoID)
 	if err != nil {
 		return t, err
 	}
@@ -90,7 +91,13 @@ func RevisionThread(ctx context.Context, db *store.DB, repoID, revisionID string
 func CreateQA(ctx context.Context, q store.Querier, repoID, ownerID, title string) (Thread, error) {
 	now := time.Now()
 	t := Thread{ID: ids.New("ath"), RepoID: repoID, OwnerID: ownerID, Title: title, CreatedAt: now, UpdatedAt: now}
-	_, err := store.Exec(ctx, q, `INSERT INTO assistant_threads (id, repo_id, owner_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`, t.ID, repoID, ownerID, title, store.Millis(now), store.Millis(now))
+	res, err := store.Exec(ctx, q, `INSERT INTO assistant_threads (id, org_id, repo_id, owner_id, title, created_at, updated_at)
+		SELECT ?, org_id, id, ?, ?, ?, ? FROM repos WHERE id = ?`, t.ID, ownerID, title, store.Millis(now), store.Millis(now), repoID)
+	if err == nil {
+		if n, _ := res.RowsAffected(); n == 0 {
+			err = store.ErrNotFound
+		}
+	}
 	return t, err
 }
 

@@ -86,6 +86,7 @@ func hashSecret(s string) string {
 
 // NewKey is what creating a key needs.
 type NewKey struct {
+	OrgID       string
 	Name        string
 	Description string
 	AllRepos    bool
@@ -100,7 +101,7 @@ func CreateKey(ctx context.Context, db *store.DB, in NewKey) (Key, string, error
 	id := randomHex(8)
 	secret := auth.Token(32)
 	now := time.Now()
-	k := Key{ID: id, Name: in.Name, Description: in.Description, AllRepos: in.AllRepos, RepoIDs: in.RepoIDs, CreatedBy: in.CreatedBy, CreatedAt: now.UTC()}
+	k := Key{ID: id, OrgID: in.OrgID, Name: in.Name, Description: in.Description, AllRepos: in.AllRepos, RepoIDs: in.RepoIDs, CreatedBy: in.CreatedBy, CreatedAt: now.UTC()}
 	var exp any
 	if in.ExpiresIn > 0 {
 		t := now.Add(in.ExpiresIn).UTC()
@@ -111,8 +112,8 @@ func CreateKey(ctx context.Context, db *store.DB, in NewKey) (Key, string, error
 		k.RepoIDs = []string{}
 	}
 	err := db.InTx(ctx, func(tx *store.Tx) error {
-		if _, err := store.Exec(ctx, tx, `INSERT INTO agent_keys (id, name, description, all_repos, secret_hash, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			id, in.Name, in.Description, in.AllRepos, hashSecret(secret), in.CreatedBy, store.Millis(now), exp); err != nil {
+		if _, err := store.Exec(ctx, tx, `INSERT INTO agent_keys (id, org_id, name, description, all_repos, secret_hash, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, in.OrgID, in.Name, in.Description, in.AllRepos, hashSecret(secret), in.CreatedBy, store.Millis(now), exp); err != nil {
 			return err
 		}
 		for _, r := range k.RepoIDs {
@@ -180,9 +181,9 @@ func GetKey(ctx context.Context, db *store.DB, id string) (Key, error) {
 	return k, loadRepos(ctx, db, &k)
 }
 
-// ListKeys returns every key, newest first, with 14 days of usage.
-func ListKeys(ctx context.Context, db *store.DB) ([]Key, error) {
-	rows, err := store.Query(ctx, db, `SELECT `+keyCols+` FROM agent_keys k LEFT JOIN users u ON u.id = k.created_by ORDER BY k.created_at DESC`)
+// ListKeys returns an org's keys, newest first, with 14 days of usage.
+func ListKeys(ctx context.Context, db *store.DB, orgID string) ([]Key, error) {
+	rows, err := store.Query(ctx, db, `SELECT `+keyCols+` FROM agent_keys k LEFT JOIN users u ON u.id = k.created_by WHERE k.org_id = ? ORDER BY k.created_at DESC`, orgID)
 	if err != nil {
 		return nil, err
 	}

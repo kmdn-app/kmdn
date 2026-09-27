@@ -21,7 +21,7 @@ func TestSearchScopeChangesWithoutGitCommit(t *testing.T) {
 				"docs/public/index.md": "# Searchneedle public\nVisible content.\n",
 				"docs/private.md":      "# Searchneedle private\nConfidential content.\n",
 			})
-			code, created := admin.do("POST", "/admin/agent-keys", map[string]any{"name": "Scope test", "repo_ids": []string{repo}})
+			code, created := admin.do("POST", "/orgs/default/admin/agent-keys", map[string]any{"name": "Scope test", "repo_ids": []string{repo}})
 			if code != 201 {
 				t.Fatalf("key: %d %v", code, created)
 			}

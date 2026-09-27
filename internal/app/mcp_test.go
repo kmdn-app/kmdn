@@ -81,13 +81,13 @@ func TestMCPServer(t *testing.T) {
 	sam, _ := users.Create(ctx, a.DB, "sam@northwind.dev", "Sam", false)
 	samC := &tc{t: t, base: admin.base, c: newClient()}
 	signIn(t, a, samC, sam)
-	if code, _ := samC.do("POST", "/admin/agent-keys", map[string]any{"name": "x", "all_repos": true}); code != 403 {
+	if code, _ := samC.do("POST", "/orgs/default/admin/agent-keys", map[string]any{"name": "x", "all_repos": true}); code != 403 {
 		t.Fatalf("non-admin creates a key: %d", code)
 	}
-	if code, _ := admin.do("POST", "/admin/agent-keys", map[string]any{"name": "Support bot"}); code != 422 {
+	if code, _ := admin.do("POST", "/orgs/default/admin/agent-keys", map[string]any{"name": "Support bot"}); code != 422 {
 		t.Fatalf("key without scope: %d", code)
 	}
-	code, created := admin.do("POST", "/admin/agent-keys", map[string]any{"name": "Support bot", "repo_ids": []string{handbook}, "expires_in_days": 90})
+	code, created := admin.do("POST", "/orgs/default/admin/agent-keys", map[string]any{"name": "Support bot", "repo_ids": []string{handbook}, "expires_in_days": 90})
 	if code != 201 {
 		t.Fatalf("create key: %d %v", code, created)
 	}
@@ -96,7 +96,7 @@ func TestMCPServer(t *testing.T) {
 	if !strings.HasPrefix(token, "kmdn_ak_"+keyID+"_") || !strings.Contains(created["config"].(string), `"Authorization": "Bearer `+token) || created["key"].(map[string]any)["expires_at"] == nil {
 		t.Fatalf("created: %v", created)
 	}
-	_, list := admin.do("GET", "/admin/agent-keys", nil)
+	_, list := admin.do("GET", "/orgs/default/admin/agent-keys", nil)
 	if strings.Contains(toJSON(list), token[len("kmdn_ak_")+17:]) {
 		t.Fatal("the secret is listed")
 	}
@@ -215,11 +215,11 @@ func TestMCPServer(t *testing.T) {
 	}
 
 	// Calls are audited and counted.
-	_, calls := admin.do("GET", "/admin/agent-keys/"+keyID+"/calls", nil)
+	_, calls := admin.do("GET", "/orgs/default/admin/agent-keys/"+keyID+"/calls", nil)
 	if s := toJSON(calls); !strings.Contains(s, "mcp.read_doc_at") || !strings.Contains(s, `"query":"abroad"`) {
 		t.Fatalf("calls: %s", s)
 	}
-	_, list = admin.do("GET", "/admin/agent-keys", nil)
+	_, list = admin.do("GET", "/orgs/default/admin/agent-keys", nil)
 	k := list["items"].([]any)[0].(map[string]any)
 	usage := k["usage"].([]any)
 	if usage[len(usage)-1].(float64) < 10 || k["last_used_at"] == nil {
@@ -227,7 +227,7 @@ func TestMCPServer(t *testing.T) {
 	}
 
 	// Revocation is immediate.
-	if code, _ := admin.do("POST", "/admin/agent-keys/"+keyID+"/revoke", nil); code != 204 {
+	if code, _ := admin.do("POST", "/orgs/default/admin/agent-keys/"+keyID+"/revoke", nil); code != 204 {
 		t.Fatalf("revoke: %d", code)
 	}
 	if _, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: "list_repos"}); err == nil || !strings.Contains(err.Error(), "Unauthorized") {
