@@ -5674,6 +5674,8 @@ export interface operations {
                 state?: string;
                 /** @description Only revisions the caller edits */
                 mine?: boolean;
+                /** @description Only revisions in review that ask the caller to review and that they haven't approved this round */
+                reviewing?: boolean;
             };
             header?: never;
             path: {

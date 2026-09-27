@@ -90,6 +90,15 @@ func TestReviewLifecycle(t *testing.T) {
 	if code, r := tomC.do("POST", "/revisions/"+revID+"/approve", nil); code != 200 || states(r) != "in_review Tom:approved,Una:pending" {
 		t.Fatalf("tom approves: %d %v", code, r)
 	}
+	// "Waiting for your review" (the repo home): Una still owes a review;
+	// Tom has approved; the editor was never asked.
+	waiting := func(c *tc) int {
+		_, l := c.do("GET", "/repos/"+repoID+"/revisions?reviewing=true", nil)
+		return len(l["items"].([]any))
+	}
+	if u, tm, sm := waiting(unaC), waiting(tomC), waiting(samC); u != 1 || tm != 0 || sm != 0 {
+		t.Fatalf("waiting for review: una %d tom %d sam %d", u, tm, sm)
+	}
 	if code, r := unaC.do("POST", "/revisions/"+revID+"/approve", nil); code != 200 || states(r) != "approved Tom:approved,Una:approved" {
 		t.Fatalf("una approves: %d %v", code, r)
 	}

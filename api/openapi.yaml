@@ -1125,6 +1125,7 @@ paths:
       parameters:
         - { name: state, in: query, schema: { type: string }, description: "open (default), all, or comma-separated states" }
         - { name: mine, in: query, schema: { type: boolean }, description: Only revisions the caller edits }
+        - { name: reviewing, in: query, schema: { type: boolean }, description: "Only revisions in review that ask the caller to review and that they haven't approved this round" }
       responses:
         "200":
           description: Revisions

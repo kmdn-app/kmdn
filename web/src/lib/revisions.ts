@@ -20,11 +20,11 @@ export function useRevision(repo: RepoView, n: number | undefined) {
   return useQuery({ ...revisionByNumberQuery(repo, n ?? 0), enabled: !!n });
 }
 
-export function useRevisions(repo: RepoView | undefined, opts: { state?: string; mine?: boolean } = {}) {
+export function useRevisions(repo: RepoView | undefined, opts: { state?: string; mine?: boolean; reviewing?: boolean } = {}) {
   return useQuery({
-    queryKey: ["revisions", repo?.id, opts.state ?? "open", !!opts.mine],
+    queryKey: ["revisions", repo?.id, opts.state ?? "open", !!opts.mine, !!opts.reviewing],
     queryFn: async () =>
-      (await unwrap(api.GET("/repos/{repo}/revisions", { params: { path: { repo: repo!.id }, query: { state: opts.state, mine: opts.mine || undefined } } }))).items,
+      (await unwrap(api.GET("/repos/{repo}/revisions", { params: { path: { repo: repo!.id }, query: { state: opts.state, mine: opts.mine || undefined, reviewing: opts.reviewing || undefined } } }))).items,
     enabled: !!repo,
   });
 }
