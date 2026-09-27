@@ -345,6 +345,17 @@ func (s *Service) Submit(ctx context.Context, repo repos.Repo, rev Revision, c C
 			return rev, err
 		}
 	}
+	if s.BeforeSubmit != nil {
+		if err := s.BeforeSubmit(ctx, repo, rev, c); err != nil {
+			return rev, err
+		}
+		if rev, err = Get(ctx, s.DB, rev.ID); err != nil {
+			return rev, err
+		}
+		if rev.HasConflicts {
+			return rev, conflict("conflicts_pending", "Resolve the conflicts before submitting.")
+		}
+	}
 	now := store.Millis(time.Now())
 	err = s.DB.InTx(ctx, func(tx *store.Tx) error {
 		res, err := store.Exec(ctx, tx, `UPDATE revisions SET state = ?, review_round = review_round + 1, submitted_at = ?, changes_requested = ? WHERE id = ? AND state = ?`,
