@@ -281,7 +281,13 @@ class Renderer {
       );
     }
     const [p, hash] = href.split("#");
-    const target = p ? resolveRelative(this.ctx.path, decodeURIComponent(p)) : this.ctx.path;
+    let decoded = p;
+    try {
+      decoded = p ? decodeURIComponent(p) : p;
+    } catch {
+      // Repository filenames can contain literal percent signs.
+    }
+    const target = decoded ? resolveRelative(this.ctx.path, decoded) : this.ctx.path;
     return (
       <AppLink href={this.ctx.pageHref(target) + (hash ? `#${hash}` : "")} title={title ?? undefined}>
         {children}
