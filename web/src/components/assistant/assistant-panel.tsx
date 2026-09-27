@@ -9,7 +9,7 @@ import { DocView } from "@/components/doc/doc-view";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { api, errorMessage, unwrap, useMe } from "@/lib/api";
+import { api, errorMessage, unwrap, useAssistantStatus, useMe } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
 import { atLeast, fileHref, rawUrl, type RepoView } from "@/lib/repos";
 import type { RevisionView } from "@/lib/revisions";
@@ -25,9 +25,6 @@ export function withCitations(text: string): string {
   });
 }
 
-export function useAssistantStatus() {
-  return useQuery({ queryKey: ["assistant-status"], queryFn: () => unwrap(api.GET("/assistant/status")), staleTime: 60_000 });
-}
 
 /** Streams a thread: live text and tool lines while a run goes, refetching when messages land. */
 function useThreadStream(threadID: string | null) {

@@ -29,7 +29,7 @@ func (s *Service) Routes(r chi.Router) {
 }
 
 func (s *Service) status(w http.ResponseWriter, r *http.Request) {
-	api.JSON(w, http.StatusOK, map[string]any{"enabled": s.Enabled(r.Context())})
+	api.JSON(w, http.StatusOK, map[string]any{"enabled": s.Enabled(r.Context()), "consistency": s.EmbeddingsEnabled(r.Context())})
 }
 
 // view is the settings without secrets.
@@ -40,6 +40,7 @@ func (s *Service) view(st Settings) map[string]any {
 		"embeddings":              map[string]any{"base_url": st.Embeddings.BaseURL, "model": st.Embeddings.Model, "key_set": st.Embeddings.KeyRef != ""},
 		"user_daily_tokens":       st.UserDailyTokens,
 		"instance_monthly_tokens": st.InstanceMonthlyTokens,
+		"consistency":             st.Consistency,
 		"check":                   st.Check,
 		"disabled":                s.Disabled,
 	}
@@ -66,6 +67,10 @@ type putInput struct {
 	} `json:"embeddings"`
 	UserDailyTokens       *int `json:"user_daily_tokens"`
 	InstanceMonthlyTokens *int `json:"instance_monthly_tokens"`
+	Consistency           *struct {
+		ScanEveryDays *int `json:"scan_every_days"`
+		ScanMaxCalls  *int `json:"scan_max_calls"`
+	} `json:"consistency"`
 }
 
 // setKey stores, replaces or removes a secret and returns its ref.
@@ -144,6 +149,14 @@ func (s *Service) put(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.InstanceMonthlyTokens != nil && *in.InstanceMonthlyTokens >= 0 {
 		st.InstanceMonthlyTokens = *in.InstanceMonthlyTokens
+	}
+	if c := in.Consistency; c != nil {
+		if c.ScanEveryDays != nil && *c.ScanEveryDays >= 0 {
+			st.Consistency.ScanEveryDays = min(*c.ScanEveryDays, 365)
+		}
+		if c.ScanMaxCalls != nil && *c.ScanMaxCalls >= 0 {
+			st.Consistency.ScanMaxCalls = min(*c.ScanMaxCalls, 100_000)
+		}
 	}
 	st.Check = nil
 	if st.Provider != "" {

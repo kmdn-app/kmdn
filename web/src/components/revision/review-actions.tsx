@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Check, CircleCheck, CircleDashed, GitPullRequest, Loader2, MessageSquareWarning, Rocket, Send, TriangleAlert, Undo2, UserPlus, X } from "lucide-react";
+import { Check, CircleCheck, CircleDashed, Copy, GitPullRequest, Loader2, MessageSquareWarning, Rocket, Send, Split, TriangleAlert, Undo2, UserPlus, X } from "lucide-react";
+import { useRevisionConsistency } from "@/components/consistency/findings";
 import { Avatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -308,6 +309,7 @@ function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: Re
   const [title, setTitle] = useState<string | null>(null);
   const [body, setBody] = useState<string | null>(null);
   const p = preview.data;
+  const findings = (useRevisionConsistency(rev).data?.findings ?? []).filter((f) => f.status === "open");
   const publish = useMutation({
     mutationFn: () => unwrap(api.POST("/revisions/{revision}/publish", { params: { path: { revision: rev.id } }, body: { title: title ?? p?.title ?? rev.title, body: body ?? p?.body ?? "" } })),
     onSuccess: () => {
@@ -355,6 +357,21 @@ function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: Re
                 {p.protected ? t("publish.viaPR", { branch: p.target_branch }) : t("publish.direct", { branch: p.target_branch })}
               </div>
             </div>
+            {findings.length > 0 && (
+              <div className="grid gap-1.5 rounded-lg border px-3 py-2 text-[13px]">
+                <p className="text-muted-foreground">{t("consistency.publishNote", { count: findings.length })}</p>
+                <ul className="grid gap-1">
+                  {findings.slice(0, 5).map((f) => (
+                    <li key={f.id} className="flex items-start gap-2">
+                      {f.kind === "contradiction" ? <Split className="mt-0.5 size-3.5 shrink-0 text-destructive" /> : <Copy className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />}
+                      <span className="min-w-0">
+                        <span className="font-medium">{f.a.path}</span> · {f.explanation}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {p.blocked && (
               <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-[13px]">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />

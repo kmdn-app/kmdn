@@ -48,6 +48,8 @@ type Service struct {
 	Removed func(ctx context.Context, rev Revision, path string)
 	// OnSubmitted runs after a revision goes in review (the submit checkpoint). Optional.
 	OnSubmitted Submitted
+	// OnContent runs after a page's materialized content changed. Optional.
+	OnContent func(ctx context.Context, revID, path string)
 	// PendingUpdates reports updates from Published not yet applied (they
 	// block approving and publishing). Optional.
 	PendingUpdates func(ctx context.Context, rev Revision) (bool, error)
@@ -632,6 +634,9 @@ func (s *Service) SetContent(ctx context.Context, revID, p, md string, by []stri
 	}
 	if _, err = store.Exec(ctx, s.DB, `UPDATE revisions SET updated_at = ? WHERE id = ?`, now, revID); err != nil {
 		return err
+	}
+	if s.OnContent != nil {
+		s.OnContent(ctx, revID, p)
 	}
 	return s.ContentChanged(ctx, revID, by)
 }

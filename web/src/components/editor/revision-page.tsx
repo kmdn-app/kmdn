@@ -27,6 +27,7 @@ import { CommentsPanel, type PendingComment } from "@/components/revision/commen
 import { useThreads } from "@/lib/threads";
 import { SuggestionList } from "@/components/revision/suggestions-panel";
 import { UpdatesBanner } from "@/components/revision/updates";
+import { ConsistencyHover, useConsistencyMarks } from "@/components/consistency/findings";
 
 /** Opens the page's room for as long as the view shows it. */
 function useRoom(revisionID: string | undefined, path: string) {
@@ -342,6 +343,7 @@ function Body({
   const baseDoc = useMemo(() => (inRev && baseMD ? parse(baseMD).doc : null), [inRev, baseMD]);
   const resolveImage = useMemo(() => (src: string) => (/^[a-z]+:|^\/\//i.test(src) ? src : revisionRawUrl(rev.id, resolveFrom(path, src))), [rev.id, path]);
   const ctx = useMemo(() => ({ path, pageHref: (p: string) => fileHref(repo, p), imageSrc: (p: string) => revisionRawUrl(rev.id, p) }), [repo, rev.id, path]);
+  const consistency = useConsistencyMarks(rev, path);
 
   if (status?.error && !noDoc) {
     return (
@@ -389,7 +391,9 @@ function Body({
             <Loading />
           )
         ) : (
-          <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} base={baseDoc} comments={comments} suggesting={suggesting} />
+          <ConsistencyHover repo={repo} rev={rev} path={path} findings={consistency.findings}>
+            <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} base={baseDoc} comments={comments} consistency={consistency.marks} suggesting={suggesting} />
+          </ConsistencyHover>
         ))
       )}
     </>

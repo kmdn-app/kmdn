@@ -31,6 +31,7 @@ import { StatePill } from "@/components/revision/revision-ui";
 import { ReviewActions, ReviewersSection } from "@/components/revision/review-actions";
 import { UpdatesBanner } from "@/components/revision/updates";
 import { ReviewSummary } from "@/components/revision/review-summary";
+import { RevisionConsistency } from "@/components/consistency/findings";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -85,6 +86,7 @@ function Overview() {
                   <Pages repo={repo} rev={r} />
                   <ReviewSummary repo={repo} rev={r} />
                   <Checks repo={repo} rev={r} />
+                  <RevisionConsistency repo={repo} rev={r} />
                   <ReviewersSection repo={repo} rev={r} />
                   <People repo={repo} rev={r} />
                   <Checkpoints repo={repo} rev={r} />

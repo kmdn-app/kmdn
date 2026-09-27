@@ -242,6 +242,10 @@
 /* Comment anchors */
 .kmdn-editor .comment-anchor { background: color-mix(in oklab, var(--warning) 22%, transparent); border-bottom: 2px solid color-mix(in oklab, var(--warning) 70%, transparent); cursor: pointer; }
 .kmdn-editor .comment-anchor.is-active { background: color-mix(in oklab, var(--warning) 40%, transparent); }
+/* Consistency findings: contradictions wavy, duplicates dotted. */
+.kmdn-editor .consistency-mark { text-decoration-line: underline; text-decoration-thickness: 1.5px; text-underline-offset: 4px; text-decoration-skip-ink: none; cursor: help; }
+.kmdn-editor .consistency-mark.is-contradiction { text-decoration-style: wavy; text-decoration-color: color-mix(in oklab, var(--destructive) 75%, transparent); }
+.kmdn-editor .consistency-mark.is-duplicate { text-decoration-style: dotted; text-decoration-color: var(--muted-foreground); }
 /* Suggestions (tracked changes), colored by author */
 .kmdn-editor ins.suggest-insertion { text-decoration: underline 1.5px; text-underline-offset: 3px; text-decoration-color: var(--author, var(--success)); background: color-mix(in oklab, var(--author, var(--success)) 14%, transparent); color: inherit; }
 .kmdn-editor del.suggest-deletion { text-decoration: line-through 1.5px; text-decoration-color: var(--author, var(--destructive)); color: var(--muted-foreground); background: color-mix(in oklab, var(--author, var(--destructive)) 8%, transparent); }

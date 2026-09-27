@@ -42,3 +42,8 @@ export function errorMessage(e: unknown, fallback: string): string {
   if (e instanceof TypeError) return fallback;
   return fallback;
 }
+
+/** Whether the assistant (and consistency checks) are set up on this instance. */
+export function useAssistantStatus() {
+  return useQuery({ queryKey: ["assistant-status"], queryFn: () => unwrap(api.GET("/assistant/status")), staleTime: 60_000 });
+}

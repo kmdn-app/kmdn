@@ -1595,9 +1595,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [enabled]
+                required: [enabled, consistency]
                 properties:
                   enabled: { type: boolean }
+                  consistency: { type: boolean, description: "Consistency checks are available (an embeddings model is set up too)" }
   /repos/{repo}/assistant/threads:
     parameters:
       - { $ref: "#/components/parameters/RepoID" }
@@ -1733,6 +1734,136 @@ paths:
                 required: [by_commit]
                 properties:
                   by_commit: { type: object, additionalProperties: { type: string } }
+  /revisions/{revision}/consistency:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [assistant]
+      operationId: getRevisionConsistency
+      summary: Contradictions and duplicates between the revision's changed passages and the rest of the repo
+      responses:
+        "200":
+          description: Findings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available, pending, findings]
+                properties:
+                  available: { type: boolean, description: "An AI provider and an embeddings model are set up" }
+                  pending: { type: boolean, description: "A check is queued or running" }
+                  findings: { type: array, items: { $ref: "#/components/schemas/ConsistencyFinding" } }
+    post:
+      tags: [assistant]
+      operationId: runRevisionConsistency
+      summary: Check the revision now (editors and reviewers)
+      responses:
+        "202": { description: Queued }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/consistency:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [assistant]
+      operationId: getConsistencyReport
+      summary: The repo's consistency report (from the latest scans)
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, ignored, closed] } }
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available, pending, can_run, can_fix, scan, findings]
+                properties:
+                  available: { type: boolean }
+                  pending: { type: boolean, description: "A scan is queued or running" }
+                  can_run: { type: boolean, description: "The caller can run a scan (maintainers)" }
+                  can_fix: { type: boolean, description: "The caller can ignore findings and start revisions" }
+                  scan:
+                    oneOf:
+                      - { $ref: "#/components/schemas/ConsistencyScan" }
+                      - { type: "null" }
+                  findings: { type: array, items: { $ref: "#/components/schemas/ConsistencyFinding" } }
+  /repos/{repo}/consistency/scan:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    post:
+      tags: [assistant]
+      operationId: runConsistencyScan
+      summary: Scan the repo now (maintainers)
+      responses:
+        "202": { description: Queued }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /consistency/findings/{finding}/ignore:
+    parameters:
+      - { name: finding, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [assistant]
+      operationId: ignoreConsistencyFinding
+      summary: Ignore the pair, with a reason (remembered until either passage changes)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        "204": { description: Ignored }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [assistant]
+      operationId: unignoreConsistencyFinding
+      summary: Stop ignoring the pair
+      responses:
+        "204": { description: No longer ignored }
+        "403": { $ref: "#/components/responses/Problem" }
+  /consistency/findings/{finding}/fix:
+    parameters:
+      - { name: finding, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [assistant]
+      operationId: fixConsistencyFinding
+      summary: Ask the assistant to fix a finding (in its revision; from the report, in a new revision touching both pages)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [fix, link], description: "link replaces a duplicate with a link to the other page" }
+      responses:
+        "201":
+          description: Revision started (report findings)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision]
+                properties:
+                  revision: { $ref: "#/components/schemas/Revision" }
+        "202":
+          description: The revision's assistant is on it
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision]
+                properties:
+                  revision: { $ref: "#/components/schemas/Revision" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /revisions/{revision}/assistant:
     parameters:
       - { $ref: "#/components/parameters/RevisionID" }
@@ -1814,6 +1945,11 @@ paths:
                     api_key: { type: string }
                 user_daily_tokens: { type: integer }
                 instance_monthly_tokens: { type: integer }
+                consistency:
+                  type: object
+                  properties:
+                    scan_every_days: { type: integer }
+                    scan_max_calls: { type: integer }
       responses:
         "200": { description: Settings, content: { application/json: { schema: { $ref: "#/components/schemas/AISettings" } } } }
         "422": { $ref: "#/components/responses/Problem" }
@@ -2285,6 +2421,53 @@ components:
         error: { type: string }
         created_at: { type: string, format: date-time }
         stale: { type: boolean, description: "The revision changed since it was written" }
+    ConsistencySide:
+      type: object
+      required: [path, slug, heading, line, text]
+      properties:
+        path: { type: string }
+        slug: { type: string }
+        heading: { type: string }
+        line: { type: integer }
+        text: { type: string }
+    ConsistencyFinding:
+      type: object
+      required: [id, kind, scope, a, b, explanation, similarity, status, first_seen, last_seen]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [contradiction, duplicate] }
+        scope: { type: string, description: "published (the repo report) or the revision id" }
+        a: { $ref: "#/components/schemas/ConsistencySide" }
+        b: { $ref: "#/components/schemas/ConsistencySide" }
+        claim_a: { type: string, description: "The conflicting claim, quoted from A" }
+        claim_b: { type: string }
+        explanation: { type: string }
+        similarity: { type: number }
+        status: { type: string, enum: [open, ignored, closed] }
+        ignore_reason: { type: string }
+        fix:
+          type: object
+          required: [id, number, title, state]
+          properties:
+            id: { type: string }
+            number: { type: integer }
+            title: { type: string }
+            state: { type: string }
+        first_seen: { type: string, format: date-time }
+        last_seen: { type: string, format: date-time }
+    ConsistencyScan:
+      type: object
+      required: [id, status, passages, candidates, judged, found, started_at]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [running, done, capped, error] }
+        passages: { type: integer }
+        candidates: { type: integer }
+        judged: { type: integer }
+        found: { type: integer }
+        error: { type: string }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
     AssistantThread:
       type: object
       required: [id, repo_id, title, created_at, updated_at]
@@ -2341,7 +2524,7 @@ components:
         created_at: { type: string, format: date-time }
     AISettings:
       type: object
-      required: [provider, key_set, models, defaults, tasks, embeddings, user_daily_tokens, instance_monthly_tokens, disabled]
+      required: [provider, key_set, models, defaults, tasks, embeddings, user_daily_tokens, instance_monthly_tokens, consistency, disabled]
       properties:
         provider: { type: string }
         base_url: { type: string }
@@ -2358,6 +2541,12 @@ components:
             key_set: { type: boolean }
         user_daily_tokens: { type: integer }
         instance_monthly_tokens: { type: integer }
+        consistency:
+          type: object
+          required: [scan_every_days, scan_max_calls]
+          properties:
+            scan_every_days: { type: integer, description: "0: scans only run on demand" }
+            scan_max_calls: { type: integer, description: "LLM judgments per scan" }
         disabled: { type: boolean, description: "assistant.enabled is false in the server config" }
         check:
           type: object
@@ -2417,7 +2606,7 @@ components:
         push_subscriptions: { type: integer, description: "Browsers subscribed to push" }
     LinkGraph:
       type: object
-      required: [nodes, edges]
+      required: [nodes, edges, duplicates]
       properties:
         nodes:
           type: array
@@ -2442,6 +2631,15 @@ components:
               to: { type: string }
               count: { type: integer }
               broken: { type: boolean }
+        duplicates:
+          type: array
+          description: Pages with duplicate passages (open findings of the consistency report)
+          items:
+            type: object
+            required: [a, b]
+            properties:
+              a: { type: string }
+              b: { type: string }
     Hook:
       type: object
       required: [id, kind, url_host, events, active, created_at]
