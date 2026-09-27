@@ -317,6 +317,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 
 // Run serves HTTP and runs background workers until ctx is cancelled.
 func (a *App) Run(ctx context.Context) error {
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
 	if _, err := a.Setup.Prepare(ctx); err != nil {
 		return err
 	}
@@ -330,6 +332,7 @@ func (a *App) Run(ctx context.Context) error {
 	done := make(chan struct{})
 	go func() { a.Jobs.Run(ctx); close(done) }()
 	err := a.Server.Run(ctx)
+	stop()
 	a.Realtime.Close()
 	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	a.Collab.Flush(fctx)
