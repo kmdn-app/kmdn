@@ -27,16 +27,19 @@ export function withCitations(text: string): string {
 }
 
 
-/** Streams a thread: live text and tool lines while a run goes, refetching when messages land. */
+/** Streams a thread: live text and tool lines while a run goes, whether a prompt waits for the next run, refetching when messages land. */
 function useThreadStream(threadID: string | null) {
   const qc = useQueryClient();
-  const [live, setLive] = useState<{ text: string; tools: string[]; running: boolean }>({ text: "", tools: [], running: false });
+  const [live, setLive] = useState<{ text: string; tools: string[]; running: boolean; queued: boolean }>({ text: "", tools: [], running: false, queued: false });
   useEffect(() => {
     if (!threadID) return;
     return realtime.follow("assistant:" + threadID, (ev) => {
       switch (ev.kind) {
         case "running":
-          setLive({ text: "", tools: [], running: true });
+          setLive({ text: "", tools: [], running: true, queued: false });
+          break;
+        case "queued":
+          setLive((l) => ({ ...l, queued: true }));
           break;
         case "delta":
           setLive((l) => ({ ...l, running: true, text: l.text + String(ev.text ?? "") }));
@@ -51,7 +54,7 @@ function useThreadStream(threadID: string | null) {
           break;
         case "done":
         case "error":
-          setLive({ text: "", tools: [], running: false });
+          setLive((l) => ({ text: "", tools: [], running: false, queued: l.queued }));
           void qc.invalidateQueries({ queryKey: ["assistant-thread", threadID] });
           void qc.invalidateQueries({ queryKey: ["revision-assistant"] });
           break;
@@ -288,6 +291,7 @@ export function AssistantPanel({ repo, path, revision }: { repo: RepoView; path?
                   {t("assistant.thinking")}
                 </span>
               )}
+              {live.queued && <span className="text-[12px] text-muted-foreground">{t("assistant.queued")}</span>}
             </div>
           )}
         </div>
