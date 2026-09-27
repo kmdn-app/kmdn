@@ -55,7 +55,7 @@ deploy/              docker-compose example (Postgres, Caddy)
 
 ## Development
 
-Requirements: Go ≥ 1.25, Node ≥ 22 with pnpm, git ≥ 2.40.
+Requirements: Go ≥ 1.26, Node ≥ 22 with pnpm, git ≥ 2.40.
 
 ```bash
 pnpm install
