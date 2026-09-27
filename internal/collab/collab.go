@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/access"
+	"github.com/kmdn-app/kmdn/internal/branches"
 	"github.com/kmdn-app/kmdn/internal/docengine"
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/realtime"
@@ -61,15 +62,16 @@ type Hub struct {
 	DB        *store.DB
 	Engine    *docengine.Engine
 	Revisions *revisions.Service
-	Log       *slog.Logger
+	// Branches commits Save all to the revision's branch.
+	Branches *branches.Service
+	Log      *slog.Logger
 	// Publish fans out events (realtime.Hub.Publish). Optional.
 	Publish func(scope string, event map[string]any)
 	Options Options
 
-	once     sync.Once
-	mu       sync.Mutex
-	rooms    map[string]*Room // by revision id + "\x00" + path
-	activity map[string]*activity
+	once  sync.Once
+	mu    sync.Mutex
+	rooms map[string]*Room // by revision id + "\x00" + path
 }
 
 const maxAwarenessState = 8 << 10
@@ -611,7 +613,6 @@ func (r *Room) ingest(ctx context.Context, data []byte, clients []uint64, c revi
 	if needManifest {
 		r.ensureManifest(ctx, c)
 	}
-	r.hub.touched(ctx, r.revID, c.User.ID)
 	return nil
 }
 

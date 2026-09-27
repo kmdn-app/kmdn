@@ -15,6 +15,7 @@ import {
   FilePen,
   FilePlus,
   FileText,
+  GitCommitHorizontal,
   GitPullRequest,
   Loader2,
   MoreHorizontal,
@@ -43,9 +44,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage, unwrap } from "@/lib/api";
 import type { RepoView } from "@/lib/repos";
-import { useRevision, useRevisionEvents, useRevisionFiles, type RevisionFile, type RevisionView } from "@/lib/revisions";
+import { useRevision, useRevisionEvents, useRevisionFiles, useSaveRevision, type RevisionFile, type RevisionView } from "@/lib/revisions";
 import { useRepo } from "@/lib/use-repo";
-import { fileHref, rawUrl } from "@/lib/repos";
+import { commitURL, fileHref, rawUrl } from "@/lib/repos";
 import { DocView } from "@/components/doc/doc-view";
 import { cn } from "@/lib/utils";
 
@@ -600,15 +601,20 @@ function Checkpoints({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
     void qc.invalidateQueries({ queryKey: ["checkpoints", rev.id] });
     invalidate();
   };
-  const create = useMutation({
-    mutationFn: () => unwrap(api.POST("/revisions/{revision}/checkpoints", { params: { path: { revision: rev.id } }, body: { name } })),
-    onSuccess: () => {
-      setName("");
-      refresh();
-      toast.success(t("checkpoints.named"));
-    },
-    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
-  });
+  const create = useSaveRevision(repo, rev);
+  const saveWithMessage = () =>
+    create.mutate(name, {
+      onSuccess: (cp) => {
+        refresh();
+        if (!cp) {
+          toast(t("revision.allSaved"));
+          return;
+        }
+        setName("");
+        toast.success(t("revision.savedAs", { sha: cp.commit_sha?.slice(0, 7) ?? "" }));
+      },
+      onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+    });
   const restore = useMutation({
     mutationFn: (id: string) => unwrap(api.POST("/revisions/{revision}/checkpoints/{checkpoint}/restore", { params: { path: { revision: rev.id, checkpoint: id } } })),
     onSuccess: () => {
@@ -627,25 +633,38 @@ function Checkpoints({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
             className="flex items-center gap-2 border-b px-4 py-2.5"
             onSubmit={(e) => {
               e.preventDefault();
-              create.mutate();
+              saveWithMessage();
             }}
           >
-            <Bookmark className="size-4 text-muted-foreground" />
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("checkpoints.namePlaceholder")} className="h-8 border-0 px-1 shadow-none focus-visible:ring-0" maxLength={200} aria-label={t("checkpoints.name")} />
-            <Button type="submit" size="sm" variant="outline" disabled={!name.trim() || create.isPending}>
-              {t("checkpoints.save")}
+            <GitCommitHorizontal className="size-4 text-muted-foreground" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("checkpoints.namePlaceholder")} className="h-8 border-0 px-1 shadow-none focus-visible:ring-0" maxLength={2000} aria-label={t("checkpoints.name")} />
+            <Button type="submit" size="sm" variant="outline" disabled={create.isPending}>
+              {create.isPending && <Loader2 className="animate-spin" />}
+              {t("revision.saveAll")}
             </Button>
           </form>
         )}
         {list.data?.length === 0 && <p className="p-6 text-center text-[13.5px] text-muted-foreground">{t("checkpoints.none")}</p>}
         {list.data?.map((c) => (
           <div key={c.id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
-            {c.kind === "named" ? <Bookmark className="size-4 text-foreground" /> : <HistoryIcon className="size-4 text-muted-foreground" />}
+            {c.commit_sha ? <GitCommitHorizontal className="size-4 text-foreground" /> : c.kind === "named" ? <Bookmark className="size-4 text-foreground" /> : <HistoryIcon className="size-4 text-muted-foreground" />}
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13.5px] font-medium">{c.name || t(`checkpoints.kinds.${c.kind}`)}</div>
               <div className="text-[12px] text-muted-foreground">
                 {c.created_by_name && `${c.created_by_name} · `}
                 <Time iso={c.created_at} /> · {t("revision.pages", { count: c.file_count })}
+                {c.commit_sha && (
+                  <>
+                    {" · "}
+                    {commitURL(repo, c.commit_sha) ? (
+                      <a href={commitURL(repo, c.commit_sha)!} target="_blank" rel="noreferrer" className="font-mono hover:text-foreground hover:underline">
+                        {c.commit_sha.slice(0, 7)}
+                      </a>
+                    ) : (
+                      <code>{c.commit_sha.slice(0, 7)}</code>
+                    )}
+                  </>
+                )}
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setViewing(c.id)}>
@@ -769,9 +788,3 @@ function Checks({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
 }
 
 /** Link to a commit on the forge (none for plain git remotes). */
-function commitURL(repo: RepoView, sha: string): string | null {
-  if (!repo.web_url) return null;
-  if (repo.forge_kind === "github") return `${repo.web_url}/commit/${sha}`;
-  if (repo.forge_kind === "gitlab") return `${repo.web_url}/-/commit/${sha}`;
-  return null;
-}

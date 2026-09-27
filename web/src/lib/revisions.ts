@@ -66,6 +66,28 @@ export function useCreateRevision(repo: RepoView) {
   });
 }
 
+/**
+ * Save all: commits the revision's content on its branch (one commit per
+ * click, authored by the caller). Nothing to save is not an error.
+ */
+export function useSaveRevision(repo: RepoView, rev: RevisionView | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (message?: string) => {
+      try {
+        return await unwrap(api.POST("/revisions/{revision}/save", { params: { path: { revision: rev!.id } }, body: { message } }));
+      } catch (e) {
+        if (e instanceof ApiError && e.problem.code === "nothing_to_save") return null;
+        throw e;
+      }
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["revision", repo.id, rev?.number] });
+      void qc.invalidateQueries({ queryKey: ["checkpoints", rev?.id] });
+    },
+  });
+}
+
 /** Keeps revision queries fresh from realtime events. */
 export function useRevisionEvents(repo: RepoView, rev: RevisionView | undefined) {
   const qc = useQueryClient();
@@ -80,6 +102,7 @@ export function useRevisionEvents(repo: RepoView, rev: RevisionView | undefined)
         void qc.invalidateQueries({ queryKey: ["revision-tree", id] });
         void qc.invalidateQueries({ queryKey: ["revisions", repo.id] });
       } else if (ev.type === "file_content") {
+        void qc.invalidateQueries({ queryKey: ["revision", repo.id, n] }); // unsaved_changes
         void qc.invalidateQueries({ queryKey: ["revision-files", id] });
         void qc.invalidateQueries({ queryKey: ["revision-content", id] });
         void qc.invalidateQueries({ queryKey: ["revision-diff", id] });
