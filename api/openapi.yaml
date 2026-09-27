@@ -23,6 +23,7 @@ tags:
   - name: revisions
   - name: links
   - name: threads
+  - name: notifications
 paths:
   /auth/magic-link:
     post:
@@ -1581,6 +1582,97 @@ paths:
         "201": { description: Thread, content: { application/json: { schema: { $ref: "#/components/schemas/Thread" } } } }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /notifications:
+    get:
+      tags: [notifications]
+      operationId: listNotifications
+      summary: The caller's inbox, newest first
+      parameters:
+        - { name: unread, in: query, schema: { type: string, enum: ["true", "false"] } }
+      responses:
+        "200":
+          description: Notifications and the unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, unread]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Notification" } }
+                  unread: { type: integer }
+  /notifications/read:
+    post:
+      tags: [notifications]
+      operationId: markNotificationsRead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids: { type: array, items: { type: string } }
+                all: { type: boolean }
+      responses:
+        "204": { description: Marked read }
+        "422": { $ref: "#/components/responses/Problem" }
+  /me/notification-prefs:
+    get:
+      tags: [notifications]
+      operationId: getNotificationPrefs
+      responses:
+        "200": { description: Preferences, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPrefs" } } } }
+    put:
+      tags: [notifications]
+      operationId: putNotificationPrefs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items: { type: array, items: { $ref: "#/components/schemas/NotificationPref" } }
+      responses:
+        "200": { description: Preferences, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPrefs" } } } }
+        "422": { $ref: "#/components/responses/Problem" }
+  /push/key:
+    get:
+      tags: [notifications]
+      operationId: getPushKey
+      summary: The instance's VAPID public key, for browsers to subscribe
+      responses:
+        "200":
+          description: Key
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [public_key]
+                properties:
+                  public_key: { type: string }
+        "404": { $ref: "#/components/responses/Problem" }
+  /me/push-subscriptions:
+    post:
+      tags: [notifications]
+      operationId: addPushSubscription
+      summary: Receive browser pushes in this browser
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PushSubscription" } } }
+      responses:
+        "204": { description: Subscribed }
+        "422": { $ref: "#/components/responses/Problem" }
+  /me/push-subscriptions/remove:
+    post:
+      tags: [notifications]
+      operationId: removePushSubscription
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PushSubscription" } } }
+      responses:
+        "204": { description: Removed }
   /repos/{repo}/discussions:
     parameters:
       - { $ref: "#/components/parameters/RepoID" }
@@ -1723,6 +1815,57 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    Notification:
+      type: object
+      required: [id, kind, data, created_at]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        repo_id: { type: string }
+        revision_id: { type: string }
+        thread_id: { type: string }
+        actor_id: { type: string }
+        actor_name: { type: string }
+        data:
+          type: object
+          properties:
+            title: { type: string }
+            number: { type: integer }
+            owner: { type: string }
+            repo: { type: string }
+            path: { type: string }
+            quote: { type: string }
+            excerpt: { type: string }
+            approved: { type: integer }
+            of: { type: integer }
+            conflicts: { type: integer }
+            url: { type: string }
+        created_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time }
+    NotificationPref:
+      type: object
+      required: [kind, in_app, push]
+      properties:
+        kind: { type: string }
+        in_app: { type: boolean }
+        push: { type: boolean }
+    NotificationPrefs:
+      type: object
+      required: [items, push_available, push_subscriptions]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/NotificationPref" } }
+        push_available: { type: boolean }
+        push_subscriptions: { type: integer, description: "Browsers subscribed to push" }
+    PushSubscription:
+      type: object
+      required: [endpoint]
+      properties:
+        endpoint: { type: string }
+        keys:
+          type: object
+          properties:
+            p256dh: { type: string }
+            auth: { type: string }
     ThreadAnchor:
       type: object
       properties:

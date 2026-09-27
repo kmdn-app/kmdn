@@ -25,6 +25,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/linking"
 	"github.com/kmdn-app/kmdn/internal/links"
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/notify"
 	"github.com/kmdn-app/kmdn/internal/publish"
 	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/repos"
@@ -60,6 +61,7 @@ type App struct {
 	Publish   *publish.Service
 	Threads   *threads.Service
 	Updates   *updates.Service
+	Notify    *notify.Service
 	Invites   *invites.Service
 }
 
@@ -147,6 +149,20 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 			return a.Collab.PutAnchor(ctx, repo, rev, c, p, threadID, pos)
 		},
 	}
+	a.Notify = &notify.Service{DB: db, Jobs: a.Jobs, PublishUser: a.Realtime.PublishUser, BaseURL: a.Repos.BaseURL, Log: log,
+		Present: func(revID, userID string) bool {
+			for _, p := range a.Collab.Presence(revID) {
+				if p.ID == userID {
+					return true
+				}
+			}
+			return false
+		},
+		Push: &notify.Pusher{DB: db, Secrets: sec, Subject: pushSubject(cfg.Server.BaseURL), Log: log},
+	}
+	a.Notify.Register()
+	a.Notify.Routes(r)
+	a.Threads.OnComment = a.Notify.Comment
 	a.Threads.Routes(r)
 	a.Repos.OnHeadChanged = append(a.Repos.OnHeadChanged, a.Threads.Reanchor)
 	a.Updates = &updates.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Engine: eng, Docs: collabDocs{a}, Jobs: a.Jobs, Publish: a.Realtime.Publish, Log: log}
@@ -159,6 +175,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}))
 	a.Revisions.Changed = func(ctx context.Context, rev revisions.Revision, kind string) {
 		a.Collab.RevisionChanged(ctx, rev)
+		a.Notify.Kick(ctx)
 		if kind == "published" {
 			// Discussions this revision fixed are resolved with it.
 			if _, err := a.Threads.RevisionPublished(ctx, rev); err != nil {
@@ -186,7 +203,12 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		return nil, err
 	}
 
-	a.Jobs.Register("auth.purge", func(ctx context.Context, _ jobs.Job) (any, error) { return nil, a.Auth.PurgeExpired(ctx) })
+	a.Jobs.Register("auth.purge", func(ctx context.Context, _ jobs.Job) (any, error) {
+		if err := notify.Purge(ctx, a.DB); err != nil {
+			return nil, err
+		}
+		return nil, a.Auth.PurgeExpired(ctx)
+	})
 	return a, nil
 }
 
@@ -196,6 +218,9 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	go a.periodic(ctx, time.Hour, "auth.purge")
+	// Events recorded without a revision change (updates prepared, threads)
+	// still reach people within a minute.
+	go a.periodic(ctx, time.Minute, notify.JobDrain)
 	a.catchUpIndexes(ctx)
 	done := make(chan struct{})
 	go func() { a.Jobs.Run(ctx); close(done) }()
@@ -292,3 +317,15 @@ func (a *App) periodic(ctx context.Context, every time.Duration, kind string) {
 
 // Close releases resources.
 func (a *App) Close() error { return a.DB.Close() }
+
+// pushSubject identifies this instance to Web Push services.
+func pushSubject(base string) string {
+	if strings.HasPrefix(base, "https://") {
+		return base
+	}
+	u, err := url.Parse(base)
+	if err != nil || u.Hostname() == "" {
+		return "mailto:kmdn@localhost"
+	}
+	return "mailto:kmdn@" + u.Hostname()
+}

@@ -1694,6 +1694,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's inbox, newest first */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["markNotificationsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/notification-prefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getNotificationPrefs"];
+        put: operations["putNotificationPrefs"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The instance's VAPID public key, for browsers to subscribe */
+        get: operations["getPushKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/push-subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive browser pushes in this browser */
+        post: operations["addPushSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/push-subscriptions/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["removePushSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{repo}/discussions": {
         parameters: {
             query?: never;
@@ -1810,6 +1909,50 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Notification: {
+            id: string;
+            kind: string;
+            repo_id?: string;
+            revision_id?: string;
+            thread_id?: string;
+            actor_id?: string;
+            actor_name?: string;
+            data: {
+                title?: string;
+                number?: number;
+                owner?: string;
+                repo?: string;
+                path?: string;
+                quote?: string;
+                excerpt?: string;
+                approved?: number;
+                of?: number;
+                conflicts?: number;
+                url?: string;
+            };
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            read_at?: string;
+        };
+        NotificationPref: {
+            kind: string;
+            in_app: boolean;
+            push: boolean;
+        };
+        NotificationPrefs: {
+            items: components["schemas"]["NotificationPref"][];
+            push_available: boolean;
+            /** @description Browsers subscribed to push */
+            push_subscriptions: number;
+        };
+        PushSubscription: {
+            endpoint: string;
+            keys?: {
+                p256dh?: string;
+                auth?: string;
+            };
+        };
         ThreadAnchor: {
             quote?: string;
             prefix?: string;
@@ -5327,6 +5470,172 @@ export interface operations {
             };
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                unread?: "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Notifications and the unread count */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Notification"][];
+                        unread: number;
+                    };
+                };
+            };
+        };
+    };
+    markNotificationsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ids?: string[];
+                    all?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Marked read */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    getNotificationPrefs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preferences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPrefs"];
+                };
+            };
+        };
+    };
+    putNotificationPrefs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    items: components["schemas"]["NotificationPref"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Preferences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPrefs"];
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPushKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        public_key: string;
+                    };
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    addPushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscription"];
+            };
+        };
+        responses: {
+            /** @description Subscribed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    removePushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscription"];
+            };
+        };
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     listDiscussions: {

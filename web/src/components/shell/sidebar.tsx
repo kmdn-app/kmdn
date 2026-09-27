@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronsUpDown, FilePen, Home, LayoutList, LogOut, Monitor, Moon, Plus, Search, Settings, Shield, Sun, UserRound } from "lucide-react";
+import { Bell, Check, ChevronsUpDown, FilePen, Home, LayoutList, LogOut, Monitor, Moon, Plus, Search, Settings, Shield, Sun, UserRound } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/logo";
 import { Avatar } from "@/components/avatar";
@@ -24,6 +24,7 @@ import type { ThemeChoice } from "@/theme";
 import { FileTree, OP_MARK } from "./file-tree";
 import { NewRevisionDialog, RevisionPicker, StateDot, StatePill } from "@/components/revision/revision-ui";
 import { ApprovalSummary } from "@/components/revision/review-actions";
+import { useNotifications } from "@/lib/notifications";
 import { usePresence, useRevisionFiles, useRevisions, useRevisionTree, type RevisionView } from "@/lib/revisions";
 import { cn } from "@/lib/utils";
 import { usePalette } from "./command-palette";
@@ -285,6 +286,7 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
             <kbd className="rounded border bg-background px-1 text-[10.5px] text-muted-foreground">⌘K</kbd>
           </button>
         )}
+        <InboxLink className={itemCls} onNavigate={onNavigate} />
         {repo && !revision && (
           <Link to="/$owner/$repo/revisions" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
             <LayoutList />
@@ -348,5 +350,18 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
         )}
       </div>
     </aside>
+  );
+}
+
+function InboxLink({ className, onNavigate }: { className: string; onNavigate?: () => void }) {
+  const { t } = useTranslation();
+  const q = useNotifications();
+  const unread = q.data?.unread ?? 0;
+  return (
+    <Link to="/inbox" onClick={onNavigate} className={className}>
+      <Bell />
+      <span className="flex-1">{t("shell.inbox")}</span>
+      {unread > 0 && <span className="rounded-full bg-primary px-1.5 text-[10.5px] leading-4 font-semibold text-primary-foreground tabular-nums">{unread > 99 ? "99+" : unread}</span>}
+    </Link>
   );
 }

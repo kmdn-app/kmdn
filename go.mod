@@ -15,9 +15,11 @@ require (
 )
 
 require (
+	github.com/SherClockHolmes/webpush-go v1.4.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.5.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/google/pprof v0.0.0-20260802141513-ef3492d7dac3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

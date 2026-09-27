@@ -21,6 +21,9 @@ import (
 type wsc struct {
 	t  *testing.T
 	ws *websocket.Conn
+	// Frames read while waiting for something else: events and replies can
+	// arrive in either order, so none are dropped.
+	backlog []frame
 }
 
 type frame struct {
@@ -64,6 +67,12 @@ func (w *wsc) control(v any) {
 // next reads frames until match accepts one.
 func (w *wsc) next(what string, match func(frame) bool) frame {
 	w.t.Helper()
+	for i, f := range w.backlog {
+		if match(f) {
+			w.backlog = append(w.backlog[:i:i], w.backlog[i+1:]...)
+			return f
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	for {
@@ -75,6 +84,7 @@ func (w *wsc) next(what string, match func(frame) bool) frame {
 		if match(f) {
 			return f
 		}
+		w.backlog = append(w.backlog, f)
 	}
 }
 
