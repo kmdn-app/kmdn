@@ -1598,6 +1598,112 @@ paths:
                 required: [enabled]
                 properties:
                   enabled: { type: boolean }
+  /repos/{repo}/assistant/threads:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [assistant]
+      operationId: listAssistantThreads
+      summary: The caller's private Q&A conversations in this repository
+      responses:
+        "200":
+          description: Threads, most recent first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/AssistantThread" } }
+    post:
+      tags: [assistant]
+      operationId: createAssistantThread
+      summary: Ask a question in a new private conversation (the answer streams on the assistant:<thread> scope)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantPost" } } }
+      responses:
+        "201":
+          description: The thread and the question
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [thread, message]
+                properties:
+                  thread: { $ref: "#/components/schemas/AssistantThread" }
+                  message: { $ref: "#/components/schemas/AssistantMessage" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /assistant/threads/{thread}:
+    parameters:
+      - { name: thread, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [assistant]
+      operationId: getAssistantThread
+      responses:
+        "200":
+          description: The thread, its messages, and whether a run is in progress
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [thread, messages, running]
+                properties:
+                  thread: { $ref: "#/components/schemas/AssistantThread" }
+                  messages: { type: array, items: { $ref: "#/components/schemas/AssistantMessage" } }
+                  running: { type: boolean }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [assistant]
+      operationId: deleteAssistantThread
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Problem" }
+  /assistant/threads/{thread}/messages:
+    parameters:
+      - { name: thread, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [assistant]
+      operationId: postAssistantMessage
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantPost" } } }
+      responses:
+        "202":
+          description: Posted; a run starts (or is queued behind the current one)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, queued]
+                properties:
+                  message: { $ref: "#/components/schemas/AssistantMessage" }
+                  queued: { type: boolean }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /assistant/threads/{thread}/proposals/{call}/accept:
+    parameters:
+      - { name: thread, in: path, required: true, schema: { type: string } }
+      - { name: call, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [assistant]
+      operationId: acceptAssistantProposal
+      summary: Start the revision the assistant proposed and move the conversation into it
+      responses:
+        "201":
+          description: The revision and its shared thread
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revision, thread]
+                properties:
+                  revision: { $ref: "#/components/schemas/Revision" }
+                  thread: { $ref: "#/components/schemas/AssistantThread" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /admin/ai:
     get:
       tags: [admin]
@@ -2078,6 +2184,57 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    AssistantThread:
+      type: object
+      required: [id, repo_id, title, created_at, updated_at]
+      properties:
+        id: { type: string }
+        repo_id: { type: string }
+        revision_id: { type: string }
+        owner_id: { type: string }
+        title: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AssistantContext:
+      type: object
+      properties:
+        path: { type: string }
+        selection: { type: string }
+    AssistantPost:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string }
+        context: { $ref: "#/components/schemas/AssistantContext" }
+    AssistantMessage:
+      type: object
+      required: [id, role, parts, context, created_at]
+      properties:
+        id: { type: string }
+        role: { type: string, enum: [user, assistant] }
+        author_id: { type: string }
+        author_name: { type: string }
+        parts:
+          type: array
+          items:
+            type: object
+            required: [type]
+            properties:
+              type: { type: string, enum: [text, tool, proposal] }
+              text: { type: string }
+              tool: { type: string }
+              label: { type: string }
+              call_id: { type: string }
+              proposal:
+                type: object
+                required: [title, description, files]
+                properties:
+                  title: { type: string }
+                  description: { type: string }
+                  files: { type: array, items: { type: string } }
+        context: { $ref: "#/components/schemas/AssistantContext" }
+        run_id: { type: string }
+        created_at: { type: string, format: date-time }
     AISettings:
       type: object
       required: [provider, key_set, models, defaults, tasks, embeddings, user_daily_tokens, instance_monthly_tokens, disabled]

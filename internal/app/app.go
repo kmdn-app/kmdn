@@ -15,6 +15,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/admin"
 	"github.com/kmdn-app/kmdn/internal/api"
+	"github.com/kmdn-app/kmdn/internal/assistant"
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/collab"
 	"github.com/kmdn-app/kmdn/internal/config"
@@ -66,6 +67,7 @@ type App struct {
 	Notify    *notify.Service
 	Hooks     *hooks.Service
 	LLM       *llm.Service
+	Assistant *assistant.Service
 	Invites   *invites.Service
 }
 
@@ -185,6 +187,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Updates.Routes(r)
 	a.Links = &links.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Engine: eng, Jobs: a.Jobs, Log: log}
 	a.Links.Register()
+	a.Assistant = &assistant.Service{DB: db, LLM: a.LLM, Repos: a.Repos, Revisions: a.Revisions, Search: &idx.Index, Links: a.Links, Engine: eng, Publish: a.Realtime.Publish, Log: log}
+	a.Assistant.Routes(r)
 	a.Links.Routes(r, links.ApplierFunc(func(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, md, kind string) error {
 		return a.Collab.Apply(ctx, repo, rev, c, p, md, kind)
 	}))
@@ -307,6 +311,9 @@ func (a *App) authorizeScope(ctx context.Context, u users.User, scope string) bo
 			return false
 		}
 		repoID = rev.RepoID
+	case "assistant":
+		t, err := assistant.GetThread(ctx, a.DB, id)
+		return err == nil && a.Assistant.CanRead(ctx, u, t)
 	default:
 		return false
 	}

@@ -264,3 +264,9 @@
 ::highlight(kmdn-comment) { background-color: color-mix(in oklab, var(--warning) 22%, transparent); }
 ::highlight(kmdn-comment-active) { background-color: color-mix(in oklab, var(--warning) 42%, transparent); }
 ::highlight(kmdn-changed) { background-color: color-mix(in oklab, var(--success) 20%, transparent); }
+/* Assistant replies in the side panel */
+.assistant-text .doc { font-size: 13.5px; line-height: 1.55; }
+.assistant-text .doc > * + * { margin-top: 0.5em; }
+.assistant-text .doc h1, .assistant-text .doc h2, .assistant-text .doc h3 { font-size: 14px; margin-top: 0.75em; }
+.assistant-text .doc a:not([target]) { display: inline-flex; align-items: center; gap: 0.2em; padding: 0 0.4em; border-radius: 0.375rem; background: var(--muted); color: var(--foreground); font-size: 12px; text-decoration: none; vertical-align: 1px; }
+.assistant-text .doc a:not([target]):hover { background: var(--accent); }

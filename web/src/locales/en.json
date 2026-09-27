@@ -944,5 +944,21 @@
     "runs": "Runs",
     "tokens": "Tokens",
     "system": "System"
+  },
+  "assistant": {
+    "off": "The assistant isn't set up on this instance.",
+    "offAdmin": "The assistant isn't set up yet. Connect an AI provider in Admin → AI provider.",
+    "conversations": "Conversations",
+    "new": "New conversation",
+    "untitled": "Untitled",
+    "intro": "Ask about this repository's pages. Answers cite their sources; ask for a change and I'll propose a revision.",
+    "placeholder": "Ask the assistant…",
+    "send": "Send",
+    "thinking": "Thinking…",
+    "context": "Looking at {{path}}",
+    "startRevision": "Start a revision: {{title}}",
+    "start": "Start revision",
+    "started": "Started {{title}}",
+    "movesNotice": "This conversation moves into the revision, where its collaborators can see it."
   }
 }

@@ -7,6 +7,7 @@ import type { RevisionView } from "@/lib/revisions";
 import { CommandPaletteProvider } from "./command-palette";
 import type { RepoView } from "@/lib/repos";
 import { RightPanel, type PanelTabs } from "./right-panel";
+import { AssistantPanel } from "@/components/assistant/assistant-panel";
 
 const PANEL_KEY = "kmdn-panel-open";
 const SIDEBAR_KEY = "kmdn-sidebar-open";
@@ -96,8 +97,16 @@ export function AppShell({
       </div>
       {mobileNav && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} aria-hidden />}
       <main className="flex min-w-0 flex-1 flex-col">{children({ panelOpen, togglePanel, toggleSidebar })}</main>
-      {panelOpen && <RightPanel onClose={togglePanel}>{panel}</RightPanel>}
+      {panelOpen && <RightPanel onClose={togglePanel}>{withAssistant(panel, ctxRepo, revision, currentPath)}</RightPanel>}
     </div>
     </CommandPaletteProvider>
   );
+}
+
+/** Every repository page gets the Assistant tab unless the page brings its own. */
+function withAssistant(panel: ReactNode | PanelTabs | undefined, repo: RepoView | undefined, revision: RevisionView | undefined, path: string | undefined): ReactNode | PanelTabs | undefined {
+  if (!repo || revision) return panel;
+  const tabs = panel && typeof panel === "object" && !("$$typeof" in (panel as object)) ? (panel as PanelTabs) : panel ? null : {};
+  if (!tabs || tabs.assistant) return panel;
+  return { ...tabs, assistant: <AssistantPanel repo={repo} path={path} /> };
 }
