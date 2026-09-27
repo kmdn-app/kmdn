@@ -19,7 +19,7 @@ import type { BlockNode, DocNode } from "./schema";
 export type Chunk<T> = { kind: "same" | "clean"; items: T[] } | { kind: "conflict"; base: T[]; ours: T[]; theirs: T[] };
 
 /** Longest common subsequence as index pairs (common prefix and suffix first). */
-function lcs(a: string[], b: string[]): [number, number][] {
+export function lcs(a: string[], b: string[]): [number, number][] {
   const n = a.length;
   const m = b.length;
   let pre = 0;

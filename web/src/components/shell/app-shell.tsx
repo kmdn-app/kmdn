@@ -105,8 +105,8 @@ export function AppShell({
 
 /** Every repository page gets the Assistant tab unless the page brings its own. */
 function withAssistant(panel: ReactNode | PanelTabs | undefined, repo: RepoView | undefined, revision: RevisionView | undefined, path: string | undefined): ReactNode | PanelTabs | undefined {
-  if (!repo || revision) return panel;
+  if (!repo) return panel;
   const tabs = panel && typeof panel === "object" && !("$$typeof" in (panel as object)) ? (panel as PanelTabs) : panel ? null : {};
   if (!tabs || tabs.assistant) return panel;
-  return { ...tabs, assistant: <AssistantPanel repo={repo} path={path} /> };
+  return { ...tabs, assistant: <AssistantPanel key={revision?.id ?? "qa"} repo={repo} path={path} revision={revision} /> };
 }

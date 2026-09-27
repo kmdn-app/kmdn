@@ -10,6 +10,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/llm"
 	"github.com/kmdn-app/kmdn/internal/repos"
+	"github.com/kmdn-app/kmdn/internal/revisions"
 	"github.com/kmdn-app/kmdn/internal/search"
 	"github.com/kmdn-app/kmdn/internal/threads"
 )
@@ -62,14 +63,27 @@ func toolLabel(name string, input json.RawMessage) string {
 		return "Reading discussions"
 	case "propose_revision":
 		return "Proposing a revision: " + str("title")
+	case "edit_file":
+		return "Suggesting changes in " + str("path")
+	case "create_file":
+		return "Drafting " + str("path")
+	case "rename_file":
+		return "Proposing to rename " + str("from") + " to " + str("to")
+	case "delete_file":
+		return "Proposing to delete " + str("path")
+	case "reply_to_thread":
+		return "Replying in a comment thread"
 	}
 	return name
 }
 
-// env is what tools can see.
+// env is what tools can see: the repository, and in a revision's thread
+// the revision and the person the assistant acts for.
 type env struct {
-	s    *Service
-	repo repos.Repo
+	s      *Service
+	repo   repos.Repo
+	rev    *revisions.Revision
+	caller revisions.Caller
 }
 
 var errTool = errors.New("tool failed")
@@ -95,14 +109,36 @@ func (e env) run(ctx context.Context, name string, input json.RawMessage) (strin
 	case "search":
 		return e.search(ctx, in.Query, in.PathPrefix, in.Limit)
 	case "list_tree":
+		if e.rev != nil {
+			return e.revisionTree(ctx, in.Path)
+		}
 		return e.listTree(ctx, in.Path)
 	case "read_file":
 		return e.readFile(ctx, in.Path, in.FromHeading, in.MaxChars)
+	case "edit_file", "create_file", "reply_to_thread", "rename_file", "delete_file":
+		if e.rev == nil {
+			return "", fmt.Errorf("%w: edits happen in a revision: call propose_revision", errTool)
+		}
+		switch name {
+		case "edit_file":
+			return e.editFile(ctx, input)
+		case "create_file":
+			return e.createFile(ctx, input)
+		case "reply_to_thread":
+			return e.replyToThread(ctx, input)
+		}
+		if err := e.canEdit(ctx); err != nil {
+			return "", err
+		}
+		return "Proposed. The person confirms it in the thread; carry on with other changes or stop.", nil
 	case "get_history":
 		return e.history(ctx, in.Path, in.Limit)
 	case "get_links":
 		return e.links(ctx, in.Path)
 	case "read_comments":
+		if e.rev != nil {
+			return e.revisionComments(ctx, in.Path)
+		}
 		return e.comments(ctx, in.Path)
 	case "propose_revision":
 		return "Proposed. The person sees a card to start the revision; stop here and wait for them.", nil
@@ -173,17 +209,21 @@ func (e env) readFile(ctx context.Context, p, from string, max int) (string, err
 	if !repos.IsMarkdown(p) {
 		return "", fmt.Errorf("%w: %s isn't a page", errTool, p)
 	}
-	f, err := e.s.Repos.ReadFile(ctx, e.repo, p, "")
+	content, inRev, err := e.pageMarkdown(ctx, p)
 	if err != nil {
-		return "", fmt.Errorf("%w: %s: %w", errTool, p, err)
+		return "", err
 	}
-	_, headings, _ := e.s.Engine.Links(ctx, f.Content)
+	_, headings, _ := e.s.Engine.Links(ctx, content)
 	var b strings.Builder
-	fmt.Fprintf(&b, "Path: %s\nOutline:\n", p)
+	fmt.Fprintf(&b, "Path: %s\n", p)
+	if inRev {
+		b.WriteString("(This revision's version; suggestions still pending aren't included.)\n")
+	}
+	b.WriteString("Outline:\n")
 	for _, h := range headings {
 		fmt.Fprintf(&b, "%s- %s (#%s)\n", strings.Repeat("  ", max0(h.Depth-1)), h.Text, h.Slug)
 	}
-	body := f.Content
+	body := content
 	if from != "" {
 		want := strings.ToLower(strings.TrimPrefix(from, "#"))
 		for _, h := range headings {

@@ -187,7 +187,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Updates.Routes(r)
 	a.Links = &links.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Engine: eng, Jobs: a.Jobs, Log: log}
 	a.Links.Register()
-	a.Assistant = &assistant.Service{DB: db, LLM: a.LLM, Repos: a.Repos, Revisions: a.Revisions, Search: &idx.Index, Links: a.Links, Engine: eng, Publish: a.Realtime.Publish, Log: log}
+	a.Assistant = &assistant.Service{DB: db, LLM: a.LLM, Repos: a.Repos, Revisions: a.Revisions, Search: &idx.Index, Links: a.Links, Engine: eng, Docs: collabDocs{a}, Publish: a.Realtime.Publish, Log: log}
 	a.Assistant.Routes(r)
 	a.Links.Routes(r, links.ApplierFunc(func(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, md, kind string) error {
 		return a.Collab.Apply(ctx, repo, rev, c, p, md, kind)
@@ -281,6 +281,9 @@ func (d collabDocs) StateOf(ctx context.Context, revID, p string) (string, []byt
 }
 func (d collabDocs) ApplyDoc(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p string, doc json.RawMessage, kind string) error {
 	return d.a.Collab.ApplyDoc(ctx, repo, rev, c, p, doc, kind)
+}
+func (d collabDocs) Suggest(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, markdown string, attrs docengine.SuggestAttrs, kind string) (bool, error) {
+	return d.a.Collab.Suggest(ctx, repo, rev, c, p, markdown, attrs, kind)
 }
 func (d collabDocs) CheckpointBeforeUpdate(ctx context.Context, rev revisions.Revision, by string) error {
 	_, err := d.a.Collab.Checkpoint(ctx, rev, by, "", collab.CheckpointPreUpdate)

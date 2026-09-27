@@ -50,11 +50,13 @@ Revision-context write tools (all produce suggestions attributed to the assistan
 
 | Tool | Description |
 |------|-------------|
-| `edit_file(path, edits[{find, replace}] \| new_markdown)` | Engine computes a block diff and applies it as insertion/deletion suggestions. Preferred mode: targeted find/replace on markdown |
+| `edit_file(path, edits[{find, replace}] \| new_markdown)` | Engine computes a block diff (then a word diff inside changed blocks) and applies it as insertion/deletion suggestions marked `assistant`, on behalf of the person who asked. Preferred mode: targeted find/replace on markdown; each `find` must match exactly once, or the tool reports why |
 | `create_file(path, markdown)` | Adds a new file to the manifest, content wrapped as one insertion suggestion |
-| `rename_file(from, to, rewrite_links: bool)` | Proposes a rename; file ops are proposals the user confirms in the UI |
-| `delete_file(path)` | Proposal, confirmed in the UI |
-| `reply_to_thread(thread_id, body)` | Reply in a comment thread when asked |
+| `rename_file(from, to, rewrite_links: bool)` | Proposes a rename; file ops are proposals anyone who can edit the revision confirms in the thread |
+| `delete_file(path)` | Proposal, confirmed in the thread |
+| `reply_to_thread(thread_id, body)` | Reply in a comment thread when asked (posted as the person, marked "via the assistant") |
+
+In a revision thread the read tools see the revision: `read_file` returns the revision's version of its pages (pending suggestions excluded), `list_tree` includes its added, renamed and deleted pages, and `read_comments` lists its comment threads. Suggestion cards show "Assistant for <person>".
 
 The assistant never approves, publishes, resolves threads, or changes settings.
 

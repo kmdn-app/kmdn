@@ -86,7 +86,8 @@ const suggestionMark = (name: string, tag: string) =>
     inclusive: false,
     // Rank after formatting marks, like the doc engine's MARK_ORDER.
     priority: 90,
-    addAttributes: () => ({ id: { default: "" }, author: { default: "" }, at: { default: null } }),
+    // assistant: made by the assistant on the author's behalf.
+    addAttributes: () => ({ id: { default: "" }, author: { default: "" }, at: { default: null }, assistant: { default: null } }),
     parseHTML: () => [],
     renderHTML: ({ HTMLAttributes }) => [
       tag,

@@ -1767,6 +1767,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/assistant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** The revision's shared assistant thread (created on first use) and whether the caller can prompt */
+        get: operations["getRevisionAssistant"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistant/threads/{thread}/proposals/{call}/accept": {
         parameters: {
             query?: never;
@@ -1779,7 +1798,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start the revision the assistant proposed and move the conversation into it */
+        /** Carry out a proposal (Q&A starts the revision and moves the conversation; in a revision thread it applies a rename or delete) */
         post: operations["acceptAssistantProposal"];
         delete?: never;
         options?: never;
@@ -2269,7 +2288,10 @@ export interface components {
             author_name?: string;
             parts: {
                 /** @enum {string} */
-                type: "text" | "tool" | "proposal";
+                type: "text" | "tool" | "proposal" | "edit" | "file_op";
+                path?: string;
+                to?: string;
+                accepted?: boolean;
                 text?: string;
                 tool?: string;
                 label?: string;
@@ -6127,6 +6149,34 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    getRevisionAssistant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        thread: components["schemas"]["AssistantThread"];
+                        messages: components["schemas"]["AssistantMessage"][];
+                        running: boolean;
+                        can_prompt: boolean;
+                    };
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
     acceptAssistantProposal: {
         parameters: {
             query?: never;
@@ -6139,6 +6189,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The file operation was applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: components["schemas"]["AssistantMessage"];
+                    };
+                };
+            };
             /** @description The revision and its shared thread */
             201: {
                 headers: {
