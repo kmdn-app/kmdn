@@ -60,6 +60,7 @@ Decisions from the design interview (D1–D45, 2026-09-26) and the first mockup 
 | D54 | Notifications | **Participants in real time** (inbox + optional browser push) and **readers** ("updated since your last visit" banner with summary, follow pages/folders). Still no notification emails | What's new feed + Slack digest; email digests | [13](13-operations.md#notifications) |
 | D55 | Consistency | **Duplicate/contradiction check on every revision + weekly repo scan**, embeddings for candidates + LLM judgment, advisory | Revisions only; scan only | [08](08-assistant.md#consistency-check-duplicates-and-contradictions) |
 | D56 | Link graph | **Links tab with local graph per page + repo graph page** from the link index | Graph page only; backlinks lists only | [04](04-doc-engine.md#link-index-and-graph) |
+| D57 | Server rooms (implementation) | **Rooms in Go holding encoded updates; stateless Yjs calls in the goja pool** (merge/diff/state vector/validate/materialize). The server creates documents; clients never seed | One goja runtime per room holding a live Y.Doc; a Go CRDT port | [05](05-collaboration.md#server-side-room) |
 
 ## Defaults chosen without a dedicated question
 

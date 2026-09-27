@@ -4,7 +4,7 @@ import { frontmatterToMarkdown } from "mdast-util-frontmatter";
 import { mathToMarkdown } from "mdast-util-math";
 import type * as md from "mdast";
 import { nodeHash } from "./hash";
-import { MARK_ORDER, defaultStyle, type BlockNode, type DocNode, type InlineNode, type Mark, type SourceMap, type Style } from "./schema";
+import { MARK_ORDER, defaultStyle, type BlockNode, type DocNode, type InlineNode, type Mark, type SourceMap, type TextNode, type Style } from "./schema";
 
 /**
  * Serializes a document to markdown. With a source map, every top-level block
@@ -118,8 +118,46 @@ export function toMdastBlock(b: BlockNode): md.RootContent {
   }
 }
 
+const FLANKING: Mark["type"][] = ["bold", "italic", "strike"];
+
+/**
+ * Moves whitespace at the edges of bold/italic/strike runs outside the mark.
+ * Markdown can't express "** bold**" (the delimiter must touch the text), and
+ * editors produce it all the time: toggle bold, type a space, type a word.
+ */
+export function hoistWhitespace(nodes: InlineNode[]): InlineNode[] {
+  const emph = (n: InlineNode | undefined) => new Set(n?.type === "text" ? (n.marks ?? []).filter((m) => FLANKING.includes(m.type)).map((m) => m.type) : []);
+  const out: InlineNode[] = [];
+  nodes.forEach((n, i) => {
+    if (n.type !== "text" || !n.marks?.length) {
+      out.push(n);
+      return;
+    }
+    const mine = emph(n);
+    const prev = emph(nodes[i - 1]);
+    const next = emph(nodes[i + 1]);
+    const opening = [...mine].filter((m) => !prev.has(m));
+    const closing = [...mine].filter((m) => !next.has(m));
+    const without = (drop: string[]) => n.marks!.filter((m) => !drop.includes(m.type));
+    const piece = (text: string, marks: Mark[]): TextNode => (marks.length ? { type: "text", text, marks } : { type: "text", text });
+    let text = n.text;
+    const lead = opening.length ? (/^\s+/.exec(text)?.[0] ?? "") : "";
+    if (lead === text) {
+      out.push(piece(text, without([...opening, ...closing])));
+      return;
+    }
+    const trail = closing.length ? (/\s+$/.exec(text)?.[0] ?? "") : "";
+    text = text.slice(lead.length, text.length - trail.length);
+    if (lead) out.push(piece(lead, without(opening)));
+    if (text) out.push(piece(text, n.marks));
+    if (trail) out.push(piece(trail, without(closing)));
+  });
+  return out;
+}
+
 /** Rebuilds nested mdast phrasing from flat marked text. */
-export function toPhrasing(nodes: InlineNode[]): md.PhrasingContent[] {
+export function toPhrasing(input: InlineNode[]): md.PhrasingContent[] {
+  const nodes = hoistWhitespace(input);
   type Frame = { mark: Mark | null; children: md.PhrasingContent[] };
   const root: Frame = { mark: null, children: [] };
   let stack: Frame[] = [root];

@@ -1,0 +1,232 @@
+import * as Y from "yjs";
+import { sortMarks, type AnyNode, type DocNode, type Mark, type TextNode } from "./schema";
+
+/**
+ * Converts between the document model and a Y.XmlFragment using the same
+ * encoding as y-prosemirror, so the server (which has no ProseMirror) and the
+ * editor agree on the collaborative document:
+ *
+ * - element nodes → Y.XmlElement(type) with non-null attrs as attributes
+ * - runs of text nodes → one Y.XmlText; marks are formatting attributes
+ *   `{[markType]: markAttrs}`
+ *
+ * See docs/specs/05-collaboration.md#ydoc-layout.
+ */
+
+/** Name of the fragment holding the page. */
+export const CONTENT = "content";
+
+type Attrs = Record<string, unknown>;
+type ElementJSON = { type: string; attrs?: Attrs; content?: AnyNode[] };
+
+function isText(n: AnyNode): n is TextNode {
+  return n.type === "text";
+}
+
+function markAttrs(marks: Mark[] | undefined): Attrs | undefined {
+  if (!marks?.length) return undefined;
+  const out: Attrs = {};
+  for (const m of marks) out[m.type] = "attrs" in m ? m.attrs : {};
+  return out;
+}
+
+function toY(node: ElementJSON): Y.XmlElement {
+  const el = new Y.XmlElement(node.type);
+  for (const [k, v] of Object.entries(node.attrs ?? {})) {
+    if (v !== null && v !== undefined) el.setAttribute(k, v as string);
+  }
+  el.insert(0, children(node.content ?? []));
+  return el;
+}
+
+function children(content: AnyNode[]): (Y.XmlElement | Y.XmlText)[] {
+  const out: (Y.XmlElement | Y.XmlText)[] = [];
+  for (let i = 0; i < content.length; i++) {
+    const n = content[i]!;
+    if (!isText(n)) {
+      out.push(toY(n as ElementJSON));
+      continue;
+    }
+    const run: TextNode[] = [];
+    while (i < content.length && isText(content[i]!)) run.push(content[i++] as TextNode);
+    i--;
+    const t = new Y.XmlText();
+    t.applyDelta(run.map((r) => ({ insert: r.text, attributes: markAttrs(r.marks) })));
+    out.push(t);
+  }
+  return out;
+}
+
+/** Fills an empty fragment with the document. */
+export function writeDoc(frag: Y.XmlFragment, doc: DocNode): void {
+  frag.insert(0, children(doc.content));
+}
+
+/** Reads the fragment back into the document model. */
+export function readDoc(frag: Y.XmlFragment): DocNode {
+  return { type: "doc", content: readChildren(frag) as DocNode["content"] };
+}
+
+function readChildren(parent: Y.XmlFragment | Y.XmlElement): AnyNode[] {
+  const out: AnyNode[] = [];
+  for (const c of parent.toArray()) {
+    if (c instanceof Y.XmlText) {
+      for (const op of c.toDelta() as { insert: unknown; attributes?: Attrs }[]) {
+        if (typeof op.insert !== "string" || op.insert === "") continue;
+        const t: TextNode = { type: "text", text: op.insert };
+        const marks: Mark[] = [];
+        for (const [k, v] of Object.entries(op.attributes ?? {})) {
+          const type = k.replace(/--.*$/, ""); // y-prosemirror's overlapping-mark keys
+          if (type === "ychange") continue;
+          marks.push((v && typeof v === "object" && Object.keys(v).length ? { type, attrs: v } : { type }) as Mark);
+        }
+        if (marks.length) t.marks = sortMarks(marks);
+        out.push(t);
+      }
+    } else if (c instanceof Y.XmlElement) {
+      // Always an attrs object: absent attributes were null (see canonical).
+      const node: ElementJSON = { type: c.nodeName, attrs: c.getAttributes() as Attrs };
+      const kids = readChildren(c);
+      if (kids.length) node.content = kids;
+      out.push(node as AnyNode);
+    }
+  }
+  return out;
+}
+
+const TEXTBLOCKS = new Set(["paragraph", "heading"]);
+
+function stripSids(n: AnyNode): AnyNode {
+  const e = n as ElementJSON;
+  if (!e.attrs || !("sid" in e.attrs)) return n;
+  const { sid: _sid, ...rest } = e.attrs;
+  return { ...e, attrs: rest } as AnyNode;
+}
+
+/** Longest common subsequence of two hash lists, as index pairs. */
+function lcs(a: string[], b: string[]): [number, number][] {
+  const n = a.length;
+  const m = b.length;
+  // Common prefix/suffix first: most edits are local.
+  let pre = 0;
+  while (pre < n && pre < m && a[pre] === b[pre]) pre++;
+  let suf = 0;
+  while (suf < n - pre && suf < m - pre && a[n - 1 - suf] === b[m - 1 - suf]) suf++;
+  const out: [number, number][] = [];
+  for (let i = 0; i < pre; i++) out.push([i, i]);
+  const A = a.slice(pre, n - suf);
+  const B = b.slice(pre, m - suf);
+  if (A.length && B.length && A.length * B.length <= 4_000_000) {
+    const dp: Uint32Array[] = Array.from({ length: A.length + 1 }, () => new Uint32Array(B.length + 1));
+    for (let i = A.length - 1; i >= 0; i--)
+      for (let j = B.length - 1; j >= 0; j--) dp[i]![j] = A[i] === B[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+    let i = 0;
+    let j = 0;
+    while (i < A.length && j < B.length) {
+      if (A[i] === B[j]) {
+        out.push([pre + i, pre + j]);
+        i++;
+        j++;
+      } else if (dp[i + 1]![j]! >= dp[i]![j + 1]!) i++;
+      else j++;
+    }
+  }
+  for (let k = 0; k < suf; k++) out.push([n - suf + k, m - suf + k]);
+  return out;
+}
+
+type Run = { ch: string; key: string; attrs?: Attrs };
+
+function runs(content: AnyNode[] | undefined): Run[] | null {
+  const out: Run[] = [];
+  for (const n of content ?? []) {
+    if (!isText(n)) return null;
+    const attrs = markAttrs(n.marks);
+    const key = canonicalMarks(n.marks);
+    for (const ch of n.text) out.push({ ch, key, attrs });
+  }
+  return out;
+}
+
+function canonicalMarks(marks: Mark[] | undefined): string {
+  return JSON.stringify(sortMarks(marks ?? []));
+}
+
+/**
+ * Edits a text block's single Y.XmlText in place: keeps the common prefix and
+ * suffix (text and marks) and replaces the middle, so concurrent edits and
+ * comment anchors elsewhere in the paragraph survive.
+ */
+function patchText(t: Y.XmlText, from: Run[], to: Run[]): void {
+  let pre = 0;
+  while (pre < from.length && pre < to.length && from[pre]!.ch === to[pre]!.ch && from[pre]!.key === to[pre]!.key) pre++;
+  let suf = 0;
+  while (suf < from.length - pre && suf < to.length - pre && from[from.length - 1 - suf]!.ch === to[to.length - 1 - suf]!.ch && from[from.length - 1 - suf]!.key === to[to.length - 1 - suf]!.key) suf++;
+  // Y.XmlText lengths count UTF-16 code units, runs count code points.
+  const len = (rs: Run[]) => rs.reduce((s, r) => s + r.ch.length, 0);
+  const at = len(from.slice(0, pre));
+  const del = len(from.slice(pre, from.length - suf));
+  if (del) t.delete(at, del);
+  let pos = at;
+  const mid = to.slice(pre, to.length - suf);
+  for (let i = 0; i < mid.length; ) {
+    let j = i;
+    let s = "";
+    while (j < mid.length && mid[j]!.key === mid[i]!.key) s += mid[j++]!.ch;
+    // With attributes given, Yjs clears the left neighbour's other marks.
+    t.insert(pos, s, { ...(mid[i]!.attrs ?? {}) });
+    pos += s.length;
+    i = j;
+  }
+}
+
+/**
+ * Turns the fragment into `target` with a minimal set of block operations:
+ * unchanged top-level blocks (by content hash) are left alone, text blocks
+ * whose type and attributes match are patched in place, everything else is
+ * deleted and re-inserted. Used for edits made outside an editor (the
+ * assistant, applying updates from Published, restoring a checkpoint).
+ */
+export function applyDoc(frag: Y.XmlFragment, target: DocNode, hash: (n: unknown) => string): void {
+  const current = readDoc(frag).content as AnyNode[];
+  const next = target.content as AnyNode[];
+  const ha = current.map(hash);
+  const hb = next.map(hash);
+  const common = lcs(ha, hb);
+  // Walk gaps between matched pairs from the end so indices stay valid.
+  const anchors: [number, number][] = [[-1, -1], ...common, [current.length, next.length]];
+  for (let g = anchors.length - 1; g > 0; g--) {
+    const [a0, b0] = anchors[g - 1]!;
+    const [a1, b1] = anchors[g]!;
+    const oldIdx = a0 + 1;
+    const oldCount = a1 - oldIdx;
+    const repl = next.slice(b0 + 1, b1);
+    // Pair up same-shaped text blocks one-to-one from the start of the gap.
+    let k = 0;
+    while (k < oldCount && k < repl.length) {
+      const o = current[oldIdx + k] as ElementJSON;
+      const n = repl[k] as ElementJSON;
+      const el = frag.get(oldIdx + k);
+      const sameShape = o.type === n.type && TEXTBLOCKS.has(o.type) && JSON.stringify(sortedAttrs(o.attrs)) === JSON.stringify(sortedAttrs(n.attrs));
+      const from = runs(o.content);
+      const to = runs(n.content);
+      if (!sameShape || !from || !to || !(el instanceof Y.XmlElement) || el.length > 1 || (el.length === 1 && !(el.get(0) instanceof Y.XmlText))) break;
+      let t = el.get(0) as Y.XmlText | undefined;
+      if (!t) {
+        t = new Y.XmlText();
+        el.insert(0, [t]);
+      }
+      patchText(t, from, to);
+      k++;
+    }
+    if (oldCount - k > 0) frag.delete(oldIdx + k, oldCount - k);
+    const inserts = repl.slice(k).map(stripSids) as ElementJSON[];
+    if (inserts.length) frag.insert(oldIdx + k, inserts.map(toY));
+  }
+}
+
+function sortedAttrs(a: Attrs | undefined): [string, unknown][] {
+  return Object.entries(a ?? {})
+    .filter(([k, v]) => k !== "sid" && v !== null && v !== undefined)
+    .sort(([x], [y]) => (x < y ? -1 : 1));
+}

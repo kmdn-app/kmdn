@@ -50,8 +50,18 @@ type Options struct {
 
 type vm struct {
 	rt        *goja.Runtime
+	api       *goja.Object
 	parse     goja.Callable
 	serialize goja.Callable
+}
+
+// fn looks up an engine function by name.
+func (v *vm) fn(name string) (goja.Callable, error) {
+	f, ok := goja.AssertFunction(v.api.Get(name))
+	if !ok {
+		return nil, fmt.Errorf("docengine: bundle does not export kmdn.%s", name)
+	}
+	return f, nil
 }
 
 // Engine is a pool of JS runtimes running the doc engine.
@@ -118,24 +128,37 @@ func (e *Engine) newVM() (*vm, error) {
 	if !ok1 || !ok2 {
 		return nil, errors.New("docengine: bundle does not export kmdn.parse/serialize")
 	}
-	return &vm{rt: rt, parse: parse, serialize: ser}, nil
+	return &vm{rt: rt, api: k, parse: parse, serialize: ser}, nil
 }
 
 // Version is the engine version stamped in the bundle.
 func (e *Engine) Version() int { return e.version }
 
 func (e *Engine) call(ctx context.Context, f func(*vm) (goja.Value, error)) (string, error) {
+	return run(ctx, e, func(v *vm) (string, error) {
+		out, err := f(v)
+		if err != nil {
+			return "", err
+		}
+		return out.String(), nil
+	})
+}
+
+// run borrows a runtime from the pool for f, under the time budget. f must
+// finish converting JS values to Go before returning.
+func run[T any](ctx context.Context, e *Engine, f func(*vm) (T, error)) (T, error) {
+	var zero T
 	var v *vm
 	select {
 	case v = <-e.pool:
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return zero, ctx.Err()
 	}
 	if v == nil {
 		nv, err := e.newVM()
 		if err != nil {
 			e.pool <- nil
-			return "", err
+			return zero, err
 		}
 		v = nv
 	}
@@ -160,15 +183,15 @@ func (e *Engine) call(ctx context.Context, f func(*vm) (goja.Value, error)) (str
 	if err != nil {
 		var ie *goja.InterruptedError
 		if errors.As(err, &ie) {
-			return "", ErrTimeout
+			return zero, ErrTimeout
 		}
 		var ex *goja.Exception
 		if errors.As(err, &ex) {
-			return "", fmt.Errorf("docengine: %s", ex.Value().String())
+			return zero, fmt.Errorf("docengine: %s", ex.Value().String())
 		}
-		return "", err
+		return zero, err
 	}
-	return out.String(), nil
+	return out, nil
 }
 
 // Parse parses markdown into the document model and source map.

@@ -9,3 +9,4 @@ export * from "./schema";
 export { parse, toMdast, type ParseResult } from "./parse";
 export { serialize, serializeBlock } from "./serialize";
 export { canonical, fnv1a64, nodeHash } from "./hash";
+export { CONTENT, applyDoc, readDoc, writeDoc } from "./ydoc";

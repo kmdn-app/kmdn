@@ -1,6 +1,6 @@
 import { parse } from "./parse";
 import { serialize } from "./serialize";
-import type { BlockNode, DocNode } from "./schema";
+import type { BlockNode, DocNode, InlineNode } from "./schema";
 
 const md = `---
 title: First week
@@ -105,4 +105,20 @@ test("empty documents", () => {
   expect(doc.content).toEqual([]);
   expect(serialize(doc, sourceMap)).toBe("");
   expect(serialize({ type: "doc", content: [] })).toBe("");
+});
+
+describe("hoistWhitespace", () => {
+  const b = [{ type: "bold" as const }];
+  const md = (content: InlineNode[]) => serialize({ type: "doc", content: [{ type: "paragraph", content }] });
+  test("moves edge spaces outside bold", () => {
+    expect(md([{ type: "text", text: "a" }, { type: "text", text: " b ", marks: b }, { type: "text", text: "c" }])).toBe("a **b** c\n");
+  });
+  test("keeps inner spaces and whitespace-only runs plain", () => {
+    expect(md([{ type: "text", text: "x " }, { type: "text", text: "  ", marks: b }, { type: "text", text: "y" }])).toBe("x   y\n");
+    expect(md([{ type: "text", text: "p q", marks: b }, { type: "text", text: " ", marks: b }, { type: "text", text: "r" }])).toBe("**p q** r\n");
+  });
+  test("leaves links alone", () => {
+    const link = [{ type: "link" as const, attrs: { href: "/x", title: null, ref: null } }];
+    expect(md([{ type: "text", text: "see " }, { type: "text", text: "docs", marks: link }])).toBe("see [docs](/x)\n");
+  });
 });

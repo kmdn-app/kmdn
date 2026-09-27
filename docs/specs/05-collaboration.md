@@ -37,11 +37,15 @@ Read-only subscribers get sync step 2 and updates but their updates are rejected
 
 ## Server-side room
 
-1. On first subscribe: load latest snapshot (`ydoc_snapshots`) + subsequent updates (`ydoc_updates`) into a JS runtime, build state.
-2. On client update: validate size (≤ 1 MB per update), apply in the engine, append to `ydoc_updates` (single INSERT, batched per 50 ms), broadcast to other subscribers, record `(user_id, bytes, timestamp)` into contribution tracking.
-3. **Snapshot compaction**: every 500 updates or 5 minutes of inactivity, write a full state snapshot and delete updates older than the snapshot (keeping them if a checkpoint references them; see below).
-4. **Materialization**: after each quiet period (2 s), serialize to markdown and store `revision_files.content_md` + hash. This feeds diffs, the link checker, search, the assistant, and publish without touching the live room.
-5. Eviction after 5 min with no subscribers.
+Rooms live in Go (`internal/collab`) and hold the document as encoded Yjs updates: a merged state plus the updates received since. The CRDT math runs in the doc engine's goja pool on demand (`yMerge`, `yDiff`, `yStateVector`, `yClients`, `yMaterialize`, `yApplyMarkdown`), so no JS runtime is tied to a room. The WebSocket framing, y-protocols sync/awareness messages (lib0 varints) and presence bookkeeping are parsed in Go.
+
+1. On first subscribe: load the latest snapshot (`ydoc_snapshots`) and later updates (`ydoc_updates`). If the file has no document yet and the caller can edit, the server creates it from the page's current content in the revision (`yFromMarkdown`) and stores the source map on `ydocs`. Clients never seed documents: two browsers seeding concurrently would duplicate the page. Read-only callers can't create one; they see published content until someone edits.
+2. Opening a page doesn't add it to the revision. The **first update** does (manifest entry `modify`).
+3. On client update: reject when read-only or over 1 MB, validate it and read its Yjs client ids (`yClients`, which also maps client ids to users in `ydoc_clients` and refuses ids owned by someone else), append to the log (batched every 50 ms), broadcast to the other peers.
+4. **Snapshot compaction**: every 500 updates, write a merged snapshot and delete the updates it covers (older snapshots are kept only when a checkpoint references them).
+5. **Materialization**: after 2 s without updates (and when the last peer leaves), serialize to markdown with the source map and store `revision_files.content_md`, its hash and +/− counts. This feeds diffs, the link checker, search, the assistant, and publish without touching the live room.
+6. Eviction from memory after 5 min with no subscribers.
+7. Edits made outside an editor (assistant, updates from Published, checkpoint restore) go through `yApplyMarkdown`: a block-level diff by content hash that leaves unchanged blocks alone and patches same-shaped text blocks in place, so concurrent edits and comment anchors elsewhere survive.
 
 ## Presence (awareness)
 

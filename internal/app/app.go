@@ -7,18 +7,23 @@ import (
 	"log/slog"
 
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
+	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/admin"
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/collab"
 	"github.com/kmdn-app/kmdn/internal/config"
+	"github.com/kmdn-app/kmdn/internal/docengine"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/invites"
 	"github.com/kmdn-app/kmdn/internal/jobs"
 	"github.com/kmdn-app/kmdn/internal/linking"
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
 	"github.com/kmdn-app/kmdn/internal/search"
@@ -26,6 +31,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/server"
 	"github.com/kmdn-app/kmdn/internal/setup"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/users"
 )
 
 // App holds the running services.
@@ -42,6 +48,9 @@ type App struct {
 	Setup     *setup.Service
 	Repos     *repos.Service
 	Revisions *revisions.Service
+	Engine    *docengine.Engine
+	Realtime  *realtime.Hub
+	Collab    *collab.Hub
 	Invites   *invites.Service
 }
 
@@ -107,6 +116,23 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Repos.ForgeRoutes(r)
 	a.Revisions = &revisions.Service{DB: db, Repos: a.Repos, Log: log}
 	a.Revisions.Routes(r)
+	eng, err := docengine.New(docengine.Options{})
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	a.Engine = eng
+	a.Realtime = &realtime.Hub{Origin: originOf(cfg.Server.BaseURL), Log: log, Authorize: a.authorizeScope}
+	a.Collab = &collab.Hub{DB: db, Engine: eng, Revisions: a.Revisions, Log: log, Publish: a.Realtime.Publish}
+	a.Realtime.Rooms = a.Collab
+	a.Revisions.Changed = func(ctx context.Context, rev revisions.Revision, kind string) {
+		a.Collab.RevisionChanged(ctx, rev)
+		ev := map[string]any{"type": "revision", "kind": kind, "revision": rev.ID, "number": rev.Number, "state": rev.State}
+		a.Realtime.Publish("revision:"+rev.ID, ev)
+		a.Realtime.Publish("repo:"+rev.RepoID, map[string]any{"type": "revision", "kind": kind, "revision": rev.ID, "number": rev.Number, "state": rev.State})
+	}
+	a.Revisions.Removed = func(_ context.Context, rev revisions.Revision, p string) { a.Collab.FileRemoved(rev, p) }
+	a.Server.Mount("/ws", a.AuthH.Middleware(a.Realtime))
 	a.Server.Mount("/hooks", a.Repos.WebhookHandler())
 	(&admin.People{DB: db, Auth: a.Auth}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL}
@@ -130,8 +156,43 @@ func (a *App) Run(ctx context.Context) error {
 	done := make(chan struct{})
 	go func() { a.Jobs.Run(ctx); close(done) }()
 	err := a.Server.Run(ctx)
+	a.Realtime.Close()
+	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	a.Collab.Flush(fctx)
+	cancel()
 	<-done
 	return err
+}
+
+// originOf returns scheme://host of the base URL (the only allowed WebSocket Origin).
+func originOf(base string) string {
+	u, err := url.Parse(base)
+	if err != nil {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// authorizeScope decides who may follow realtime events for a scope.
+func (a *App) authorizeScope(ctx context.Context, u users.User, scope string) bool {
+	kind, id, ok := strings.Cut(scope, ":")
+	if !ok {
+		return false
+	}
+	repoID := id
+	switch kind {
+	case "repo":
+	case "revision":
+		rev, err := revisions.Get(ctx, a.DB, id)
+		if err != nil {
+			return false
+		}
+		repoID = rev.RepoID
+	default:
+		return false
+	}
+	role, err := access.Effective(ctx, a.DB, u, repoID)
+	return err == nil && role != access.None
 }
 
 // periodic enqueues a maintenance job every interval (deduplicated by key).

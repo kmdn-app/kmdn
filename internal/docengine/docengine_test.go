@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -143,6 +144,88 @@ func BenchmarkParse10KB(b *testing.B) {
 	md := string(src)[:10*1024]
 	for i := 0; b.Loop(); i++ {
 		if _, err := e.Parse(context.Background(), md+strings.Repeat(" ", i%1000)); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestYjsRoundTrip(t *testing.T) {
+	e, err := New(Options{Runtimes: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	md := "---\ntitle: First week\n---\n\n# First week\n\n* [x] Laptop\n* [ ] Badge\n\n| a | b |\n|---|:-:|\n| 1 | 2 |\n\nSee [the handbook](../index.md).\n"
+	u, sm, err := e.YFromMarkdown(ctx, md, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := e.YMaterialize(ctx, u, sm); err != nil || got != md {
+		t.Fatalf("materialize: %v\n%q", err, got)
+	}
+	if ids, err := e.YClients(ctx, u); err != nil || len(ids) != 1 || ids[0] != 7 {
+		t.Fatalf("clients: %v %v", ids, err)
+	}
+	sv, err := e.YStateVector(ctx, u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing, err := e.YDiff(ctx, u, sv)
+	if err != nil || len(missing) > 4 {
+		t.Fatalf("diff against own state should be empty: %v %d bytes", err, len(missing))
+	}
+	merged, err := e.YMerge(ctx, [][]byte{u, missing})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.YMaterialize(ctx, merged, sm); got != md {
+		t.Fatalf("after merge: %q", got)
+	}
+	// Two replicas that each created the page concurrently: both copies survive
+	// the merge (why the server, not clients, creates documents).
+	u2, _, _ := e.YFromMarkdown(ctx, "# Other\n", 8)
+	both, err := e.YMerge(ctx, [][]byte{u, u2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := e.YMaterialize(ctx, both, "")
+	if !strings.Contains(got, "# Other") || !strings.Contains(got, "# First week") {
+		t.Fatalf("merge of two replicas: %q", got)
+	}
+	// An edit made on the server applies on top and materializes.
+	edit, err := e.YApplyMarkdown(ctx, u, strings.Replace(md, "Badge", "Badge and keys", 1), 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ids, _ := e.YClients(ctx, edit); len(ids) != 1 || ids[0] != 9 {
+		t.Fatalf("edit clients: %v", ids)
+	}
+	edited, _ := e.YMerge(ctx, [][]byte{u, edit})
+	if got, _ := e.YMaterialize(ctx, edited, sm); got != strings.Replace(md, "Badge", "Badge and keys", 1) {
+		t.Fatalf("after edit: %q", got)
+	}
+	if noop, err := e.YApplyMarkdown(ctx, edited, strings.Replace(md, "Badge", "Badge and keys", 1), 9); err != nil || len(noop) > 2 {
+		t.Fatalf("no-op edit: %v %d bytes", err, len(noop))
+	}
+	if _, err := e.YClients(ctx, []byte{0xff, 0xff, 0xff}); !errors.Is(err, ErrBadUpdate) {
+		t.Fatalf("garbage update: %v", err)
+	}
+}
+
+func BenchmarkYMaterialize10KB(b *testing.B) {
+	e, _ := New(Options{Runtimes: 1})
+	ctx := context.Background()
+	var sb strings.Builder
+	for i := 0; sb.Len() < 10<<10; i++ {
+		fmt.Fprintf(&sb, "## Section %d\n\nSome *text* with a [link](x.md) and `code`.\n\n- item\n- item\n\n", i)
+	}
+	u, sm, err := e.YFromMarkdown(ctx, sb.String(), 1)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for range b.N {
+		if _, err := e.YMaterialize(ctx, u, sm); err != nil {
 			b.Fatal(err)
 		}
 	}

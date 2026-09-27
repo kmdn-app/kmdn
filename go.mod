@@ -3,6 +3,8 @@ module github.com/kmdn-app/kmdn
 go 1.25.0
 
 require (
+	github.com/bmatcuk/doublestar/v4 v4.10.2
+	github.com/coder/websocket v1.8.15
 	github.com/dop251/goja v0.0.0-20260926152631-39ec2650adc9
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/jackc/pgx/v5 v5.11.0
@@ -13,7 +15,6 @@ require (
 )
 
 require (
-	github.com/bmatcuk/doublestar/v4 v4.10.2 // indirect
 	github.com/dlclark/regexp2/v2 v2.5.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
