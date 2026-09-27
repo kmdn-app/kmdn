@@ -141,6 +141,9 @@ func (s *Service) deliver(ctx context.Context, n Notification, to []string) {
 			continue
 		}
 		seen[uid] = true
+		if !s.canReceive(ctx, uid, n.RepoID) {
+			continue
+		}
 		p := s.prefsFor(ctx, uid, n.Kind)
 		if !p.inApp && !p.push {
 			continue
@@ -162,10 +165,26 @@ func (s *Service) deliver(ctx context.Context, n Notification, to []string) {
 			s.pushing.Add(1)
 			go func() {
 				defer s.pushing.Done()
-				s.Push.Send(context.WithoutCancel(ctx), uid, msg)
+				pushCtx := context.WithoutCancel(ctx)
+				if s.canReceive(pushCtx, uid, m.RepoID) {
+					s.Push.Send(pushCtx, uid, msg)
+				}
 			}()
 		}
 	}
+}
+
+// Historical participation does not grant access to new notifications.
+func (s *Service) canReceive(ctx context.Context, userID, repoID string) bool {
+	u, err := users.ByID(ctx, s.DB, userID)
+	if err != nil || u.Status != users.Active {
+		return false
+	}
+	if repoID == "" {
+		return true
+	}
+	role, err := access.Effective(ctx, s.DB, u, repoID)
+	return err == nil && role != access.None
 }
 
 // pushAllowed: not while they have the revision open, and at most one push
@@ -431,11 +450,27 @@ func List(ctx context.Context, q store.Querier, userID string, unreadOnly bool, 
 		limit = 100
 	}
 	where := "n.user_id = ?"
+	args := []any{userID}
+	u, err := users.ByID(ctx, q, userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if u.Status != users.Active {
+		return []Notification{}, 0, nil
+	}
+	if !u.IsInstanceAdmin {
+		where += ` AND (n.repo_id IS NULL OR EXISTS (
+			SELECT 1 FROM repo_members m WHERE m.repo_id = n.repo_id AND (
+			(m.principal_type = 'user' AND m.principal_id = ?) OR
+			(m.principal_type = 'group' AND m.principal_id IN (SELECT group_id FROM group_members WHERE user_id = ?)))))`
+		args = append(args, userID, userID)
+	}
+	unreadWhere := where + " AND n.read_at IS NULL"
 	if unreadOnly {
 		where += " AND n.read_at IS NULL"
 	}
 	rows, err := store.Query(ctx, q, `SELECT n.id, n.kind, COALESCE(n.repo_id, ''), COALESCE(n.revision_id, ''), COALESCE(n.thread_id, ''), COALESCE(n.actor_id, ''), COALESCE(u.name, ''), n.data, n.created_at, n.read_at
-		FROM notifications n LEFT JOIN users u ON u.id = n.actor_id WHERE `+where+` ORDER BY n.created_at DESC LIMIT ?`, userID, limit)
+		FROM notifications n LEFT JOIN users u ON u.id = n.actor_id WHERE `+where+` ORDER BY n.created_at DESC LIMIT ?`, append(args, limit)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -456,7 +491,7 @@ func List(ctx context.Context, q store.Querier, userID string, unreadOnly bool, 
 		return nil, 0, err
 	}
 	var unread int
-	err = store.QueryRow(ctx, q, `SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL`, userID).Scan(&unread)
+	err = store.QueryRow(ctx, q, `SELECT COUNT(*) FROM notifications n WHERE `+unreadWhere, args...).Scan(&unread)
 	return out, unread, err
 }
 
