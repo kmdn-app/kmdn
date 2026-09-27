@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 
-const COLORS = ["#e11d48", "#2563eb", "#059669", "#d97706", "#7c3aed", "#0891b2", "#db2777", "#4f46e5", "#65a30d", "#ea580c", "#0d9488", "#9333ea"];
+// White initials on each meet WCAG AA (≥ 4.5:1) at the small sizes avatars use.
+const COLORS = ["#be123c", "#2563eb", "#047857", "#b45309", "#7c3aed", "#0e7490", "#be185d", "#4f46e5", "#4d7c0f", "#c2410c", "#0f766e", "#9333ea"];
 
 /** Stable presence color per user id. */
 export function userColor(id: string): string {

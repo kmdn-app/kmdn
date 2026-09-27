@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown, ChevronRight, FileText, Folder, Image as ImageIcon } from "lucide-react";
@@ -54,6 +55,7 @@ export function FileTree({
   revision?: number;
   onNavigate?: () => void;
 }) {
+  const { t } = useTranslation();
   const tree = useMemo(() => build(nodes, root), [nodes, root]);
   const [open, setOpen] = useState<Set<string>>(() => {
     const s = new Set<string>();
@@ -78,7 +80,7 @@ export function FileTree({
         .map((sub) => {
           const isOpen = open.has(sub.path) || (!!current && current.startsWith(sub.path + "/"));
           return (
-            <div key={sub.path}>
+            <li key={sub.path}>
               <button
                 type="button"
                 onClick={() => toggle(sub.path)}
@@ -90,8 +92,8 @@ export function FileTree({
                 <Folder className="size-3.5 text-muted-foreground" />
                 <span className="truncate">{sub.name}</span>
               </button>
-              {isOpen && render(sub, depth + 1)}
-            </div>
+              {isOpen && <ul>{render(sub, depth + 1)}</ul>}
+            </li>
           );
         })}
       {d.files
@@ -106,9 +108,10 @@ export function FileTree({
             !f.markdown && "text-muted-foreground",
           );
           const style = { paddingLeft: 8 + depth * 14 + 18 };
-          return f.markdown ? (
+          return (
+            <li key={f.path}>
+              {f.markdown ? (
             <Link
-              key={f.path}
               to="/$owner/$repo/$"
               params={{ owner: repo.owner, repo: repo.name, _splat: f.path }}
               search={revision ? { revision } : {}}
@@ -122,13 +125,17 @@ export function FileTree({
               {f.op && OP_MARK[f.op] && <span className={cn("ml-auto font-mono text-[11px] font-semibold", OP_MARK[f.op]!.cls)}>{OP_MARK[f.op]!.letter}</span>}
             </Link>
           ) : (
-            <div key={f.path} className={cls} style={style} title={f.path}>
+            <div className={cls} style={style} title={f.path}>
               <Icon className="size-3.5 shrink-0" />
               <span className="truncate">{f.name}</span>
             </div>
+              )}
+            </li>
           );
         })}
     </>
   );
-  return <div role="tree">{render(tree, 0)}</div>;
+  // Nested lists of disclosure buttons and links: every item is reachable
+  // with Tab, which a role="tree" would require roving focus for.
+  return <ul aria-label={t("shell.files")}>{render(tree, 0)}</ul>;
 }
