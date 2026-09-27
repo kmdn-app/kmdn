@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -14,6 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, errorMessage, meQuery, unwrap, useMe } from "@/lib/api";
+import { Switch } from "@/components/ui/switch";
+import { currentSubscription, disablePush, enablePush, pushSupported } from "@/lib/notifications";
+import type { components } from "@kmdn/api-client";
+
+type NotificationPref = components["schemas"]["NotificationPref"];
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import type { ThemeChoice } from "@/theme";
@@ -44,6 +49,7 @@ function Profile() {
               <CommitEmail />
               <LinkedAccounts />
               <Appearance />
+              <Notifications />
               <Sessions />
             </div>
           </div>
@@ -170,6 +176,67 @@ function LinkedAccounts() {
             </Row>
           ))}
         {(providers.data?.length ?? 0) === 0 && (linked.data?.length ?? 0) === 0 && <p className="text-[13.5px] text-muted-foreground">{t("profile.noProviders")}</p>}
+      </Card>
+    </Panel>
+  );
+}
+
+function Notifications() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const prefs = useQuery({ queryKey: ["notification-prefs"], queryFn: () => unwrap(api.GET("/me/notification-prefs")) });
+  const here = useQuery({ queryKey: ["push-here"], queryFn: async () => !!(await currentSubscription()), enabled: pushSupported() });
+  const save = useMutation({
+    mutationFn: (items: NotificationPref[]) => unwrap(api.PUT("/me/notification-prefs", { body: { items } })),
+    onSuccess: (d) => qc.setQueryData(["notification-prefs"], d),
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  const toggle = useMutation({
+    mutationFn: async (on: boolean) => {
+      if (on && !(await enablePush())) throw new Error(t(Notification.permission === "denied" ? "inbox.prefs.pushDenied" : "inbox.prefs.pushUnsupported"));
+      if (!on) await disablePush();
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["push-here"] });
+      void qc.invalidateQueries({ queryKey: ["notification-prefs"] });
+    },
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  const set = (kind: string, field: "in_app" | "push", v: boolean) => {
+    const items = (prefs.data?.items ?? []).map((p) => (p.kind === kind ? { ...p, [field]: v } : p));
+    save.mutate(items.filter((p) => p.kind === kind));
+    qc.setQueryData(["notification-prefs"], { ...prefs.data!, items });
+  };
+  return (
+    <Panel
+      title={t("inbox.prefs.title")}
+      desc={t("inbox.prefs.hint")}
+      actions={
+        prefs.data?.push_available &&
+        (pushSupported() ? (
+          <Button size="sm" variant={here.data ? "outline" : "default"} disabled={toggle.isPending} onClick={() => toggle.mutate(!here.data)}>
+            {toggle.isPending && <Loader2 className="animate-spin" />}
+            {here.data ? t("inbox.prefs.disablePush") : t("inbox.prefs.enablePush")}
+          </Button>
+        ) : (
+          <span className="text-[12.5px] text-muted-foreground">{t("inbox.prefs.pushUnsupported")}</span>
+        ))
+      }
+    >
+      <Card>
+        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 gap-y-3 text-[13.5px]">
+          <span className="text-[12px] font-medium text-muted-foreground">{t("inbox.prefs.kind")}</span>
+          <span className="text-[12px] font-medium text-muted-foreground">{t("inbox.prefs.inApp")}</span>
+          <span className="text-[12px] font-medium text-muted-foreground">{t("inbox.prefs.push")}</span>
+          {(prefs.data?.items ?? []).map((p) => (
+            <Fragment key={p.kind}>
+              <span>{t(`inbox.prefKinds.${p.kind}`)}</span>
+              <Switch checked={p.in_app} onCheckedChange={(v) => set(p.kind, "in_app", v)} aria-label={`${t(`inbox.prefKinds.${p.kind}`)}: ${t("inbox.prefs.inApp")}`} />
+              <Switch checked={p.push} disabled={!here.data} onCheckedChange={(v) => set(p.kind, "push", v)} aria-label={`${t(`inbox.prefKinds.${p.kind}`)}: ${t("inbox.prefs.push")}`} />
+            </Fragment>
+          ))}
+        </div>
+        {here.data && <p className="text-[12.5px] text-muted-foreground">{t("inbox.prefs.pushOn")}</p>}
       </Card>
     </Panel>
   );

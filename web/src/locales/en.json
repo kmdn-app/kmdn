@@ -784,5 +784,55 @@
       "keepPage": "Keep this revision's page",
       "deletePage": "Delete it too"
     }
+  },
+  "inbox": {
+    "title": "Inbox",
+    "markAll": "Mark all read",
+    "empty": "Nothing new. Review requests, replies and mentions show up here.",
+    "unread": "Unread",
+    "updates_one": "{{count}} update",
+    "updates_other": "{{count}} updates",
+    "kinds": {
+      "mention": "{{actor}} mentioned you",
+      "reply": "{{actor}} replied",
+      "review_requested": "{{actor}} asked for your review",
+      "approval": "{{actor}} approved ({{approved}} of {{of}})",
+      "approved": "Every reviewer approved: ready to publish",
+      "changes_requested": "{{actor}} asked for changes",
+      "update_available": "Published changed pages in this revision",
+      "conflicts": "Updates from Published brought {{conflicts}} conflicts: back to editing",
+      "publishing": "A pull request was opened to publish it",
+      "published": "{{actor}} published it",
+      "publish_closed": "The pull request was closed without merging",
+      "invited": "{{actor}} added you as an editor",
+      "page_published": "{{actor}} published changes to {{path}}"
+    },
+    "prefs": {
+      "title": "Notifications",
+      "hint": "People involved in a revision hear about it here and, if you allow it, as browser notifications. No emails.",
+      "kind": "Event",
+      "inApp": "Inbox",
+      "push": "Browser",
+      "enablePush": "Allow browser notifications",
+      "disablePush": "Turn off in this browser",
+      "pushOn": "Browser notifications are on in this browser.",
+      "pushUnsupported": "This browser doesn't support notifications.",
+      "pushDenied": "Notifications are blocked for this site in the browser's settings."
+    },
+    "prefKinds": {
+      "mention": "Someone mentions you",
+      "reply": "A reply in a thread you're in",
+      "review_requested": "Your review is requested",
+      "approval": "A reviewer approves",
+      "approved": "Every reviewer approved",
+      "changes_requested": "Changes are requested",
+      "update_available": "Updates from Published",
+      "conflicts": "Conflicts after updates",
+      "publishing": "A pull request opens to publish",
+      "published": "A revision you're in is published",
+      "publish_closed": "A publish pull request is closed",
+      "invited": "You're added to a revision",
+      "page_published": "A page you follow is updated"
+    }
   }
 }

@@ -14,6 +14,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
+import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AuthVerifyRouteImport } from './routes/auth.verify'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AppOwnerRepoRouteRouteImport } from './routes/_app/$owner/$repo/route'
@@ -46,6 +47,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppAdminRoute = AppAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInboxRoute = AppInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => AppRoute,
 } as any)
 const AuthVerifyRoute = AuthVerifyRouteImport.update({
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
   '/admin': typeof AppAdminRoute
+  '/inbox': typeof AppInboxRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/invite/$token': typeof InviteTokenRoute
   '/$owner/$repo': typeof AppOwnerRepoRouteRouteWithChildren
@@ -115,6 +122,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
   '/admin': typeof AppAdminRoute
+  '/inbox': typeof AppInboxRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/invite/$token': typeof InviteTokenRoute
   '/': typeof AppIndexRoute
@@ -131,6 +139,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
   '/_app/admin': typeof AppAdminRoute
+  '/_app/inbox': typeof AppInboxRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/invite/$token': typeof InviteTokenRoute
   '/_app/': typeof AppIndexRoute
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/signin'
     | '/admin'
+    | '/inbox'
     | '/auth/verify'
     | '/invite/$token'
     | '/$owner/$repo'
@@ -163,6 +173,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/signin'
     | '/admin'
+    | '/inbox'
     | '/auth/verify'
     | '/invite/$token'
     | '/'
@@ -178,6 +189,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/signin'
     | '/_app/admin'
+    | '/_app/inbox'
     | '/auth/verify'
     | '/invite/$token'
     | '/_app/'
@@ -233,6 +245,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AppAdminRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/inbox': {
+      id: '/_app/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof AppInboxRouteImport
       parentRoute: typeof AppRoute
     }
     '/auth/verify': {
@@ -322,6 +341,7 @@ const AppOwnerRepoRouteRouteWithChildren =
 
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
+  AppInboxRoute: typeof AppInboxRoute
   AppIndexRoute: typeof AppIndexRoute
   AppOwnerRepoRouteRoute: typeof AppOwnerRepoRouteRouteWithChildren
   AppSettingsProfileRoute: typeof AppSettingsProfileRoute
@@ -329,6 +349,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
+  AppInboxRoute: AppInboxRoute,
   AppIndexRoute: AppIndexRoute,
   AppOwnerRepoRouteRoute: AppOwnerRepoRouteRouteWithChildren,
   AppSettingsProfileRoute: AppSettingsProfileRoute,
