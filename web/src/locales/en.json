@@ -557,7 +557,8 @@
     "remove": "Remove",
     "rename": "Rename",
     "delete": "Delete",
-    "add": "Add"
+    "add": "Add",
+    "close": "Close"
   },
   "checkpoints": {
     "title": "Checkpoints",
@@ -593,7 +594,9 @@
     "reasons": {
       "missing_page": "page not found",
       "missing_anchor": "section not found"
-    }
+    },
+    "more_one": "And {{count}} more",
+    "more_other": "And {{count}} more"
   },
   "presence": {
     "label_one": "{{count}} person in this revision",
@@ -890,5 +893,25 @@
     "redeliver": "Redeliver",
     "attempts_one": "{{count}} attempt",
     "attempts_other": "{{count}} attempts"
+  },
+  "graph": {
+    "title": "Graph",
+    "search": "Find a page",
+    "folder": "Folder",
+    "allFolders": "All folders",
+    "root": "(root)",
+    "scope": "Scope",
+    "empty": "No pages yet.",
+    "stats": "{{pages}} pages · {{links}} links",
+    "broken_one": "{{count}} broken link",
+    "broken_other": "{{count}} broken links",
+    "orphans_one": "{{count}} orphan page",
+    "orphans_other": "{{count}} orphan pages",
+    "inOut": "{{in}} in · {{out}} out",
+    "orphan": "no links in",
+    "changed": "changed in this revision",
+    "open": "Open page",
+    "local": "Nearby pages",
+    "openGraph": "Open the graph"
   }
 }

@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { Waypoints } from "lucide-react";
 import { Bell, Check, ChevronsUpDown, FilePen, Home, LayoutList, LogOut, Monitor, Moon, Plus, Search, Settings, Shield, Sun, UserRound } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/logo";
@@ -291,6 +292,12 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
           <Link to="/$owner/$repo/revisions" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
             <LayoutList />
             {t("revision.list")}
+          </Link>
+        )}
+        {repo && !revision && (
+          <Link to="/$owner/$repo/graph" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
+            <Waypoints />
+            {t("graph.title")}
           </Link>
         )}
         {repo && (revision ? <RevisionNav repo={repo} rev={revision} currentPath={currentPath} onNavigate={onNavigate} /> : <PublishedNav repo={repo} currentPath={currentPath} onNavigate={onNavigate} />)}

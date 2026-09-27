@@ -21,6 +21,7 @@ import { Route as AppOwnerRepoRouteRouteImport } from './routes/_app/$owner/$rep
 import { Route as AppSettingsProfileRouteImport } from './routes/_app/settings/profile'
 import { Route as AppOwnerRepoIndexRouteImport } from './routes/_app/$owner/$repo/index'
 import { Route as AppOwnerRepoSplatRouteImport } from './routes/_app/$owner/$repo/$'
+import { Route as AppOwnerRepoGraphRouteImport } from './routes/_app/$owner/$repo/graph'
 import { Route as AppOwnerRepoSettingsRouteImport } from './routes/_app/$owner/$repo/settings'
 import { Route as AppOwnerRepoRevisionsIndexRouteImport } from './routes/_app/$owner/$repo/revisions/index'
 import { Route as AppOwnerRepoRevisionsNumberRouteImport } from './routes/_app/$owner/$repo/revisions/$number'
@@ -84,6 +85,11 @@ const AppOwnerRepoSplatRoute = AppOwnerRepoSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => AppOwnerRepoRouteRoute,
 } as any)
+const AppOwnerRepoGraphRoute = AppOwnerRepoGraphRouteImport.update({
+  id: '/graph',
+  path: '/graph',
+  getParentRoute: () => AppOwnerRepoRouteRoute,
+} as any)
 const AppOwnerRepoSettingsRoute = AppOwnerRepoSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo': typeof AppOwnerRepoRouteRouteWithChildren
   '/settings/profile': typeof AppSettingsProfileRoute
   '/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
+  '/$owner/$repo/graph': typeof AppOwnerRepoGraphRoute
   '/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
   '/$owner/$repo/': typeof AppOwnerRepoIndexRoute
   '/$owner/$repo/revisions/$number': typeof AppOwnerRepoRevisionsNumberRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/settings/profile': typeof AppSettingsProfileRoute
   '/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
+  '/$owner/$repo/graph': typeof AppOwnerRepoGraphRoute
   '/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
   '/$owner/$repo': typeof AppOwnerRepoIndexRoute
   '/$owner/$repo/revisions/$number': typeof AppOwnerRepoRevisionsNumberRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/_app/$owner/$repo': typeof AppOwnerRepoRouteRouteWithChildren
   '/_app/settings/profile': typeof AppSettingsProfileRoute
   '/_app/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
+  '/_app/$owner/$repo/graph': typeof AppOwnerRepoGraphRoute
   '/_app/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
   '/_app/$owner/$repo/': typeof AppOwnerRepoIndexRoute
   '/_app/$owner/$repo/revisions/$number': typeof AppOwnerRepoRevisionsNumberRoute
@@ -164,6 +173,7 @@ export interface FileRouteTypes {
     | '/$owner/$repo'
     | '/settings/profile'
     | '/$owner/$repo/$'
+    | '/$owner/$repo/graph'
     | '/$owner/$repo/settings'
     | '/$owner/$repo/'
     | '/$owner/$repo/revisions/$number'
@@ -179,6 +189,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings/profile'
     | '/$owner/$repo/$'
+    | '/$owner/$repo/graph'
     | '/$owner/$repo/settings'
     | '/$owner/$repo'
     | '/$owner/$repo/revisions/$number'
@@ -196,6 +207,7 @@ export interface FileRouteTypes {
     | '/_app/$owner/$repo'
     | '/_app/settings/profile'
     | '/_app/$owner/$repo/$'
+    | '/_app/$owner/$repo/graph'
     | '/_app/$owner/$repo/settings'
     | '/_app/$owner/$repo/'
     | '/_app/$owner/$repo/revisions/$number'
@@ -296,6 +308,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOwnerRepoSplatRouteImport
       parentRoute: typeof AppOwnerRepoRouteRoute
     }
+    '/_app/$owner/$repo/graph': {
+      id: '/_app/$owner/$repo/graph'
+      path: '/graph'
+      fullPath: '/$owner/$repo/graph'
+      preLoaderRoute: typeof AppOwnerRepoGraphRouteImport
+      parentRoute: typeof AppOwnerRepoRouteRoute
+    }
     '/_app/$owner/$repo/settings': {
       id: '/_app/$owner/$repo/settings'
       path: '/settings'
@@ -322,6 +341,7 @@ declare module '@tanstack/react-router' {
 
 interface AppOwnerRepoRouteRouteChildren {
   AppOwnerRepoSplatRoute: typeof AppOwnerRepoSplatRoute
+  AppOwnerRepoGraphRoute: typeof AppOwnerRepoGraphRoute
   AppOwnerRepoSettingsRoute: typeof AppOwnerRepoSettingsRoute
   AppOwnerRepoIndexRoute: typeof AppOwnerRepoIndexRoute
   AppOwnerRepoRevisionsNumberRoute: typeof AppOwnerRepoRevisionsNumberRoute
@@ -330,6 +350,7 @@ interface AppOwnerRepoRouteRouteChildren {
 
 const AppOwnerRepoRouteRouteChildren: AppOwnerRepoRouteRouteChildren = {
   AppOwnerRepoSplatRoute: AppOwnerRepoSplatRoute,
+  AppOwnerRepoGraphRoute: AppOwnerRepoGraphRoute,
   AppOwnerRepoSettingsRoute: AppOwnerRepoSettingsRoute,
   AppOwnerRepoIndexRoute: AppOwnerRepoIndexRoute,
   AppOwnerRepoRevisionsNumberRoute: AppOwnerRepoRevisionsNumberRoute,

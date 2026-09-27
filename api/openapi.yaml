@@ -1851,6 +1851,18 @@ paths:
       responses:
         "202": { description: Queued again }
         "404": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/graph:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [links]
+      operationId: getLinkGraph
+      summary: Pages and the links between them (published, or as a revision sees them)
+      parameters:
+        - { name: scope, in: query, schema: { type: string, description: "published (default) or revision:<id>" } }
+      responses:
+        "200": { description: Graph, content: { application/json: { schema: { $ref: "#/components/schemas/LinkGraph" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
   /repos/{repo}/discussions:
     parameters:
       - { $ref: "#/components/parameters/RepoID" }
@@ -2034,6 +2046,33 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/NotificationPref" } }
         push_available: { type: boolean }
         push_subscriptions: { type: integer, description: "Browsers subscribed to push" }
+    LinkGraph:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          items:
+            type: object
+            required: [path, title, folder, in, out]
+            properties:
+              path: { type: string }
+              title: { type: string }
+              folder: { type: string }
+              in: { type: integer }
+              out: { type: integer }
+              orphan: { type: boolean }
+              changed: { type: boolean }
+        edges:
+          type: array
+          items:
+            type: object
+            required: [from, to, count]
+            properties:
+              from: { type: string }
+              to: { type: string }
+              count: { type: integer }
+              broken: { type: boolean }
     Hook:
       type: object
       required: [id, kind, url_host, events, active, created_at]

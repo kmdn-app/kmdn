@@ -21,6 +21,7 @@ func (s *Service) Routes(r chi.Router, apply Applier) {
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Require)
 		r.Get("/repos/{repo}/links/*", s.publishedLinks)
+		r.Get("/repos/{repo}/graph", s.graph)
 		r.Get("/revisions/{revision}/links/*", s.revisionLinks)
 		r.Get("/revisions/{revision}/checks", s.checks)
 		r.Post("/revisions/{revision}/files/rename-preview", s.renamePreview)
