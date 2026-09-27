@@ -388,6 +388,8 @@ func (s *Service) Changes(ctx context.Context, rev revisions.Revision) ([]gitmir
 	}
 	touched := map[string]bool{}
 	var out []gitmirror.Change
+	// Clear old paths before writing the final manifest. A renamed page's
+	// source can be reused by an added page or another rename.
 	for _, f := range files {
 		touched[f.Path] = true
 		switch f.Op {
@@ -395,8 +397,11 @@ func (s *Service) Changes(ctx context.Context, rev revisions.Revision) ([]gitmir
 			out = append(out, gitmirror.Change{Path: f.Path, Delete: true})
 		case revisions.OpRename:
 			touched[f.FromPath] = true
-			out = append(out, gitmirror.Change{Path: f.FromPath, Delete: true}, gitmirror.Change{Path: f.Path, Content: []byte(f.ContentMD)})
-		default:
+			out = append(out, gitmirror.Change{Path: f.FromPath, Delete: true})
+		}
+	}
+	for _, f := range files {
+		if f.Op != revisions.OpDelete {
 			out = append(out, gitmirror.Change{Path: f.Path, Content: []byte(f.ContentMD)})
 		}
 	}
