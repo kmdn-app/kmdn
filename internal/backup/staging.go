@@ -103,7 +103,7 @@ func (s *stagedBackup) install(root *os.Root, name, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 	tmpName := ".restore-" + ids.New("file")
 	tmp, err := root.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {

@@ -68,7 +68,7 @@ func open(in string) (*archiveReader, func(), error) {
 		return nil, nil, err
 	}
 	var r io.Reader
-	closeAll := func() { _ = f.Close() }
+	var closeAll func()
 	switch {
 	case strings.HasSuffix(in, ".tar.gz"), strings.HasSuffix(in, ".tgz"):
 		gr, err := gzip.NewReader(f)
@@ -154,7 +154,7 @@ func Restore(ctx context.Context, o RestoreOptions) (Restored, error) {
 	if err != nil {
 		return out, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	for _, name := range staged.files {
 		if name == "kmdn.db" {
 			continue
