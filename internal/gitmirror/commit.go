@@ -173,17 +173,28 @@ func (m *Mirror) DeleteRemoteBranch(ctx context.Context, cred *Credential, branc
 	return err
 }
 
-// FindTrailer returns the newest commit in from..to whose message contains
-// the line (used to resume a publish that already landed).
+// FindTrailer returns the newest commit in from..to with line as a whole
+// line of its message (used to resume a publish that already landed).
 func (m *Mirror) FindTrailer(ctx context.Context, from, to, line string) (string, bool, error) {
 	rng := to
 	if from != "" {
 		rng = from + ".." + to
 	}
-	out, err := m.Git.run(ctx, m.Path, nil, nil, "log", "--format=%H", "-F", "--grep="+line, rng)
+	out, err := m.Git.run(ctx, m.Path, nil, nil, "log", "--format=%H%x00%B%x01", "-F", "--grep="+line, rng)
 	if err != nil {
 		return "", false, err
 	}
-	first, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
-	return first, first != "", nil
+	// --grep matches substrings: .../revisions/1 would match /revisions/12.
+	for _, rec := range strings.Split(string(out), "\x01") {
+		sha, msg, ok := strings.Cut(strings.TrimSpace(rec), "\x00")
+		if !ok {
+			continue
+		}
+		for _, l := range strings.Split(msg, "\n") {
+			if strings.TrimSpace(l) == line {
+				return sha, true, nil
+			}
+		}
+	}
+	return "", false, nil
 }

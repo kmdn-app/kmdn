@@ -2135,7 +2135,7 @@ R.publish=()=>{
   const tr=(k,v,note)=>`<div class="li" style="padding:7px 0"><span class="mono xsmall" style="color:var(--syn-key);white-space:nowrap">${k}:</span><span class="mono xsmall trunc" style="flex:1" title="${esc(v)}">${esc(v)}</span>${note?`<span class="badge badge-outline hide-sm">${note}</span>`:''}</div>`;
   const dlg=`<div class="overlay" id="pub-dlg"><div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="pub-t">
     <button class="btn btn-ghost btn-sm btn-icon x" data-close aria-label="Close">${ic('x')}</button>
-    <div class="dlg-h"><h2 id="pub-t">Publish to northwind/handbook</h2><p>Creates one commit on <b style="color:var(--foreground)">main</b> with all 5 files. Published updates for everyone right after.</p></div>
+    <div class="dlg-h"><h2 id="pub-t">Publish to northwind/handbook</h2><p>Merges the revision's pull request into <b style="color:var(--foreground)">main</b> with a merge commit: 5 files, and the 6 commits saved along the way stay in history. Published updates for everyone right after.</p></div>
     <div class="dlg-c">
       <div class="row wrap" style="margin-bottom:16px"><span class="xsmall muted">Mockup variant:</span><div class="tabs sm" role="tablist"><button class="tab" role="tab" data-tab="${set}:open" aria-selected="true">main is open</button><button class="tab" role="tab" data-tab="${set}:prot" aria-selected="false">main is protected</button></div></div>
       <div class="field"><label class="label" for="pub-title">Commit title</label><input class="input" id="pub-title" value="Update onboarding for 2026"></div>
@@ -2584,7 +2584,7 @@ const SCREENS=[
 ];
 const GROUPS=['Onboarding & auth','Reading','Editing','Review & publish','History','Assistant','Settings & admin'];
 R.index=()=>`<div class="index">
-  <div class="ix-hero"><span class="logo lg">k</span><div><h1>kmdn mockups</h1><p>Collaborative markdown editing with a git backend. ${SCREENS.length-1} screens from the Northwind instance: people edit a revision together, assigned reviewers approve, kmdn publishes one commit.</p></div></div>
+  <div class="ix-hero"><span class="logo lg">k</span><div><h1>kmdn mockups</h1><p>Collaborative markdown editing with a git backend. ${SCREENS.length-1} screens from the Northwind instance: people edit a revision together (each Save all a commit on its draft pull request), assigned reviewers approve, kmdn merges it.</p></div></div>
   <div class="ix-legend"><span class="lg-h">Revision states</span>${Object.keys(ST).map(pill).join('')}<span class="xsmall muted" style="flex-basis:100%">Conflicts send a revision back to Editing; the Conflict pill in lists means \u201cEditing \u00b7 has conflicts\u201d. Updates from Published are previewed, then applied.</span></div>
   <div class="ix-legend"><span class="lg-h">People</span>${['maya','tom','priya','luis','sam','bot'].map(k=>`<span class="row small">${av(k,'sm')}${P[k].n}<span class="muted">${k==='bot'?'agent':P[k].r}</span></span>`).join('')}</div>
   ${GROUPS.map(g=>`<h2 class="ix-g">${g}</h2><div class="ix-grid">${SCREENS.filter(s=>s[1]===g).map(s=>`<a class="ix-card" href="#${s[0]}"><span class="ix-thumb">${ic(s[4],'lg')}</span><div style="min-width:0"><div class="ix-n">${s[2]}</div><div class="ix-d">${s[3]}</div><code>#${s[0]}</code></div></a>`).join('')}</div>`).join('')}

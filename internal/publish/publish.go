@@ -33,6 +33,9 @@ const JobPublish = "revision.publish"
 type Docs interface {
 	FlushRevision(ctx context.Context, revID string)
 	StateOf(ctx context.Context, revID, p string) (docID string, state []byte, err error)
+	// SaveBeforePublish commits unsaved work on the branch (Save all) as by;
+	// the caller holds the branch lock.
+	SaveBeforePublish(ctx context.Context, repo repos.Repo, rev revisions.Revision, by users.User) error
 }
 
 // Service publishes revisions.
@@ -65,8 +68,12 @@ type Preview struct {
 	Assisted  bool     `json:"assisted"`
 	Message   string   `json:"message"`
 	Target    string   `json:"target_branch"`
-	// Protected: publishing opens a pull/merge request instead of pushing.
+	// Protected: the target branch is protected (kmdn still merges through
+	// the forge's API; with required checks, auto-merge waits for them).
 	Protected bool `json:"protected"`
+	// RequiredReviews: approvals the forge's protection wants, which kmdn
+	// can't give unless it's on the rule's bypass list.
+	RequiredReviews int `json:"required_reviews"`
 	// Blocked explains why it can't be published right now ("" when it can).
 	Blocked string `json:"blocked,omitempty"`
 }
@@ -262,7 +269,7 @@ func (s *Service) Preview(ctx context.Context, repo repos.Repo, rev revisions.Re
 	p.Message = msg.String()
 	if a, err := s.Repos.Adapters.ForRepo(ctx, repo); err == nil && repo.ForgeKind != forge.KindGit {
 		if prot, err := a.BranchProtection(ctx, repo.ForgeRepo(), repo.TargetBranch); err == nil {
-			p.Protected = prot.Protected
+			p.Protected, p.RequiredReviews = prot.Protected, prot.RequiredReviews
 		}
 	}
 	p.Blocked = s.blocked(ctx, rev)
@@ -346,6 +353,12 @@ func blockedMessage(code string) string {
 		return "Apply the updates from Published first."
 	case "suggestions_pending":
 		return "Accept or reject the pending suggestions first."
+	case "merge_commits_disabled":
+		return "The repository doesn't allow merge commits. Allow them in its settings on the forge: kmdn keeps every saved commit in history."
+	case "approvals_required":
+		return "Branch protection on the forge requires approvals kmdn can't give. Add kmdn to the rule's bypass list, or merge the pull request on the forge."
+	case "not_mergeable":
+		return "The forge can't merge the pull request right now. Open it on the forge to see why."
 	case "published_moved":
 		return "Published changed some of these pages since the revision started. Apply the updates from Published first."
 	}
@@ -403,7 +416,7 @@ func (s *Service) run(ctx context.Context, in jobInput) (string, string, error) 
 	if sha, ok, err := m.FindTrailer(ctx, rev.BaseSHA, head, trailer); err == nil && ok {
 		return sha, "", s.finish(ctx, repo, rev, in.By, sha)
 	}
-	changes, touched, err := s.Branches.Changes(ctx, rev)
+	_, touched, err := s.Branches.Changes(ctx, rev)
 	if err != nil {
 		return "", "", err
 	}
@@ -420,48 +433,103 @@ func (s *Service) run(ctx context.Context, in jobInput) (string, string, error) 
 			}
 		}
 	}
+
+	unlock := s.Branches.Lock(rev.ID)
+	defer unlock()
+	// What gets merged is committed on the branch first.
+	if err := s.Docs.SaveBeforePublish(ctx, repo, rev, by); err != nil {
+		return "", "", err
+	}
+	if rev, err = revisions.Get(ctx, s.DB, rev.ID); err != nil {
+		return "", "", err
+	}
+	if rev, err = s.Branches.Ensure(ctx, repo, rev); err != nil {
+		return "", "", err
+	}
 	preview, err := s.Preview(ctx, repo, rev, in.Title, in.Body)
 	if err != nil {
 		return "", "", err
 	}
-	sha, err := m.BuildCommit(ctx, head, changes, preview.Message, s.Branches.Bot(ctx, repo))
-	if err != nil {
-		return "", "", err
-	}
-	prot := forge.Protection{}
-	if repo.ForgeKind != forge.KindGit {
-		if prot, err = adapter.BranchProtection(ctx, repo.ForgeRepo(), repo.TargetBranch); err != nil {
-			return "", "", err
-		}
-	}
-	if !prot.Protected {
-		if err := m.Push(ctx, cred, sha, repo.TargetBranch, head); err != nil {
-			if errors.Is(err, gitmirror.ErrStale) {
-				return "", "", err // the branch moved while we built: the job retries on the new head
-			}
+	title, body, _ := strings.Cut(preview.Message, "\n")
+
+	cr, ok := adapter.(forge.ChangeRequester)
+	if !ok || rev.ChangeRequestRef == "" {
+		// Plain git: kmdn writes the merge commit itself.
+		sha, err := s.mergeLocally(ctx, repo, rev, head, preview.Message)
+		if err != nil {
 			return "", "", err
 		}
 		return sha, "", s.finish(ctx, repo, rev, in.By, sha)
 	}
-	// Protected: the revision's own pull request carries the publish commit
-	// and the forge merges it.
-	if _, ok := adapter.(forge.ChangeRequester); !ok {
-		return "", "", jobs.Permanent(errors.New("the target branch is protected and this forge can't open pull requests"))
-	}
-	unlock := s.Branches.Lock(rev.ID)
-	defer unlock()
-	rev, _, err = s.Branches.Commit(ctx, repo, rev, preview.Message, s.Branches.Bot(ctx, repo))
-	if err != nil {
-		return "", "", err
-	}
 	if err := s.Branches.MarkReady(ctx, repo, rev); err != nil {
 		return "", "", err
 	}
-	if err := s.Revisions.MarkPublishing(ctx, rev.ID, in.By, rev.ChangeRequestURL, rev.ChangeRequestRef); err != nil {
-		return "", "", err
+	ref := forge.ChangeRequest{URL: rev.ChangeRequestURL, Ref: rev.ChangeRequestRef, Node: rev.ChangeRequestNode}
+	res, err := cr.MergeChangeRequest(ctx, repo.ForgeRepo(), ref, forge.MergeInput{Title: title, Body: strings.TrimSpace(body), HeadSHA: rev.BranchSHA})
+	if err != nil {
+		for code, e := range map[string]error{"merge_commits_disabled": forge.ErrMergeCommitsDisabled, "approvals_required": forge.ErrApprovalsRequired, "not_mergeable": forge.ErrNotMergeable} {
+			if errors.Is(err, e) {
+				_ = s.Revisions.PublishStopped(ctx, rev.ID, "publish_blocked", map[string]any{"reason": code, "detail": err.Error()})
+				return "", "", jobs.Permanent(&revisions.ErrConflict{Code: code, Msg: blockedMessage(code)})
+			}
+		}
+		return "", "", err // forge down, head changed: retried
 	}
-	_ = audit.Write(ctx, s.DB, audit.Entry{ActorType: "user", ActorID: in.By, Action: "revision.pull_request_opened", TargetType: "revision", TargetID: rev.ID, RepoID: repo.ID, Data: map[string]any{"url": rev.ChangeRequestURL}})
-	return "", rev.ChangeRequestURL, nil
+	if res.Queued {
+		// Required checks are running: the forge merges when they pass and
+		// its webhook finishes the publish.
+		if err := s.Revisions.MarkPublishing(ctx, rev.ID, in.By, rev.ChangeRequestURL, rev.ChangeRequestRef); err != nil {
+			return "", "", err
+		}
+		_ = audit.Write(ctx, s.DB, audit.Entry{ActorType: "user", ActorID: in.By, Action: "revision.auto_merge_enabled", TargetType: "revision", TargetID: rev.ID, RepoID: repo.ID, Data: map[string]any{"url": rev.ChangeRequestURL}})
+		return "", rev.ChangeRequestURL, nil
+	}
+	if err := s.finish(ctx, repo, rev, in.By, res.SHA); err != nil {
+		return res.SHA, "", err
+	}
+	s.deleteBranch(ctx, repo, rev.Branch)
+	return res.SHA, "", nil
+}
+
+// mergeLocally merges the revision's branch into the target branch in the
+// mirror (plain git remotes have no pull requests): the tree is the target's
+// head with the revision's changes, the parents the head and the branch tip.
+func (s *Service) mergeLocally(ctx context.Context, repo repos.Repo, rev revisions.Revision, head, message string) (string, error) {
+	_, cred, err := s.Branches.Forge(ctx, repo)
+	if err != nil {
+		return "", err
+	}
+	tip, err := s.Branches.Tip(ctx, repo, rev, cred)
+	if err != nil {
+		return "", err
+	}
+	changes, _, err := s.Branches.Changes(ctx, rev)
+	if err != nil {
+		return "", err
+	}
+	m := s.Repos.Mirror(repo)
+	bot := s.Branches.Bot(ctx, repo)
+	sha, err := m.Commit(ctx, gitmirror.CommitInput{From: head, Changes: changes, Parents: []string{head, tip}, Message: message, Author: bot})
+	if err != nil {
+		return "", err
+	}
+	if err := m.Push(ctx, cred, sha, repo.TargetBranch, head); err != nil {
+		return "", err // the target moved while we built (ErrStale): the job retries on the new head
+	}
+	s.deleteBranch(ctx, repo, rev.Branch)
+	return sha, nil
+}
+
+// deleteBranch removes a merged kmdn branch on the forge (best effort).
+func (s *Service) deleteBranch(ctx context.Context, repo repos.Repo, branch string) {
+	if !strings.HasPrefix(branch, "kmdn/") {
+		return
+	}
+	if _, cred, err := s.Branches.Forge(ctx, repo); err == nil {
+		if err := s.Repos.Mirror(repo).DeleteRemoteBranch(ctx, cred, branch); err != nil {
+			s.Log.Warn("delete merged branch", "err", err, "branch", branch)
+		}
+	}
 }
 
 func (s *Service) finish(ctx context.Context, repo repos.Repo, rev revisions.Revision, by, sha string) error {
@@ -491,13 +559,7 @@ func (s *Service) onChangeRequest(ctx context.Context, repo repos.Repo, ev forge
 		if err := s.finish(ctx, repo, rev, "", ev.MergeSHA); err != nil {
 			return err
 		}
-		if ev.Head != "" && strings.HasPrefix(ev.Head, "kmdn/") {
-			if a, err := s.Repos.Adapters.ForRepo(ctx, repo); err == nil {
-				if cred, err := a.Credential(ctx, repo.ForgeRepo()); err == nil {
-					_ = s.Repos.Mirror(repo).DeleteRemoteBranch(ctx, cred, ev.Head)
-				}
-			}
-		}
+		s.deleteBranch(ctx, repo, ev.Head)
 		return nil
 	}
 	if rev.State == revisions.Publishing {

@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -365,6 +366,13 @@ func (d collabDocs) ApplyDoc(ctx context.Context, repo repos.Repo, rev revisions
 }
 func (d collabDocs) Suggest(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, markdown string, attrs docengine.SuggestAttrs, kind string) (bool, error) {
 	return d.a.Collab.Suggest(ctx, repo, rev, c, p, markdown, attrs, kind)
+}
+func (d collabDocs) SaveBeforePublish(ctx context.Context, repo repos.Repo, rev revisions.Revision, by users.User) error {
+	_, err := d.a.Collab.SaveLocked(ctx, repo, rev, by, "Save before publishing")
+	if errors.Is(err, collab.ErrNothingToSave) {
+		return nil
+	}
+	return err
 }
 func (d collabDocs) SaveBeforeUpdate(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller) error {
 	return d.a.Collab.SaveFirst(ctx, repo, rev, c.User, "Save before applying updates from Published")

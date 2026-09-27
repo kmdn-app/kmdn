@@ -77,7 +77,7 @@ test.describe.serial("sign in, edit, review, publish", () => {
     await expect(r.getByText("Approved").first()).toBeVisible();
   });
 
-  test("the admin publishes: one commit on the forge, co-signed", async () => {
+  test("the admin publishes: the merge request is merged with a merge commit, co-signed", async () => {
     await a.goto(`${repoPath}/revisions/1`);
     await a.getByRole("button", { name: "Publish", exact: true }).first().click();
     const dialog = a.getByRole("dialog");
@@ -89,6 +89,9 @@ test.describe.serial("sign in, edit, review, publish", () => {
     const log = st.projects.find((p) => p.path_with_namespace === `${owner}/${name}`)!.log[0]!;
     expect(log).toContain(`Co-authored-by: ${ADMIN.name}`);
     expect(log).toContain(`Reviewed-by: ${REVIEWER.name}`);
+    const mr = st.merge_requests.find((m) => /^kmdn\/1-/.test(m.source_branch))!;
+    expect(mr.state).toBe("merged");
+    expect(st.projects.find((p) => p.path_with_namespace === `${owner}/${name}`)!.branches[mr.source_branch]).toBeUndefined();
     // Readers see the published change, its history and blame (which read
     // contents through the partial mirror, with the forge's credentials).
     await r.goto(`${repoPath}/docs/travel.md`);
@@ -98,7 +101,7 @@ test.describe.serial("sign in, edit, review, publish", () => {
     await expect(r.getByRole("main").getByText("Ana").first()).toBeVisible();
   });
 
-  test("a revision is a draft merge request, ready once published on a protected branch", async () => {
+  test("on a protected branch, publishing still merges the revision's merge request", async () => {
     await fetch(`${FORGE_URL}/_fake/projects`, { method: "POST", body: JSON.stringify({ path: `${owner}/${name}`, protected: true }) });
     const csrf = (await admin.cookies()).find((c) => c.name === "kmdn_csrf")!.value;
     expect((await a.request.post(`/api/v1/repos/${repoID}/refresh`, { headers: { "X-Kmdn-CSRF": csrf } })).status()).toBe(202);
@@ -127,12 +130,12 @@ test.describe.serial("sign in, edit, review, publish", () => {
 
     await a.goto(`${repoPath}/revisions/2`);
     await a.getByRole("button", { name: "Publish", exact: true }).first().click();
-    await a.getByRole("dialog").getByRole("button", { name: /Open (a )?merge request|Open (a )?pull request|Publish/ }).last().click();
+    await a.getByRole("dialog").getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(a.getByRole("main").getByText("Published", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     const mr = (await mrOf2())!;
     expect(mr.target_branch).toBe("main");
-    await expect.poll(async () => forgeFile(`${owner}/${name}`, "docs/index.md", mr.source_branch), { timeout: 20_000 }).toContain("Ask in #docs");
-    // main is untouched until the merge request is merged.
-    expect(await forgeFile(`${owner}/${name}`, "docs/index.md")).not.toContain("Ask in #docs");
+    expect(mr.state).toBe("merged");
+    expect(await forgeFile(`${owner}/${name}`, "docs/index.md")).toContain("Ask in #docs");
   });
 
 });

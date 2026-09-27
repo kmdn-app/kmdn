@@ -26,7 +26,10 @@ func runJobs(t *testing.T, a *App) {
 	}
 }
 
-func TestPublishSquashedCommitWithAttribution(t *testing.T) {
+// TestPublishMergesTheRevisionBranch: publishing merges the revision's
+// branch with a merge commit carrying the attribution; the commits people
+// saved stay in history.
+func TestPublishMergesTheRevisionBranch(t *testing.T) {
 	a, admin := newApp(t, nil)
 	a.Collab.Options = collab.Options{FlushDelay: time.Millisecond, QuietPeriod: time.Millisecond}
 	ctx := context.Background()
@@ -105,6 +108,17 @@ func TestPublishSquashedCommitWithAttribution(t *testing.T) {
 	}
 	if got := gitIn(t, remote, "log", "-1", "--format=%an|%B"); !strings.HasPrefix(got, "kmdn|Refresh the handbook") || !strings.Contains(got, "Co-authored-by: Sam Lindqvist <sam.l@example.org>") {
 		t.Fatalf("commit: %q", got)
+	}
+	// A merge of main and the branch. The branch holds the start commit,
+	// Sam's save on submit and the save of Tom's later fix before publishing.
+	if parents := strings.Fields(gitIn(t, remote, "log", "-1", "--format=%P")); len(parents) != 2 {
+		t.Fatalf("not a merge: %v", parents)
+	}
+	if got := gitIn(t, remote, "log", "--format=%an|%s", "HEAD^1..HEAD^2"); got != "Tom Okafor|Save before publishing\nSam Lindqvist|Save for review\nSam Lindqvist|Start revision #1: Refresh the handbook" {
+		t.Fatalf("saved commits: %q", got)
+	}
+	if got := gitIn(t, remote, "branch", "--list", "kmdn/*"); got != "" {
+		t.Fatalf("merged branch not deleted: %q", got)
 	}
 	if got := gitIn(t, remote, "ls-tree", "-r", "--name-only", "HEAD"); got != "docs/guides/guide.md\ndocs/index.md\ndocs/intact.md\ndocs/new.md" {
 		t.Fatalf("tree: %q", got)
