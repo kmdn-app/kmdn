@@ -1,0 +1,12 @@
+{
+  "name": "kmdn-monorepo",
+  "private": true,
+  "packageManager": "pnpm@11.26.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  }
+}
