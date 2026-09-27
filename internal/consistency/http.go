@@ -67,7 +67,7 @@ func (s *Service) revisionGet(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
-	api.JSON(w, http.StatusOK, map[string]any{"available": s.Available(r.Context()), "pending": s.Pending(r.Context(), JobRevision, rev.ID), "findings": list})
+	api.JSON(w, http.StatusOK, map[string]any{"available": s.AvailableFor(r.Context(), rev.RepoID), "pending": s.Pending(r.Context(), JobRevision, rev.ID), "findings": list})
 }
 
 func (s *Service) revisionRun(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,7 @@ func (s *Service) revisionRun(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, api.Err(http.StatusForbidden, "forbidden", "Editors and reviewers of the revision can run the check."))
 		return
 	}
-	if !s.Available(r.Context()) {
+	if !s.AvailableFor(r.Context(), rev.RepoID) {
 		api.Error(w, r, errOff)
 		return
 	}
@@ -111,7 +111,7 @@ func (s *Service) repoGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.JSON(w, http.StatusOK, map[string]any{
-		"available": s.Available(r.Context()), "pending": s.Pending(r.Context(), JobScan, repoID),
+		"available": s.AvailableFor(r.Context(), repoID), "pending": s.Pending(r.Context(), JobScan, repoID),
 		"can_run": role.AtLeast(access.Maintainer), "can_fix": role.AtLeast(access.Contributor),
 		"scan": scan, "findings": list,
 	})
@@ -129,7 +129,7 @@ func (s *Service) repoScan(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, api.Err(http.StatusForbidden, "forbidden", "Maintainers run consistency scans."))
 		return
 	}
-	if !s.Available(r.Context()) {
+	if !s.AvailableFor(r.Context(), repoID) {
 		api.Error(w, r, errOff)
 		return
 	}
@@ -278,7 +278,7 @@ func (s *Service) fix(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, api.Invalid("action", "Only duplicates can be replaced with a link."))
 		return
 	}
-	if !s.LLM.Enabled(r.Context()) || s.Brief == nil {
+	if !s.LLM.EnabledForRepo(r.Context(), f.RepoID) || s.Brief == nil {
 		api.Error(w, r, errOff)
 		return
 	}

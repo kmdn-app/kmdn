@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { api, meQuery, unwrap, useAssistantStatus, useMe, useSetupStatus } from "@/lib/api";
+import { api, meQuery, unwrap, useMe, useSetupStatus } from "@/lib/api";
 import { atLeast, useRepos, useTree, type RepoView } from "@/lib/repos";
 import { useTheme } from "@/lib/theme";
 import type { ThemeChoice } from "@/theme";
@@ -30,6 +30,7 @@ import { usePresence, useRevisionFiles, useRevisions, useRevisionTree, type Revi
 import { cn } from "@/lib/utils";
 import { usePalette } from "./command-palette";
 import { ForgeIcon } from "./forge-icon";
+import { useAssistantStatus } from "@/lib/orgs";
 
 const itemCls =
   "flex h-[1.875rem] w-full items-center gap-2 rounded-[0.4375rem] px-2 text-left text-[0.8125rem] whitespace-nowrap text-sidebar-foreground hover:bg-sidebar-accent [&.active]:bg-sidebar-accent [&.active]:font-medium [&_svg]:size-4 [&_svg]:text-muted-foreground";

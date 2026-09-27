@@ -102,6 +102,18 @@ func (s *Service) dup() float32 {
 // Available reports whether checks can run (a chat provider and an embeddings model).
 func (s *Service) Available(ctx context.Context) bool { return s.LLM.EmbeddingsEnabled(ctx) }
 
+// AvailableFor reports whether checks can run for a repo: Available, and
+// the repo's org has AI features on.
+func (s *Service) AvailableFor(ctx context.Context, repoID string) bool {
+	return s.Available(ctx) && s.LLM.EnabledForRepo(ctx, repoID)
+}
+
+// availableForRevision is AvailableFor the revision's repo.
+func (s *Service) availableForRevision(ctx context.Context, revID string) bool {
+	rev, err := revisions.Get(ctx, s.DB, revID)
+	return err == nil && s.AvailableFor(ctx, rev.RepoID)
+}
+
 // Register wires the jobs and the head-changed hook.
 func (s *Service) Register() {
 	decode := func(j jobs.Job) (map[string]string, error) {
@@ -137,7 +149,7 @@ func (s *Service) Register() {
 		return nil, s.schedule(ctx)
 	})
 	s.Repos.OnHeadChanged = append(s.Repos.OnHeadChanged, func(ctx context.Context, r repos.Repo, _, _ string) error {
-		if !s.Available(ctx) {
+		if !s.AvailableFor(ctx, r.ID) {
 			return nil
 		}
 		_, err := s.Jobs.Enqueue(ctx, s.DB, JobIndex, map[string]string{"repo_id": r.ID}, jobs.EnqueueOptions{Key: JobIndex + ":" + r.ID, MaxAttempts: 3})
@@ -147,7 +159,7 @@ func (s *Service) Register() {
 
 // Index syncs a repo's published passages and embeds new ones.
 func (s *Service) Index(ctx context.Context, repoID string) error {
-	if !s.Available(ctx) {
+	if !s.AvailableFor(ctx, repoID) {
 		return nil
 	}
 	r, err := repos.Get(ctx, s.DB, repoID)
@@ -167,7 +179,7 @@ func (s *Service) Index(ctx context.Context, repoID string) error {
 
 // RequestRevision queues a revision check after delay (deduplicated per revision).
 func (s *Service) RequestRevision(ctx context.Context, revID string, delay time.Duration) {
-	if !s.Available(ctx) {
+	if !s.availableForRevision(ctx, revID) {
 		return
 	}
 	if _, err := s.Jobs.Enqueue(ctx, s.DB, JobRevision, map[string]string{"revision_id": revID}, jobs.EnqueueOptions{Key: JobRevision + ":" + revID, RunAt: time.Now().Add(delay), MaxAttempts: 2}); err != nil {
@@ -190,7 +202,7 @@ type pair struct {
 // CheckRevision compares the passages a revision changes with the rest of
 // the repo (and with each other) and records the findings.
 func (s *Service) CheckRevision(ctx context.Context, revID string) error {
-	if !s.Available(ctx) {
+	if !s.availableForRevision(ctx, revID) {
 		return nil
 	}
 	rev, err := revisions.Get(ctx, s.DB, revID)
@@ -444,7 +456,7 @@ func (s *Service) RequestScan(ctx context.Context, repoID, by string) error {
 // next scan picks them up (verdicts are cached).
 func (s *Service) Scan(ctx context.Context, repoID, by string) (Scan, error) {
 	sc := Scan{ID: ids.New("csc"), Status: "running", StartedAt: time.Now()}
-	if !s.Available(ctx) {
+	if !s.AvailableFor(ctx, repoID) {
 		return sc, nil
 	}
 	r, err := repos.Get(ctx, s.DB, repoID)
@@ -565,7 +577,7 @@ func (s *Service) schedule(ctx context.Context) error {
 	}
 	due := time.Now().Add(-time.Duration(st.Consistency.ScanEveryDays) * 24 * time.Hour)
 	for _, r := range list {
-		if r.HeadSHA == "" {
+		if r.HeadSHA == "" || !s.LLM.EnabledForRepo(ctx, r.ID) {
 			continue
 		}
 		var last int64

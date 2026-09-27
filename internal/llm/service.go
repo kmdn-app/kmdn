@@ -96,6 +96,9 @@ type Service struct {
 	Secrets *secrets.Store
 	// Disabled turns the assistant off whatever the settings (assistant.enabled: false).
 	Disabled bool
+	// OrgAllows reports whether an org has AI features on (its settings, its
+	// plan); nil allows every org.
+	OrgAllows func(ctx context.Context, orgID string) bool
 	// HTTP overrides the providers' client (tests).
 	HTTP *http.Client
 	Log  *slog.Logger
@@ -126,6 +129,22 @@ func (s *Service) stored(ctx context.Context) (Settings, error) {
 		st.Models = map[string]string{}
 	}
 	return st, nil
+}
+
+// EnabledForRepo reports whether AI features can run for a repository: a
+// provider is set up and the repo's org has them on.
+func (s *Service) EnabledForRepo(ctx context.Context, repoID string) bool {
+	if !s.Enabled(ctx) {
+		return false
+	}
+	if s.OrgAllows == nil {
+		return true
+	}
+	var orgID string
+	if err := store.QueryRow(ctx, s.DB, `SELECT org_id FROM repos WHERE id = ?`, repoID).Scan(&orgID); err != nil {
+		return false
+	}
+	return s.OrgAllows(ctx, orgID)
 }
 
 // Enabled reports whether a provider is set up and passed its check.

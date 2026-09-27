@@ -67,9 +67,13 @@ func (s *Service) thread(w http.ResponseWriter, r *http.Request) (Thread, users.
 	return t, p.User, true
 }
 
-func (s *Service) enabled(w http.ResponseWriter, r *http.Request) bool {
+func (s *Service) enabled(w http.ResponseWriter, r *http.Request, repoID string) bool {
 	if !s.LLM.Enabled(r.Context()) {
 		api.Error(w, r, api.Err(http.StatusConflict, "assistant_off", "The assistant isn't set up on this instance."))
+		return false
+	}
+	if !s.LLM.EnabledForRepo(r.Context(), repoID) {
+		api.Error(w, r, api.Err(http.StatusConflict, "assistant_off", "The assistant is turned off for this organization."))
 		return false
 	}
 	return true
@@ -104,7 +108,7 @@ func title(text string) string {
 // createThread starts a private Q&A thread with its first question.
 func (s *Service) createThread(w http.ResponseWriter, r *http.Request) {
 	repo, u, _, ok := s.repo(w, r)
-	if !ok || !s.enabled(w, r) {
+	if !ok || !s.enabled(w, r, repo.ID) {
 		return
 	}
 	var in postInput
@@ -205,7 +209,7 @@ func (s *Service) deleteThread(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) postMessage(w http.ResponseWriter, r *http.Request) {
 	t, u, ok := s.thread(w, r)
-	if !ok || !s.enabled(w, r) {
+	if !ok || !s.enabled(w, r, t.RepoID) {
 		return
 	}
 	// Revision threads: anyone who can edit the revision can prompt.
