@@ -157,7 +157,8 @@ func TestMirrorReadsTreeFilesHistoryAndBlame(t *testing.T) {
 
 func TestParseTrailersWithoutTrailers(t *testing.T) {
 	body, co, rev, r := parseTrailers("Just a body.\nSecond line: not a trailer block because no blank line")
-	if len(co)+len(rev) != 0 || r != "" || !strings.HasPrefix(body, "Just a body.") {
+	// Non-nil so the API encodes [] rather than null.
+	if co == nil || rev == nil || len(co)+len(rev) != 0 || r != "" || !strings.HasPrefix(body, "Just a body.") {
 		t.Fatalf("%q %v %v %q", body, co, rev, r)
 	}
 }

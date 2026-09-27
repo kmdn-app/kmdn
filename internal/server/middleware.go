@@ -97,10 +97,12 @@ func recoverer(log *slog.Logger) func(http.Handler) http.Handler {
 }
 
 // securityHeaders applies the baseline from docs/specs/09-auth-permissions.md.
+// form-action allows https: because the GitHub App manifest flow POSTs a form
+// to github.com (or a GitHub Enterprise Server host).
 func securityHeaders(next http.Handler) http.Handler {
 	const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
 		"img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; " +
-		"worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+		"worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https:"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Content-Security-Policy", csp)

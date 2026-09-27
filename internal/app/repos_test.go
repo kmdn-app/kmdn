@@ -121,12 +121,30 @@ func TestConnectPlainGitRepoAndRead(t *testing.T) {
 	if code != 200 || f["content"] != "# First week\n\nWelcome.\n" || f["markdown"] != true {
 		t.Fatalf("file: %d %v", code, f)
 	}
+	// The web client encodes "/" in the path parameter.
+	if code, f := admin.do("GET", "/repos/"+repoID+"/files/docs%2Fonboarding%2Ffirst-week.md", nil); code != 200 || f["path"] != "docs/onboarding/first-week.md" {
+		t.Fatalf("escaped path: %d %v", code, f)
+	}
+	if code, _ := admin.do("GET", "/repos/"+repoID+"/files/docs%2F..%2Fsrc%2Fapp.go", nil); code != 404 {
+		t.Fatalf("traversal: %d", code)
+	}
 	if code, _ := admin.do("GET", "/repos/"+repoID+"/files/src/app.go", nil); code != 404 {
 		t.Fatalf("out of scope file: %d", code)
 	}
 	code, hist := admin.do("GET", "/repos/"+repoID+"/history/docs/onboarding/first-week.md", nil)
 	if code != 200 || !strings.Contains(toJSON(hist), "Tom Okafor") {
 		t.Fatalf("history: %v", hist)
+	}
+	if code, act := admin.do("GET", "/repos/"+repoID+"/activity", nil); code != 200 || !strings.Contains(toJSON(act), "Create handbook") || strings.Contains(toJSON(act), "src/app.go") {
+		t.Fatalf("activity: %d %v", code, act)
+	}
+	rawRes, err := admin.c.Get(admin.base + "/api/v1/repos/" + repoID + "/raw/docs/onboarding/images/desk.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawRes.Body.Close()
+	if rawRes.StatusCode != 200 || rawRes.Header.Get("Content-Type") != "image/png" || !strings.Contains(rawRes.Header.Get("Content-Security-Policy"), "sandbox") {
+		t.Fatalf("raw: %d %v", rawRes.StatusCode, rawRes.Header)
 	}
 	if code, bl := admin.do("GET", "/repos/"+repoID+"/blame/docs/onboarding/first-week.md", nil); code != 200 || len(bl["items"].([]any)) != 3 {
 		t.Fatalf("blame: %v", bl)
