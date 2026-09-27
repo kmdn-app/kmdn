@@ -12,7 +12,7 @@
 SMTP is **required** (setup wizard blocks until a test email succeeds).
 
 1. **Magic link**: enter email → email with a single-use link and a 6-digit code (for when the link opens on another device). Token: 32 random bytes, stored hashed (SHA-256), 15 min TTL, single use, bound to the requesting browser via a short-lived cookie nonce (code entry works without it). Rate-limited per email and IP.
-2. **Passkeys** (WebAuthn): users add passkeys after first sign-in from Profile. Discoverable credentials enable one-tap "Sign in with passkey". Multiple passkeys per user, named, with last-used.
+2. **Passkeys** (WebAuthn): users add passkeys after first sign-in from Profile. Discoverable credentials enable one-tap "Sign in with passkey". Multiple passkeys per user, named, with last-used. The relying party is `server.base_url` (RP ID = its host, the only allowed origin = its scheme and host), so changing the base URL's host invalidates passkeys. Resident keys are required, user verification preferred, a user's existing credentials are excluded when adding one, and a sign count going backwards (a cloned authenticator) refuses the sign-in and is audited. Challenges are single-use and expire after 5 minutes.
 3. **Continue with GitHub / GitLab**: OAuth via the GitHub App's user OAuth and the GitLab OAuth application. Signs in only if the forge identity is already **linked** to a kmdn account, or if the forge's verified primary email matches an existing kmdn account (then it links automatically). Never creates accounts on its own, unless the auto-join domain rule matches.
 
 No passwords.

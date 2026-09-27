@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Loader2, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { KeyRound, Loader2, LogOut, Monitor, Moon, Sun } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { Card, Panel, Row } from "@/components/settings-layout";
@@ -19,6 +19,7 @@ import { currentSubscription, disablePush, enablePush, pushSupported } from "@/l
 import type { components } from "@kmdn/api-client";
 
 type NotificationPref = components["schemas"]["NotificationPref"];
+import { cancelled, createPasskey, passkeysSupported } from "@/lib/passkeys";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import type { ThemeChoice } from "@/theme";
@@ -48,6 +49,7 @@ function Profile() {
               <ProfileCard key={me.id + me.name} />
               <CommitEmail />
               <LinkedAccounts />
+              <Passkeys />
               <Appearance />
               <Notifications />
               <Sessions />
@@ -269,6 +271,103 @@ function Appearance() {
       </div>
     </Panel>
   );
+}
+
+function Passkeys() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const list = useQuery({ queryKey: ["passkeys"], queryFn: async () => (await unwrap(api.GET("/me/passkeys"))).items });
+  const [name, setName] = useState("");
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const refresh = () => void qc.invalidateQueries({ queryKey: ["passkeys"] });
+  const add = useMutation({
+    mutationFn: async () => {
+      const o = await unwrap(api.POST("/me/passkeys/register/options", { body: { name: name.trim() || defaultPasskeyName() } }));
+      const credential = await createPasskey(o.options.publicKey);
+      return unwrap(api.POST("/me/passkeys/register/verify", { body: { ceremony: o.ceremony, credential } }));
+    },
+    onSuccess: () => (setName(""), refresh(), toast.success(t("profile.passkeyAdded"))),
+    onError: (e) => !cancelled(e) && toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  const rename = useMutation({
+    mutationFn: (r: { id: string; name: string }) => unwrap(api.PATCH("/me/passkeys/{id}", { params: { path: { id: r.id } }, body: { name: r.name } })),
+    onSuccess: () => (setRenaming(null), refresh()),
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => unwrap(api.DELETE("/me/passkeys/{id}", { params: { path: { id } } })),
+    onSuccess: refresh,
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  const supported = passkeysSupported();
+  return (
+    <Panel title={t("profile.passkeys")} desc={t("profile.passkeysDesc")}>
+      <Card>
+        {(list.data ?? []).map((p) =>
+          renaming?.id === p.id ? (
+            <form
+              key={p.id}
+              className="flex items-center gap-2 border-b py-3 last:border-b-0 first:pt-0"
+              onSubmit={(e) => (e.preventDefault(), rename.mutate(renaming))}
+            >
+              <Input value={renaming.name} onChange={(e) => setRenaming({ ...renaming, name: e.target.value })} maxLength={60} autoFocus aria-label={t("profile.passkeyName")} />
+              <Button size="sm" type="submit" disabled={!renaming.name.trim() || rename.isPending}>
+                {t("common.save")}
+              </Button>
+              <Button size="sm" variant="ghost" type="button" onClick={() => setRenaming(null)}>
+                {t("common.cancel")}
+              </Button>
+            </form>
+          ) : (
+            <Row
+              key={p.id}
+              title={p.name}
+              desc={
+                <>
+                  {t("profile.passkeyAddedOn", { date: new Date(p.created_at).toLocaleDateString() })}
+                  {" · "}
+                  {p.last_used_at ? (
+                    <>
+                      {t("profile.lastUsed")} <Time iso={p.last_used_at} />
+                    </>
+                  ) : (
+                    t("profile.neverUsed")
+                  )}
+                  {p.synced && ` · ${t("profile.synced")}`}
+                </>
+              }
+            >
+              <span className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={() => setRenaming({ id: p.id, name: p.name })}>
+                  {t("profile.rename")}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => remove.mutate(p.id)} disabled={remove.isPending}>
+                  {t("profile.remove")}
+                </Button>
+              </span>
+            </Row>
+          ),
+        )}
+        {list.data?.length === 0 && <p className="text-[13.5px] text-muted-foreground">{t("profile.noPasskeys")}</p>}
+        {supported ? (
+          <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => (e.preventDefault(), add.mutate())}>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={defaultPasskeyName()} maxLength={60} className="w-56" aria-label={t("profile.passkeyName")} />
+            <Button type="submit" size="sm" disabled={add.isPending}>
+              {add.isPending ? <Loader2 className="animate-spin" /> : <KeyRound />}
+              {t("profile.addPasskey")}
+            </Button>
+          </form>
+        ) : (
+          <p className="text-[13px] text-muted-foreground">{t("profile.passkeysUnsupported")}</p>
+        )}
+      </Card>
+    </Panel>
+  );
+}
+
+/** A name for a new passkey from the device, e.g. "Chrome on macOS". */
+function defaultPasskeyName(): string {
+  return typeof navigator === "undefined" ? "Passkey" : summarizeUA(navigator.userAgent);
 }
 
 function Sessions() {

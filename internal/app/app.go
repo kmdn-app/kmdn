@@ -123,6 +123,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Mail = mail.NewService(cfg, db, sec, log)
 	a.Auth = &auth.Service{DB: db, Mail: a.Mail, BaseURL: cfg.Server.BaseURL, SessionTTL: cfg.Auth.SessionTTL, AutoJoinDomains: cfg.Auth.AutoJoinDomains, Log: log}
 	a.AuthH = auth.NewHTTP(a.Auth, strings.HasPrefix(cfg.Server.BaseURL, "https://"), trusted)
+	a.AuthH.BaseURL = cfg.Server.BaseURL
 	a.Setup = &setup.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: cfg.Server.BaseURL, Log: log}
 
 	r := a.Server.API()

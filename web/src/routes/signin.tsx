@@ -2,13 +2,14 @@ import { useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Mail, ArrowLeft, Loader2 } from "lucide-react";
+import { Mail, ArrowLeft, KeyRound, Loader2 } from "lucide-react";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ForgeIcon } from "@/components/shell/forge-icon";
 import { ApiError, api, errorMessage, refreshMe, unwrap, useSetupStatus } from "@/lib/api";
+import { cancelled, getPasskey, passkeysSupported } from "@/lib/passkeys";
 
 export const Route = createFileRoute("/signin")({
   validateSearch: (s: Record<string, unknown>): { redirect?: string; oauth_error?: string } => ({
@@ -69,6 +70,7 @@ function RequestForm({
           {t(`signin.oauthError.${oauth_error}`, { defaultValue: t("signin.oauthError.generic") })}
         </p>
       )}
+      <PasskeySignIn redirect={redirect} />
       {(providers.data?.length ?? 0) > 0 && (
         <>
           <div className="grid gap-2">
@@ -113,6 +115,40 @@ function RequestForm({
         {send.isPending ? t("signin.sending") : t("signin.sendLink")}
       </Button>
     </form>
+  );
+}
+
+/** "Sign in with a passkey": the browser lists this site's passkeys, no email needed. */
+function PasskeySignIn({ redirect }: { redirect?: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const signIn = useMutation({
+    mutationFn: async () => {
+      const o = await unwrap(api.POST("/auth/passkey/options"));
+      const credential = await getPasskey(o.options.publicKey);
+      return unwrap(api.POST("/auth/passkey/verify", { body: { ceremony: o.ceremony, credential } }));
+    },
+    onSuccess: async () => {
+      await refreshMe(qc);
+      await navigate({ to: redirect ?? "/" });
+    },
+    onError: (e) => setError(cancelled(e) ? null : errorMessage(e, t("signin.passkeyFailed"))),
+  });
+  if (!passkeysSupported()) return null;
+  return (
+    <div className="mb-5 grid gap-2">
+      <Button type="button" variant="outline" className="w-full" disabled={signIn.isPending} onClick={() => (setError(null), signIn.mutate())}>
+        {signIn.isPending ? <Loader2 className="animate-spin" /> : <KeyRound />}
+        {t("signin.passkey")}
+      </Button>
+      {error && (
+        <p role="alert" className="text-[13px] text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
