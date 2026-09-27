@@ -335,7 +335,7 @@ function CodeBlock({ lang, code }: { lang: string | null; code: string }) {
   );
 }
 
-function MathView({ source, display }: { source: string; display?: boolean }) {
+export function MathView({ source, display }: { source: string; display?: boolean }) {
   const html = useMemo(() => {
     try {
       return katex.renderToString(source, { displayMode: !!display, throwOnError: false, strict: "ignore", trust: false });

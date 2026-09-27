@@ -223,3 +223,11 @@
   content: attr(data-lang); position: absolute; top: 4px; right: 10px; font: 11px var(--font-sans); color: var(--muted-foreground);
 }
 .kmdn-editor pre code { background: none; padding: 0; font-size: inherit; }
+/* Node views */
+.kmdn-editor .props input, .kmdn-editor .props textarea { font: inherit; }
+.kmdn-editor .math-edit { margin: 0 0 16px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.kmdn-editor .math-edit .math-src { margin: 0; border: 0; border-radius: 0; border-bottom: 1px solid var(--border); background: var(--muted); font: 13px/1.6 var(--font-mono); padding: 8px 12px; white-space: pre-wrap; }
+.kmdn-editor .math-edit .math-preview { padding: 10px 12px; overflow-x: auto; }
+.kmdn-editor .math-inline-edit.is-selected, .kmdn-editor .math-inline-edit:hover { outline: 1px solid var(--border); border-radius: 4px; }
+.kmdn-editor .rawblk-edit { margin: 0 0 16px; border: 1px dashed var(--border); border-radius: 10px; overflow: hidden; }
+.kmdn-editor .rawblk-bar { display: flex; align-items: center; gap: 6px; padding: 4px 10px; font: 12px var(--font-sans); color: var(--muted-foreground); border-bottom: 1px dashed var(--border); }

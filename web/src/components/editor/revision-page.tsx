@@ -223,7 +223,7 @@ function Body({
             <Loading />
           )
         ) : (
-          <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} />
+          <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} />
         ))
       )}
     </>
