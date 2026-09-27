@@ -3,11 +3,11 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
-import { applyTheme, storedTheme } from "./theme";
+import { applyAppearance, storedAppearance } from "./theme";
 import "./styles.css";
 import "./i18n";
 
-applyTheme(storedTheme());
+applyAppearance(storedAppearance());
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },

@@ -268,6 +268,17 @@
     "link": "Link {{name}}",
     "noProviders": "No forge sign-in is configured on this instance.",
     "appearance": "Appearance",
+    "appearanceDesc": "Saved to your account, so it follows you to every device.",
+    "palette": "Color theme",
+    "palettes": {
+      "default": "Default",
+      "catppuccin": "Catppuccin",
+      "gruvbox": "Gruvbox",
+      "base16": "Base16",
+      "nord": "Nord"
+    },
+    "uiScale": "Interface size",
+    "default": "default",
     "sessions": "Signed-in devices",
     "sessionsDesc": "Sign out of devices you don't use anymore.",
     "unknownDevice": "Unknown device",

@@ -124,6 +124,19 @@ func TestMagicLinkFlow(t *testing.T) {
 	if res, body := c.do("PATCH", "/me", `{"name":"Maya Chen","theme":"dark"}`, true); res.StatusCode != 200 || !strings.Contains(body, "Maya Chen") {
 		t.Fatalf("patch: %d %s", res.StatusCode, body)
 	}
+	// Appearance is per user: palette and interface size persist on the account.
+	if res, body := c.do("GET", "/me", "", false); res.StatusCode != 200 || !strings.Contains(body, `"palette":"default"`) || !strings.Contains(body, `"ui_scale":120`) {
+		t.Fatalf("default appearance: %d %s", res.StatusCode, body)
+	}
+	if res, body := c.do("PATCH", "/me", `{"palette":"nord","ui_scale":135}`, true); res.StatusCode != 200 || !strings.Contains(body, `"palette":"nord"`) || !strings.Contains(body, `"ui_scale":135`) || !strings.Contains(body, `"theme":"dark"`) {
+		t.Fatalf("appearance: %d %s", res.StatusCode, body)
+	}
+	if res, _ := c.do("PATCH", "/me", `{"palette":"solarized"}`, true); res.StatusCode != 422 {
+		t.Fatalf("unknown palette: %d", res.StatusCode)
+	}
+	if res, _ := c.do("PATCH", "/me", `{"ui_scale":300}`, true); res.StatusCode != 422 {
+		t.Fatalf("bad size: %d", res.StatusCode)
+	}
 	if res, _ := c.do("POST", "/auth/logout", "", true); res.StatusCode != 204 {
 		t.Fatalf("logout: %d", res.StatusCode)
 	}

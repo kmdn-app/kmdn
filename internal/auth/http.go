@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -181,8 +182,10 @@ func (h *HTTP) me(w http.ResponseWriter, r *http.Request) {
 func (h *HTTP) updateMe(w http.ResponseWriter, r *http.Request) {
 	p, _ := FromContext(r.Context())
 	var body struct {
-		Name  *string `json:"name"`
-		Theme *string `json:"theme"`
+		Name    *string `json:"name"`
+		Theme   *string `json:"theme"`
+		Palette *string `json:"palette"`
+		UIScale *int    `json:"ui_scale"`
 	}
 	if err := api.Decode(r, &body); err != nil {
 		api.Error(w, r, err)
@@ -205,7 +208,26 @@ func (h *HTTP) updateMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	palette, scale := p.User.Palette, p.User.UIScale
+	if body.Palette != nil {
+		if !slices.Contains(users.Palettes, *body.Palette) {
+			api.Error(w, r, api.Invalid("palette", "Palette must be one of "+strings.Join(users.Palettes, ", ")+"."))
+			return
+		}
+		palette = *body.Palette
+	}
+	if body.UIScale != nil {
+		if !slices.Contains(users.UIScales, *body.UIScale) {
+			api.Error(w, r, api.Invalid("ui_scale", "Interface size must be 100, 110, 120 or 135."))
+			return
+		}
+		scale = *body.UIScale
+	}
 	if err := users.UpdateProfile(r.Context(), h.Svc.DB, p.User.ID, name, theme); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	if err := users.UpdateAppearance(r.Context(), h.Svc.DB, p.User.ID, palette, scale); err != nil {
 		api.Error(w, r, err)
 		return
 	}
