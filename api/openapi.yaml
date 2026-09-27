@@ -1277,6 +1277,56 @@ paths:
                 required: [items]
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/PresenceUser" } }
+  /revisions/{revision}/suggestions:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: listSuggestions
+      summary: Pending suggestions in the revision's pages (or one page)
+      parameters:
+        - { name: path, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Suggestions in manifest and document order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Suggestion" } }
+  /revisions/{revision}/suggestions/resolve:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [revisions]
+      operationId: resolveSuggestions
+      summary: Accept or reject suggestions in a page (by id, by author, or all)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, action]
+              properties:
+                path: { type: string }
+                action: { type: string, enum: [accept, reject] }
+                ids: { type: array, items: { type: string } }
+                author: { type: string, description: "Only this author's suggestions" }
+      responses:
+        "200":
+          description: How many were resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resolved]
+                properties:
+                  resolved: { type: integer }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /revisions/{revision}/sourcemap/{path}:
     parameters:
       - { $ref: "#/components/parameters/RevisionID" }
@@ -1812,7 +1862,7 @@ components:
         closed_at: { type: string, format: date-time }
     RevisionAccess:
       type: object
-      required: [member, reviewer, can_edit, can_manage, can_submit, can_review, can_withdraw, can_publish]
+      required: [member, reviewer, can_edit, can_manage, can_submit, can_review, can_withdraw, can_publish, can_resolve]
       properties:
         member: { type: boolean }
         reviewer: { type: boolean }
@@ -1822,7 +1872,25 @@ components:
         can_review: { type: boolean }
         can_withdraw: { type: boolean }
         can_publish: { type: boolean }
+        can_resolve: { type: boolean, description: "Accept or reject anyone's suggestions" }
         reason: { type: string, description: "Why editing is off: viewer, not_member, or the revision state" }
+    Suggestion:
+      type: object
+      required: [id, author, inserted, deleted, kinds, path]
+      properties:
+        id: { type: string }
+        author: { type: string, description: "User id" }
+        at: { type: integer, format: int64, description: "Unix milliseconds" }
+        inserted: { type: string }
+        deleted: { type: string }
+        kinds: { type: array, items: { type: string, enum: [insert, join, delete, change] } }
+        change:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string }
+            to: { type: string }
+        path: { type: string }
     RevisionMember:
       type: object
       required: [user_id, name, email, role, added_at]

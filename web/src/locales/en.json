@@ -534,7 +534,9 @@
       "published": "published it",
       "publish_blocked": "Publishing stopped: Published changed these pages",
       "change_request_closed": "The pull request was closed without merging",
-      "thread_opened": "commented on {{path}}"
+      "thread_opened": "commented on {{path}}",
+      "suggestions_accepted": "accepted suggestions in {{path}}",
+      "suggestions_rejected": "rejected suggestions in {{path}}"
     },
     "updateLinks_one": "Update {{count}} link in {{pages}} page",
     "updateLinks_other": "Update {{count}} links in {{pages}} pages",
@@ -648,7 +650,8 @@
       "not_approved": "Every reviewer has to approve first.",
       "conflicts": "Resolve the conflicts first.",
       "updates_pending": "Apply the updates from Published first.",
-      "other": "This revision can't be published right now."
+      "other": "This revision can't be published right now.",
+      "suggestions_pending": "Accept or reject the pending suggestions first."
     }
   },
   "diff": {
@@ -693,5 +696,39 @@
     "showResolved_one": "Show {{count}} resolved thread",
     "showResolved_other": "Show {{count}} resolved threads",
     "hideResolved": "Hide resolved"
+  },
+  "suggestions": {
+    "title": "Suggestions",
+    "count_one": "{{count}} suggestion",
+    "count_other": "{{count}} suggestions",
+    "toggle": "Suggesting",
+    "toggleHint": "Record your edits as suggestions others can accept or reject",
+    "refused": "This change can't be made as a suggestion yet. Turn off Suggesting to make it directly.",
+    "accept": "Accept",
+    "reject": "Reject",
+    "bulk": "Review all",
+    "acceptAll": "Accept all",
+    "rejectAll": "Reject all",
+    "acceptFrom": "Accept all from {{name}}",
+    "add": "Add {{text}}",
+    "delete": "Delete {{text}}",
+    "replace": "Replace {{from}} with {{to}}",
+    "change": "Change {{from}} to {{to}}",
+    "join": "Join with the previous paragraph",
+    "split": "New paragraph",
+    "sourceLocked_one": "This page has {{count}} pending suggestion. Accept or reject it in the visual editor to edit the source.",
+    "sourceLocked_other": "This page has {{count}} pending suggestions. Accept or reject them in the visual editor to edit the source.",
+    "nodes": {
+      "paragraph": "paragraph",
+      "heading": "heading",
+      "codeBlock": "code block",
+      "mathBlock": "math block",
+      "listItem": "list item",
+      "blockquote": "quote",
+      "frontmatter": "front matter",
+      "rawBlock": "raw block",
+      "horizontalRule": "divider",
+      "table": "table"
+    }
   }
 }

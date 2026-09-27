@@ -2,7 +2,7 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { nodeHash, type DocNode } from "@kmdn/doc-engine";
+import { settledHash, type DocNode } from "@kmdn/doc-engine";
 
 export const changeMarksKey = new PluginKey("changeMarks");
 
@@ -31,7 +31,7 @@ function blocksOfJSON(doc: DocNode): Block[] {
     const x = n as { text?: string; content?: unknown[] };
     return (x.text ?? "") + (x.content ?? []).map(text).join("");
   };
-  return doc.content.map((b) => ({ type: b.type, text: text(b), hash: nodeHash(b) }));
+  return doc.content.map((b) => ({ type: b.type, text: text(b), hash: settledHash(b) }));
 }
 
 /**
@@ -43,7 +43,8 @@ function blocksOfJSON(doc: DocNode): Block[] {
 function decorate(doc: PMNode, base: Block[]): DecorationSet {
   const cur: { node: PMNode; pos: number; b: Block }[] = [];
   doc.forEach((node, pos) => {
-    cur.push({ node, pos, b: { type: node.type.name, text: node.textContent, hash: nodeHash(node.toJSON()) } });
+    // Pending suggestions aren't changes yet: compare the block as it would publish.
+    cur.push({ node, pos, b: { type: node.type.name, text: node.textContent, hash: settledHash(node.toJSON()) } });
   });
   const pairs = lcs(
     base.map((b) => b.hash),

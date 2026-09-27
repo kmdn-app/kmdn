@@ -421,6 +421,8 @@ func (h *Hub) Routes(r chi.Router) {
 		r.Post("/revisions/{revision}/checkpoints/{checkpoint}/restore", h.restore)
 		r.Get("/revisions/{revision}/presence", h.presence)
 		r.Get("/revisions/{revision}/sourcemap/*", h.sourceMap)
+		r.Get("/revisions/{revision}/suggestions", h.listSuggestions)
+		r.Post("/revisions/{revision}/suggestions/resolve", h.resolveSuggestions)
 	})
 }
 

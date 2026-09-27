@@ -5,7 +5,8 @@
  * y-prosemirror meets a node the schema rejects, it deletes it from the shared
  * document. schema.test.ts checks this against the fidelity fixtures.
  */
-import { Extension, Node, mergeAttributes, textblockTypeInputRule, type AnyExtension } from "@tiptap/core";
+import { Extension, Mark, Node, mergeAttributes, textblockTypeInputRule, type AnyExtension } from "@tiptap/core";
+import { userColor } from "@/components/avatar";
 import Document from "@tiptap/extension-document";
 import Text from "@tiptap/extension-text";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -49,6 +50,52 @@ const SourceIds = Extension.create({
     return [{ types: TOP_BLOCKS, attributes: { sid: { default: null, rendered: false, keepOnSplit: false } } }];
   },
 });
+
+/** Every node type that can carry a node-level suggestion (see suggest.ts). */
+export const SUGGESTABLE = [...TOP_BLOCKS, "listItem", "tableRow", "tableHeader", "tableCell"];
+
+/**
+ * Node-level suggestions `{kind, id, author, at, from?}`. Never kept on split
+ * (the new half is marked by the suggestion itself) and never parsed from
+ * pasted HTML.
+ */
+const Suggestions = Extension.create({
+  name: "suggestionAttrs",
+  addGlobalAttributes() {
+    return [
+      {
+        types: SUGGESTABLE,
+        attributes: {
+          suggestion: {
+            default: null,
+            keepOnSplit: false,
+            parseHTML: () => null,
+            renderHTML: (a: { suggestion?: { kind: string; author: string } | null }) =>
+              a.suggestion ? { "data-suggestion": a.suggestion.kind, style: `--author: ${userColor(a.suggestion.author)}` } : {},
+          },
+        },
+      },
+    ];
+  },
+});
+
+const suggestionMark = (name: string, tag: string) =>
+  Mark.create({
+    name,
+    inclusive: false,
+    // Rank after formatting marks, like the doc engine's MARK_ORDER.
+    priority: 90,
+    addAttributes: () => ({ id: { default: "" }, author: { default: "" }, at: { default: null } }),
+    parseHTML: () => [],
+    renderHTML: ({ HTMLAttributes }) => [
+      tag,
+      { class: `suggest-${name}`, "data-suggestion-id": HTMLAttributes.id, style: `--author: ${userColor(String(HTMLAttributes.author ?? ""))}` },
+      0,
+    ],
+  });
+
+export const Insertion = suggestionMark("insertion", "ins");
+export const Deletion = suggestionMark("deletion", "del");
 
 const Doc = Document.extend({ content: "block*" });
 
@@ -121,14 +168,25 @@ const ListItem_ = ListItem.extend({
         box.checked = checked;
         box.disabled = !editor.isEditable;
       };
+      const suggested = (sg: { kind: string; author: string } | null) => {
+        if (sg) {
+          li.dataset.suggestion = sg.kind;
+          li.style.setProperty("--author", userColor(sg.author));
+        } else {
+          delete li.dataset.suggestion;
+          li.style.removeProperty("--author");
+        }
+      };
       li.append(content);
       render(node.attrs.checked as boolean | null);
+      suggested(node.attrs.suggestion);
       return {
         dom: li,
         contentDOM: content,
         update: (n) => {
           if (n.type.name !== "listItem") return false;
           render(n.attrs.checked as boolean | null);
+          suggested(n.attrs.suggestion);
           return true;
         },
         ignoreMutation: (m) => m.target === box || (m.type === "attributes" && m.target === li),
@@ -138,6 +196,7 @@ const ListItem_ = ListItem.extend({
 });
 
 const CodeBlock_ = CodeBlock.extend({
+  marks: "insertion deletion",
   addAttributes() {
     return {
       lang: {
@@ -210,7 +269,7 @@ export const MathBlock = Node.create({
   name: "mathBlock",
   group: "block",
   content: "text*",
-  marks: "",
+  marks: "insertion deletion",
   code: true,
   defining: true,
   parseHTML: () => [{ tag: 'pre[data-kmdn="math"]', preserveWhitespace: "full" }],
@@ -308,7 +367,10 @@ export function schemaExtensions(opts: { resolveImage?: (src: string) => string 
     Italic,
     Strike,
     Code_,
+    Insertion,
+    Deletion,
     SourceIds,
+    Suggestions,
   ];
 }
 

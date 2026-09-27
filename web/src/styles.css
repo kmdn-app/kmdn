@@ -242,3 +242,9 @@
 /* Comment anchors */
 .kmdn-editor .comment-anchor { background: color-mix(in oklab, var(--warning) 22%, transparent); border-bottom: 2px solid color-mix(in oklab, var(--warning) 70%, transparent); cursor: pointer; }
 .kmdn-editor .comment-anchor.is-active { background: color-mix(in oklab, var(--warning) 40%, transparent); }
+/* Suggestions (tracked changes), colored by author */
+.kmdn-editor ins.suggest-insertion { text-decoration: underline 1.5px; text-underline-offset: 3px; text-decoration-color: var(--author, var(--success)); background: color-mix(in oklab, var(--author, var(--success)) 14%, transparent); color: inherit; }
+.kmdn-editor del.suggest-deletion { text-decoration: line-through 1.5px; text-decoration-color: var(--author, var(--destructive)); color: var(--muted-foreground); background: color-mix(in oklab, var(--author, var(--destructive)) 8%, transparent); }
+.kmdn-editor [data-suggestion] { box-shadow: inset 3px 0 0 var(--author, var(--success)); padding-left: 0.5rem; }
+.kmdn-editor [data-suggestion="delete"] { text-decoration: line-through; color: var(--muted-foreground); }
+.kmdn-editor [data-suggestion="join"]::before { content: "¶"; margin-right: 0.25rem; color: var(--author, var(--destructive)); text-decoration: line-through; }

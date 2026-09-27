@@ -293,7 +293,37 @@ func (s *Service) blocked(ctx context.Context, rev revisions.Revision) string {
 			return "updates_pending"
 		}
 	}
+	if n, err := s.pendingSuggestions(ctx, rev); err != nil || n > 0 {
+		return "suggestions_pending"
+	}
 	return ""
+}
+
+// pendingSuggestions counts suggestions nobody accepted or rejected yet.
+func (s *Service) pendingSuggestions(ctx context.Context, rev revisions.Revision) (int, error) {
+	files, err := revisions.Files(ctx, s.DB, rev.ID)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, f := range files {
+		if f.Op == revisions.OpDelete || !repos.IsMarkdown(f.Path) {
+			continue
+		}
+		_, state, err := s.Docs.StateOf(ctx, rev.ID, f.Path)
+		if err != nil {
+			return 0, err
+		}
+		if state == nil {
+			continue
+		}
+		list, err := s.Engine.YSuggestions(ctx, state)
+		if err != nil {
+			return 0, err
+		}
+		n += len(list)
+	}
+	return n, nil
 }
 
 type jobInput struct {
@@ -326,6 +356,8 @@ func blockedMessage(code string) string {
 		return "Resolve the conflicts before publishing."
 	case "updates_pending":
 		return "Apply the updates from Published first."
+	case "suggestions_pending":
+		return "Accept or reject the pending suggestions first."
 	case "published_moved":
 		return "Published changed some of these pages since the revision started. Apply the updates from Published first."
 	}

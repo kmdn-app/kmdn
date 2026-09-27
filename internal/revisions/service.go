@@ -85,6 +85,9 @@ type Access struct {
 	CanWithdraw bool `json:"can_withdraw"`
 	// CanPublish: any maintainer once Approved.
 	CanPublish bool `json:"can_publish"`
+	// CanResolve: accept or reject anyone's suggestions (editors, and
+	// assigned reviewers; editors keep it while In review).
+	CanResolve bool `json:"can_resolve"`
 	// Reason explains read-only access: viewer, not_member, in_review, approved, publishing, published, closed.
 	Reason string `json:"reason,omitempty"`
 }
@@ -109,7 +112,7 @@ func (s *Service) AccessFor(ctx context.Context, rev Revision, c Caller) (Access
 		case !contrib:
 			a.Reason = "viewer"
 		case member || maint:
-			a.CanEdit, a.CanSubmit = true, true
+			a.CanEdit, a.CanSubmit, a.CanResolve = true, true, true
 		default:
 			a.Reason = "not_member"
 		}
@@ -121,6 +124,7 @@ func (s *Service) AccessFor(ctx context.Context, rev Revision, c Caller) (Access
 		a.CanWithdraw = (member && contrib) || maint
 		a.CanSubmit = (member && contrib) || maint // change reviewers
 		a.CanPublish = rev.State == Approved && maint
+		a.CanResolve = reviewer || (member && contrib)
 		if !reviewer {
 			a.Reason = string(rev.State)
 			if !contrib {
