@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -94,6 +95,32 @@ func ContentHash(ctx context.Context, q store.Querier, revisionID string) (strin
 	}
 	h.Write([]byte(strings.Join(assets, "\n")))
 	return hex.EncodeToString(h.Sum(nil)[:16]), rows.Err()
+}
+
+// SavedHash is the content hash of the revision's last Save all ("" before the first).
+func SavedHash(ctx context.Context, q store.Querier, revisionID string) (string, error) {
+	var h string
+	err := store.QueryRow(ctx, q, `SELECT content_hash FROM revision_checkpoints WHERE revision_id = ? AND commit_sha <> '' ORDER BY created_at DESC, id DESC LIMIT 1`, revisionID).Scan(&h)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return h, err
+}
+
+// Unsaved reports whether the revision's content differs from its last
+// Save all (before the first one: whether it has any change at all).
+func Unsaved(ctx context.Context, q store.Querier, revisionID string) (bool, error) {
+	saved, err := SavedHash(ctx, q, revisionID)
+	if err != nil {
+		return false, err
+	}
+	if saved == "" {
+		var n int
+		err := store.QueryRow(ctx, q, `SELECT (SELECT COUNT(*) FROM revision_files WHERE revision_id = ?) + (SELECT COUNT(*) FROM revision_assets WHERE revision_id = ?)`, revisionID, revisionID).Scan(&n)
+		return n > 0, err
+	}
+	now, err := ContentHash(ctx, q, revisionID)
+	return now != saved, err
 }
 
 // ReviewerCandidate is a maintainer who could review.

@@ -1203,7 +1203,8 @@ function edbar(o){
     <span class="vsep cq-hide-900"></span>
     <button class="tbtn cq-hide-900" aria-label="Task list">${ic('listcheck')}</button><button class="tbtn cq-hide-900" aria-label="Table">${ic('table')}</button><button class="tbtn cq-hide-900" aria-label="Image">${ic('image')}</button><button class="tbtn cq-hide-900" aria-label="Code block">${ic('code')}</button>`}
     <span class="sp"></span>
-    <span class="savestate cq-hide-760">${ic('check','sm')}Saved \u00b7 live with ${o.live||2} others</span>
+    <span class="savestate cq-hide-760">${ic('check','sm')}Synced \u00b7 live with ${o.live||2} others</span>
+    <button class="btn btn-outline btn-xs" data-toast="Saved as commit 4f2a9c1 on the draft pull request">${ic('check','sm')}Save all <span class="dot" style="color:var(--warning)"></span></button>
   </div>`;
 }
 function pagebar(list,right=''){
@@ -1296,7 +1297,7 @@ const DEF={
     <div class="check">${ic('refresh','warn')}<div><div class="m">Published changed 2 pages</div><div class="muted small">Sam Lindqvist, 25 min ago \u00b7 <a class="linkbtn" href="#sync">Review and apply</a></div></div></div>
   </div>`,
   history:()=>`<div class="rp-scroll">
-    <div class="rp-sub"><span>Checkpoints</span><button class="btn btn-outline btn-xs">${ic('bookmark','sm')}Name this checkpoint</button></div>
+    <div class="rp-sub"><span>Checkpoints \u00b7 commits on the pull request</span><button class="btn btn-outline btn-xs" data-toast="Saved as commit 4f2a9c1">${ic('check','sm')}Save all</button></div>
     ${DRAFTVERS()}
   </div>`
 };
@@ -1309,15 +1310,15 @@ const FILES=[
 ];
 function DRAFTVERS(){
   const v=(o)=>`<div class="tl-i">${o.named?`<span class="tl-ico" style="color:var(--foreground)">${ic('bookmark')}</span>`:`<span class="tl-ico">${ic('clock')}</span>`}
-    <div class="row" style="justify-content:space-between"><span class="${o.named?'b':'m'}">${o.t}</span><button class="btn btn-ghost btn-xs" data-toast="Restored as a new checkpoint. Nothing was lost.">${ic('undo','sm')}Restore</button></div>
+    <div class="row" style="justify-content:space-between"><span class="${o.named?'b':'m'}">${o.t}</span><button class="btn btn-ghost btn-xs" data-toast="Restored. Save all to commit it; unsaved work was saved first.">${ic('undo','sm')}Restore</button></div>
     <time>${o.d}</time>
     <div class="row g4" style="margin-top:6px">${o.a.map(([k,n])=>`<span class="badge badge-outline" style="border-color:color-mix(in oklab,${P[k].c} 40%,var(--border))"><span class="dot" style="color:${P[k].c}"></span>${k==='bot'?'Assistant':P[k].n.split(' ')[0]} \u00b7 ${n}</span>`).join('')}</div></div>`;
   return `<div class="tl">${[
-    {t:'Latest',d:'Today, 14:32 \u00b7 autosaved checkpoint',a:[['priya',3],['tom',2]]},
-    {t:'Before assistant edits',named:1,d:'Today, 11:05 \u00b7 named by Tom Okafor',a:[['tom',6]]},
-    {t:'Autosaved checkpoint',d:'Today, 10:40',a:[['bot',4]]},
-    {t:'First pass on IT setup',named:1,d:'Yesterday, 17:12 \u00b7 named by Priya Raman',a:[['priya',9],['tom',1]]},
-    {t:'Revision started',d:'Sep 23, 09:14 \u00b7 from Published',a:[['tom',0]]}
+    {t:'Update first-week.md and it-setup.md',named:1,d:'Today, 14:32 \u00b7 Priya Raman \u00b7 4f2a9c1',a:[['priya',3],['tom',2]]},
+    {t:'Before assistant edits',named:1,d:'Today, 11:05 \u00b7 Tom Okafor \u00b7 9b1e0d4',a:[['tom',6]]},
+    {t:'Move laptop-policy.md to docs/policies/equipment/laptop-policy.md',named:1,d:'Today, 10:40 \u00b7 Tom Okafor \u00b7 c07d2e8',a:[['bot',4]]},
+    {t:'First pass on IT setup',named:1,d:'Yesterday, 17:12 \u00b7 Priya Raman \u00b7 51aa6f3',a:[['priya',9],['tom',1]]},
+    {t:'Start revision #42',d:'Sep 23, 09:14 \u00b7 draft pull request opened',a:[['tom',0]]}
   ].map(v).join('')}</div>`;
 }
 
@@ -1833,7 +1834,7 @@ R['draft-overview']=()=>{
             <div class="row">${av('sam','md')}<div style="flex:1"><div class="m small">Sam Lindqvist</div><div class="xsmall muted">IT \u00b7 it-setup.md owner</div></div><span class="badge badge-outline">Assigned on submit</span></div>
             <div class="help" style="margin-top:12px">All assigned reviewers must approve. While in review only reviewers edit; an edit by one reviewer resets the others' approvals.</div>
           </div></div>
-          <div class="card"><div class="card-c"><dl class="kv" style="margin:0"><dt>Publishes to</dt><dd class="row g4">${ic('github','sm')}northwind/handbook</dd><dt>Started</dt><dd>Sep 23 from Published</dd><dt>Assistant</dt><dd>Helped in 3 turns</dd><dt>Checkpoints</dt><dd><a class="linkbtn" href="#history">2 named, 14 autosaved</a></dd></dl></div></div>
+          <div class="card"><div class="card-c"><dl class="kv" style="margin:0"><dt>Publishes to</dt><dd class="row g4">${ic('github','sm')}northwind/handbook</dd><dt>Started</dt><dd>Sep 23 from Published</dd><dt>Assistant</dt><dd>Helped in 3 turns</dd><dt>Checkpoints</dt><dd><a class="linkbtn" href="#history">5 commits on the draft pull request</a></dd></dl></div></div>
           <button class="btn btn-ghost btn-sm" style="color:var(--destructive-fg);justify-content:flex-start" data-toast="Revision closed. You can reopen it from All revisions.">${ic('x')}Close revision</button>
         </div>
       </div></div>`}));
@@ -1912,7 +1913,7 @@ function reviewBar(view,local){
   <button class="tbtn cq-hide-760" aria-label="Undo">${ic('undo2')}</button>
   <button class="tbtn cq-hide-900" style="padding:0 8px">Paragraph ${ic('chevd','xs')}</button>
   <button class="tbtn cq-hide-600" aria-label="Bold">${ic('bold')}</button><button class="tbtn cq-hide-600" aria-label="Italic">${ic('italic')}</button><button class="tbtn cq-hide-760" aria-label="Link">${ic('link')}</button>
-  <span class="sp"></span><span class="savestate cq-hide-760">${ic('check','sm')}Saved \u00b7 your edits are credited to you</span></div>`;
+  <span class="sp"></span><span class="savestate cq-hide-760">${ic('check','sm')}Synced \u00b7 Save all commits your edits as you</span></div>`;
 }
 const reviewActs=(blocked)=>`<button class="btn btn-outline btn-sm" data-toast="Changes requested. The revision goes back to Editing for Tom and Priya.">${ic('msg')}<span class="cq-hide-760">Request changes</span></button>${blocked?`<button class="btn btn-default btn-sm" disabled title="Update from Published first">${ic('check')}Approve (1 of 2)</button>`:`<a class="btn btn-default btn-sm" href="#publish" data-toast="Approved (2 of 2). Ready to publish.">${ic('check')}Approve (1 of 2)</a>`}`;
 const consContra=()=>`<span class="cons contra" tabindex="0">every three years<span class="cons-card" role="tooltip"><span class="row" style="gap:6px"><span class="badge badge-warning">${ic('alert')}Contradiction</span><span class="xsmall muted">review assistant</span></span><span style="display:block;margin-top:8px">This says laptops are refreshed <b>every three years</b>. <a class="lnk" href="#consistency">policies/equipment/laptop-policy.md \u203a Refresh cycle</a> says <b>every four years</b>.</span><span class="acts"><button class="btn btn-default btn-xs" data-toast="The assistant added a suggestion to align both pages">${ic('sparkles','sm')}Fix</button><button class="btn btn-outline btn-xs" data-toast="Replaced with a link, as a suggestion">${ic('link','sm')}Link instead</button><button class="btn btn-ghost btn-xs" data-toast="Ignored. Reason saved: \u201cPolicy changes in this revision\u201d">Ignore\u2026</button></span></span></span>`;
@@ -2192,13 +2193,13 @@ R.history=()=>{
   const hp=`<div class="rp-scroll">
     <div class="tabs sm full" role="tablist" style="margin-bottom:14px"><button class="tab" role="tab" data-tab="hs:pub" aria-selected="true">Published versions</button><button class="tab" role="tab" data-tab="hs:drafts" aria-selected="false">Checkpoints</button><button class="tab" role="tab" data-tab="hs:blame" aria-selected="false">Blame</button></div>
     <div data-tabpanel="hs:pub"><div class="rp-sub"><span>6 published versions</span><button class="btn btn-outline btn-xs" data-toast="Comparing Aug 30 with Sep 24">${ic('filediff','sm')}Compare selected</button></div>${fileHistory(true)}</div>
-    <div data-tabpanel="hs:drafts" hidden><div class="rp-sub"><span>Update onboarding for 2026</span><button class="btn btn-outline btn-xs">${ic('bookmark','sm')}Name checkpoint</button></div>${DRAFTVERS()}</div>
+    <div data-tabpanel="hs:drafts" hidden><div class="rp-sub"><span>Update onboarding for 2026</span><button class="btn btn-outline btn-xs" data-toast="Saved as commit 4f2a9c1">${ic('check','sm')}Save all</button></div>${DRAFTVERS()}</div>
     <div data-tabpanel="hs:blame" hidden>${blameLegend}</div>
   </div>`;
   return frame('/northwind/handbook/docs/onboarding/first-week.md/history/3c9d2a1',app({side:{active:'doc-published'},
     top:docbar({ctx:'published',people:['priya'],share:false,actions:`<button class="btn btn-outline btn-sm" data-toast="Revision \u201cRestore first-week.md to Aug 30\u201d started">${ic('undo')}<span class="cq-hide-760">Restore this version</span></button>`}),
     main:`<div data-tabpanel="hs:pub"><div style="max-width:720px;margin:20px auto 0;padding:0 24px"><div class="alert">${ic('history')}<div style="flex:1"><div class="alert-t">Version from Aug 30, 2026 \u00b7 Priya Raman</div><div class="alert-d">Highlighted: what changed between this version and the current one.</div></div><div class="alert-a"><div class="dd">${selectBox('Compare with: Current').replace('class="select "','class="select" style="height:30px;font-size:13px;width:auto"')}</div><button class="btn btn-default btn-xs hide-sm" data-toast="Revision \u201cRestore first-week.md to Aug 30\u201d started">Restore</button></div></div></div>${docFirstWeek('old')}</div>
-      <div data-tabpanel="hs:drafts" hidden><div style="max-width:720px;margin:20px auto 0;padding:0 24px"><div class="alert">${ic('bookmark')}<div style="flex:1"><div class="alert-t">Checkpoint \u201cLatest\u201d \u00b7 Update onboarding for 2026</div><div class="alert-d">Changes are colored by author: <span style="color:var(--p-4)">Tom</span>, <span style="color:var(--p-3)">Priya</span>, <span style="color:var(--assistant)">assistant</span>.</div></div><div class="alert-a"><button class="btn btn-outline btn-xs" data-toast="Restored as a new checkpoint">Restore</button></div></div></div>${docFirstWeek('sugg')}</div>
+      <div data-tabpanel="hs:drafts" hidden><div style="max-width:720px;margin:20px auto 0;padding:0 24px"><div class="alert">${ic('bookmark')}<div style="flex:1"><div class="alert-t">Checkpoint \u201cLatest\u201d \u00b7 Update onboarding for 2026</div><div class="alert-d">Changes are colored by author: <span style="color:var(--p-4)">Tom</span>, <span style="color:var(--p-3)">Priya</span>, <span style="color:var(--assistant)">assistant</span>.</div></div><div class="alert-a"><button class="btn btn-outline btn-xs" data-toast="Restored. Save all to commit it">Restore</button></div></div></div>${docFirstWeek('sugg')}</div>
       <div data-tabpanel="hs:blame" hidden>${docFirstWeek('blame')}</div>`,
     panel:rpanel(uid('hi'),'history',{history:hp,ccount:3,rev:false})}));
 };

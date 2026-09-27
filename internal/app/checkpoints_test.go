@@ -14,13 +14,16 @@ import (
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
-func TestCheckpointsAndRestore(t *testing.T) {
+// TestSaveAllCheckpointsAndRestore: Save all commits to the revision's
+// branch, one commit per save by whoever clicked; the checkpoints are those
+// commits.
+func TestSaveAllCheckpointsAndRestore(t *testing.T) {
 	a, admin := newApp(t, nil)
 	a.Collab.Options = collab.Options{FlushDelay: time.Millisecond, QuietPeriod: time.Millisecond}
 	ctx := context.Background()
 	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
 	signIn(t, a, admin, maya)
-	repoID := connectLocal(t, a, admin, map[string]string{
+	repoID, remote := connectLocalRemote(t, a, admin, map[string]string{
 		"docs/index.md": "# Handbook\n\nStart here.\n",
 		"docs/old.md":   "# Old\n",
 	})
@@ -48,11 +51,36 @@ func TestCheckpointsAndRestore(t *testing.T) {
 	if err := a.Collab.Apply(ctx, repo, rev, caller, "docs/index.md", "# Handbook\n\nStart here. Version one.\n", "human"); err != nil {
 		t.Fatal(err)
 	}
-	code, cp := samC.do("POST", "/revisions/"+revID+"/checkpoints", map[string]any{"name": "First draft"})
-	if code != 201 || cp["kind"] != "named" || cp["file_count"] != float64(1) {
-		t.Fatalf("name checkpoint: %d %v", code, cp)
+	if _, v := samC.do("GET", "/revisions/"+revID, nil); v["unsaved_changes"] != true {
+		t.Fatalf("an edit should be unsaved: %v", v["unsaved_changes"])
+	}
+	code, cp := samC.do("POST", "/revisions/"+revID+"/save", map[string]any{"message": "First draft"})
+	if code != 201 || cp["kind"] != "save" || cp["file_count"] != float64(1) || cp["commit_sha"] == nil {
+		t.Fatalf("save: %d %v", code, cp)
 	}
 	cpID := cp["id"].(string)
+	rev, _ = revisions.Get(ctx, a.DB, revID)
+	if rev.BranchSHA != cp["commit_sha"] {
+		t.Fatalf("branch at %s, checkpoint %v", rev.BranchSHA, cp["commit_sha"])
+	}
+	// The commit is Sam's, on the branch, with the page as edited and the
+	// start commit as parent.
+	if log := gitIn(t, remote, "log", "-1", "--format=%an|%cn|%s", rev.Branch); log != "Sam|kmdn|First draft" {
+		t.Fatalf("commit: %q", log)
+	}
+	if got := gitIn(t, remote, "show", rev.Branch+":docs/index.md"); got != "# Handbook\n\nStart here. Version one." {
+		t.Fatalf("committed content: %q", got)
+	}
+	if n := gitIn(t, remote, "rev-list", "--count", "main.."+rev.Branch); n != "2" {
+		t.Fatalf("commits on the branch: %q", n)
+	}
+	if _, v := samC.do("GET", "/revisions/"+revID, nil); v["unsaved_changes"] != false {
+		t.Fatal("saved revision still has unsaved changes")
+	}
+	// Nothing changed: no commit.
+	if code, body := samC.do("POST", "/revisions/"+revID+"/save", map[string]any{}); code != 409 || body["code"] != "nothing_to_save" {
+		t.Fatalf("empty save: %d %v", code, body)
+	}
 	if code, f := samC.do("GET", "/revisions/"+revID+"/checkpoints/"+cpID+"/files/docs/index.md", nil); code != 200 || f["content"] != "# Handbook\n\nStart here. Version one.\n" {
 		t.Fatalf("checkpoint file: %d %v", code, f)
 	}
@@ -64,6 +92,18 @@ func TestCheckpointsAndRestore(t *testing.T) {
 	a.Collab.Flush(ctx)
 	if got := manifest(); got != "[docs/index.md:modify docs/new.md:add docs/old.md:delete]" {
 		t.Fatalf("before restore: %s", got)
+	}
+	// A second person saving writes another commit, theirs.
+	_ = access.Grant(ctx, a.DB, repoID, "user", maya.ID, access.Maintainer)
+	if code, cp2 := admin.do("POST", "/revisions/"+revID+"/save", map[string]any{}); code != 201 || cp2["name"] != nil {
+		t.Fatalf("second save: %d %v", code, cp2)
+	}
+	rev, _ = revisions.Get(ctx, a.DB, revID)
+	if log := gitIn(t, remote, "log", "-1", "--format=%an|%s", rev.Branch); log != "Maya|Update index.md, add new.md and delete old.md" {
+		t.Fatalf("second commit: %q", log)
+	}
+	if _, err := gitInErr(remote, "cat-file", "-e", rev.Branch+":docs/old.md"); err == nil {
+		t.Fatal("deleted page still in the commit")
 	}
 
 	// An editor has the page open while the restore happens.
@@ -90,10 +130,15 @@ func TestCheckpointsAndRestore(t *testing.T) {
 	for _, it := range list["items"].([]any) {
 		kinds = append(kinds, it.(map[string]any)["kind"].(string))
 	}
-	if fmt.Sprint(kinds) != "[pre_restore named]" {
+	// Nothing was unsaved before the restore, so it didn't add a commit;
+	// the restore itself is unsaved until the next Save all.
+	if fmt.Sprint(kinds) != "[save save]" {
 		t.Fatalf("checkpoints: %v", kinds)
 	}
-	// Restoring the pre-restore checkpoint undoes the restore.
+	if _, v := samC.do("GET", "/revisions/"+revID, nil); v["unsaved_changes"] != true {
+		t.Fatal("a restore should leave unsaved changes")
+	}
+	// Restoring the latest checkpoint undoes the restore, after saving it.
 	preID := list["items"].([]any)[0].(map[string]any)["id"].(string)
 	if code, _ := samC.do("POST", "/revisions/"+revID+"/checkpoints/"+preID+"/restore", nil); code != 204 {
 		t.Fatalf("undo restore: %d", code)
@@ -103,5 +148,13 @@ func TestCheckpointsAndRestore(t *testing.T) {
 	}
 	if got := manifest(); got != "[docs/index.md:modify docs/new.md:add docs/old.md:delete]" {
 		t.Fatalf("manifest after undo: %s", got)
+	}
+	_, list = samC.do("GET", "/revisions/"+revID+"/checkpoints", nil)
+	if first := list["items"].([]any)[0].(map[string]any); first["name"] != "Save before restoring a checkpoint" || first["created_by_name"] != "Sam" {
+		t.Fatalf("save before restore: %v", first)
+	}
+	rev, _ = revisions.Get(ctx, a.DB, revID)
+	if n := gitIn(t, remote, "rev-list", "--count", "main.."+rev.Branch); n != "4" {
+		t.Fatalf("commits on the branch: %q", n)
 	}
 }

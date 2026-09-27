@@ -23,17 +23,18 @@ import (
 	"github.com/kmdn-app/kmdn/internal/store"
 )
 
-// Checkpoint kinds (docs/specs/05-collaboration.md#checkpoints-history-inside-a-revision).
+// Checkpoint kinds (docs/specs/05-collaboration.md#saving-and-checkpoints).
+// Checkpoints are the commits Save all writes; the other kinds are from
+// before that and only appear in older revisions.
 const (
+	CheckpointSave = "save"
+
 	CheckpointAuto       = "auto"
 	CheckpointNamed      = "named"
 	CheckpointSubmit     = "submit"
 	CheckpointPreUpdate  = "pre_update"
 	CheckpointPreRestore = "pre_restore"
 )
-
-// AutoCheckpointAfter is how much editing activity triggers an automatic checkpoint.
-var AutoCheckpointAfter = 10 * time.Minute
 
 // Apply turns a page into markdown as a new change written on c's behalf
 // (restore now, the assistant later): the room's document is diffed block by
@@ -83,44 +84,6 @@ func (h *Hub) PutAnchor(ctx context.Context, repo repos.Repo, rev revisions.Revi
 		return err
 	}
 	return room.ingest(ctx, update, []uint64{client}, c, nil, "comment")
-}
-
-type activity struct {
-	since time.Time
-	busy  bool
-}
-
-// touched notes editing activity and takes an automatic checkpoint after
-// AutoCheckpointAfter of it.
-func (h *Hub) touched(ctx context.Context, revID, userID string) {
-	h.mu.Lock()
-	if h.activity == nil {
-		h.activity = map[string]*activity{}
-	}
-	a := h.activity[revID]
-	if a == nil {
-		a = &activity{since: time.Now()}
-		h.activity[revID] = a
-	}
-	due := !a.busy && time.Since(a.since) >= AutoCheckpointAfter
-	if due {
-		a.busy = true
-	}
-	h.mu.Unlock()
-	if !due {
-		return
-	}
-	go func() {
-		ctx := context.WithoutCancel(ctx)
-		if rev, err := revisions.Get(ctx, h.DB, revID); err == nil {
-			if _, err := h.Checkpoint(ctx, rev, userID, "", CheckpointAuto); err != nil {
-				h.Log.Error("auto checkpoint", "err", err, "revision", revID)
-			}
-		}
-		h.mu.Lock()
-		a.busy, a.since = false, time.Now()
-		h.mu.Unlock()
-	}()
 }
 
 func (h *Hub) liveRooms(revID string) []*Room {
@@ -215,20 +178,14 @@ type CheckpointView struct {
 	CreatedByName string    `json:"created_by_name,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 	Files         int       `json:"file_count"`
+	// CommitSHA is the commit on the revision's branch (empty for old kinds).
+	CommitSHA string `json:"commit_sha,omitempty"`
 }
 
-// Checkpoint records every manifest file: its operation, markdown, and a
-// snapshot of its document (kept through compaction).
-func (h *Hub) Checkpoint(ctx context.Context, rev revisions.Revision, by, name, kind string) (CheckpointView, error) {
-	h.init()
-	for _, r := range h.liveRooms(rev.ID) {
-		r.flush(ctx)
-		r.materialize(ctx)
-	}
-	files, err := revisions.Files(ctx, h.DB, rev.ID)
-	if err != nil {
-		return CheckpointView{}, err
-	}
+// checkpoint records every manifest file (its operation, markdown, and a
+// snapshot of its document, kept through compaction) for the commit sha
+// that saved them. Rooms are flushed already.
+func (h *Hub) checkpoint(ctx context.Context, rev revisions.Revision, files []revisions.File, by, name, sha, hash string) (CheckpointView, error) {
 	type snap struct {
 		docID string
 		state []byte
@@ -247,14 +204,14 @@ func (h *Hub) Checkpoint(ctx context.Context, rev revisions.Revision, by, name, 
 		}
 	}
 	now := time.Now()
-	cp := CheckpointView{ID: ids.New(ids.Checkpoint), Name: strings.TrimSpace(name), Kind: kind, CreatedBy: by, CreatedAt: now.UTC(), Files: len(files)}
-	err = h.DB.InTx(ctx, func(tx *store.Tx) error {
+	cp := CheckpointView{ID: ids.New(ids.Checkpoint), Name: strings.TrimSpace(name), Kind: CheckpointSave, CreatedBy: by, CreatedAt: now.UTC(), Files: len(files), CommitSHA: sha}
+	err := h.DB.InTx(ctx, func(tx *store.Tx) error {
 		var creator any
 		if by != "" {
 			creator = by
 		}
-		if _, err := store.Exec(ctx, tx, `INSERT INTO revision_checkpoints (id, revision_id, name, kind, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-			cp.ID, rev.ID, cp.Name, kind, creator, store.Millis(now)); err != nil {
+		if _, err := store.Exec(ctx, tx, `INSERT INTO revision_checkpoints (id, revision_id, name, kind, created_by, created_at, commit_sha, content_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			cp.ID, rev.ID, cp.Name, CheckpointSave, creator, store.Millis(now), sha, hash); err != nil {
 			return err
 		}
 		for _, f := range files {
@@ -274,10 +231,7 @@ func (h *Hub) Checkpoint(ctx context.Context, rev revisions.Revision, by, name, 
 				return err
 			}
 		}
-		if kind == CheckpointNamed {
-			return revisions.Record(ctx, tx, rev.ID, revisions.ActorUser, by, "version_named", map[string]any{"checkpoint": cp.ID, "name": cp.Name})
-		}
-		return nil
+		return revisions.Record(ctx, tx, rev.ID, revisions.ActorUser, by, "saved", map[string]any{"checkpoint": cp.ID, "sha": sha, "message": cp.Name})
 	})
 	return cp, err
 }
@@ -307,8 +261,8 @@ func checkpointFiles(ctx context.Context, q store.Querier, cpID string) ([]Check
 	return out, rows.Err()
 }
 
-// Restore brings the revision back to a checkpoint as a new change: first a
-// pre-restore checkpoint, then the manifest is reconciled and every page's
+// Restore brings the revision back to a checkpoint as a new change (for the
+// next Save all to commit): unsaved work is saved first, then the manifest is reconciled and every page's
 // content applied through its room, so open editors follow along.
 func (h *Hub) Restore(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, cpID string) error {
 	h.init()
@@ -327,7 +281,8 @@ func (h *Hub) Restore(ctx context.Context, repo repos.Repo, rev revisions.Revisi
 	if err != nil {
 		return err
 	}
-	if _, err := h.Checkpoint(ctx, rev, c.User.ID, "", CheckpointPreRestore); err != nil {
+	// Unsaved work is committed first, so the restore can be undone.
+	if err := h.SaveFirst(ctx, repo, rev, c.User, "Save before restoring a checkpoint"); err != nil {
 		return err
 	}
 	current, err := revisions.Files(ctx, h.DB, rev.ID)
@@ -415,7 +370,7 @@ func (h *Hub) Routes(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Require)
 		r.Get("/revisions/{revision}/checkpoints", h.listCheckpoints)
-		r.Post("/revisions/{revision}/checkpoints", h.nameCheckpoint)
+		r.Post("/revisions/{revision}/save", h.save)
 		r.Get("/revisions/{revision}/checkpoints/{checkpoint}/files", h.checkpointFiles)
 		r.Get("/revisions/{revision}/checkpoints/{checkpoint}/files/*", h.checkpointFile)
 		r.Post("/revisions/{revision}/checkpoints/{checkpoint}/restore", h.restore)
@@ -456,7 +411,7 @@ func (h *Hub) listCheckpoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := store.Query(r.Context(), h.DB, `SELECT c.id, c.name, c.kind, COALESCE(c.created_by, ''), COALESCE(u.name, ''), c.created_at,
-		(SELECT COUNT(*) FROM revision_checkpoint_files f WHERE f.checkpoint_id = c.id)
+		(SELECT COUNT(*) FROM revision_checkpoint_files f WHERE f.checkpoint_id = c.id), c.commit_sha
 		FROM revision_checkpoints c LEFT JOIN users u ON u.id = c.created_by WHERE c.revision_id = ? ORDER BY c.created_at DESC, c.id DESC`, rev.ID)
 	if err != nil {
 		api.Error(w, r, err)
@@ -467,7 +422,7 @@ func (h *Hub) listCheckpoints(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var v CheckpointView
 		var at int64
-		if err := rows.Scan(&v.ID, &v.Name, &v.Kind, &v.CreatedBy, &v.CreatedByName, &at, &v.Files); err != nil {
+		if err := rows.Scan(&v.ID, &v.Name, &v.Kind, &v.CreatedBy, &v.CreatedByName, &at, &v.Files, &v.CommitSHA); err != nil {
 			api.Error(w, r, err)
 			return
 		}
@@ -475,40 +430,6 @@ func (h *Hub) listCheckpoints(w http.ResponseWriter, r *http.Request) {
 		out = append(out, v)
 	}
 	api.JSON(w, http.StatusOK, map[string]any{"items": out})
-}
-
-func (h *Hub) nameCheckpoint(w http.ResponseWriter, r *http.Request) {
-	rev, _, c, ok := h.load(w, r)
-	if !ok {
-		return
-	}
-	var in struct {
-		Name string `json:"name"`
-	}
-	if err := api.Decode(r, &in); err != nil {
-		api.Error(w, r, err)
-		return
-	}
-	if strings.TrimSpace(in.Name) == "" || len(in.Name) > 200 {
-		api.Error(w, r, api.Invalid("name", "Give the checkpoint a name (up to 200 characters)."))
-		return
-	}
-	acc, err := h.Revisions.AccessFor(r.Context(), rev, c)
-	if err != nil {
-		api.Error(w, r, err)
-		return
-	}
-	if !acc.CanEdit {
-		api.Error(w, r, api.Err(http.StatusForbidden, "forbidden", "Only people who can edit the revision can name checkpoints."))
-		return
-	}
-	cp, err := h.Checkpoint(r.Context(), rev, c.User.ID, in.Name, CheckpointNamed)
-	if err != nil {
-		api.Error(w, r, err)
-		return
-	}
-	cp.CreatedByName = c.User.Name
-	api.JSON(w, http.StatusCreated, cp)
 }
 
 func (h *Hub) ownCheckpoint(w http.ResponseWriter, r *http.Request, rev revisions.Revision) (string, bool) {

@@ -76,8 +76,8 @@ func TestReviewLifecycle(t *testing.T) {
 		t.Fatalf("editor access in review: %v", acc)
 	}
 	_, cps := samC.do("GET", "/revisions/"+revID+"/checkpoints", nil)
-	if !strings.Contains(toJSON(cps), `"kind":"submit"`) {
-		t.Fatalf("submit checkpoint: %v", cps)
+	if !strings.Contains(toJSON(cps), `"name":"Save for review"`) {
+		t.Fatalf("save on submit: %v", cps)
 	}
 	// Editors are read-only in review; reviewers edit.
 	if code, _ := samC.do("POST", "/revisions/"+revID+"/files", map[string]any{"op": "add", "path": "docs/new.md"}); code != 403 {
@@ -135,9 +135,12 @@ func TestReviewLifecycle(t *testing.T) {
 	_, ev := samC.do("GET", "/revisions/"+revID+"/events", nil)
 	var kinds []string
 	for _, e := range ev["items"].([]any) {
-		kinds = append(kinds, e.(map[string]any)["kind"].(string))
+		if k := e.(map[string]any)["kind"].(string); k != "branch_created" { // whenever the branch job ran
+			kinds = append(kinds, k)
+		}
 	}
-	want := "created,submitted,approval,approval,approved,approvals_reset,in_review_again,changes_requested,file_added,submitted,reviewer_removed,approval,approved,withdrawn"
+	// Each submit saves what goes to review.
+	want := "created,submitted,saved,approval,approval,approved,approvals_reset,in_review_again,changes_requested,file_added,submitted,saved,reviewer_removed,approval,approved,withdrawn"
 	if got := strings.Join(kinds, ","); got != want {
 		t.Fatalf("events:\n%s\nwant\n%s", got, want)
 	}

@@ -34,7 +34,8 @@ const (
 type Docs interface {
 	FlushRevision(ctx context.Context, revID string)
 	ApplyDoc(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p string, doc json.RawMessage, kind string) error
-	CheckpointBeforeUpdate(ctx context.Context, rev revisions.Revision, by string) error
+	// SaveBeforeUpdate commits unsaved work (Save all) before applying.
+	SaveBeforeUpdate(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller) error
 }
 
 // Service prepares and applies updates.
@@ -324,7 +325,7 @@ func (s *Service) Apply(ctx context.Context, rev revisions.Revision, c revisions
 	if err != nil {
 		return res, err
 	}
-	if err := s.Docs.CheckpointBeforeUpdate(ctx, rev, c.User.ID); err != nil {
+	if err := s.Docs.SaveBeforeUpdate(ctx, repo, rev, c); err != nil {
 		return res, err
 	}
 	s.Docs.FlushRevision(ctx, rev.ID)

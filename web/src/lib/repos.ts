@@ -95,3 +95,11 @@ const RANK: Record<string, number> = { "": 0, viewer: 1, contributor: 2, maintai
 export function atLeast(role: Role | undefined, min: Exclude<Role, "">) {
   return RANK[role ?? ""]! >= RANK[min]!;
 }
+
+/** A commit's page on the forge (null for plain git). */
+export function commitURL(repo: RepoView, sha: string): string | null {
+  if (!repo.web_url) return null;
+  if (repo.forge_kind === "github") return `${repo.web_url}/commit/${sha}`;
+  if (repo.forge_kind === "gitlab") return `${repo.web_url}/-/commit/${sha}`;
+  return null;
+}

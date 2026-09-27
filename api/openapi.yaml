@@ -1352,19 +1352,29 @@ paths:
                 required: [items]
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/Checkpoint" } }
+  /revisions/{revision}/save:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
     post:
       tags: [revisions]
-      operationId: nameCheckpoint
-      summary: Name the current state
+      operationId: saveRevision
+      summary: Save all
+      description: >-
+        Commits the revision's current content on its branch, authored by the caller, pushes it to
+        the pull/merge request and records the commit as a checkpoint. 409 nothing_to_save when the
+        content is what the last save committed; 409 branch_moved when someone pushed to the branch
+        outside kmdn; 502 when the forge can't be reached.
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
-            schema: { type: object, required: [name], properties: { name: { type: string } } }
+            schema: { type: object, properties: { message: { type: string, description: "Commit message; empty names the changed pages" } } }
       responses:
         "201": { description: Checkpoint, content: { application/json: { schema: { $ref: "#/components/schemas/Checkpoint" } } } }
         "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
   /revisions/{revision}/checkpoints/{checkpoint}/files:
     parameters:
       - { $ref: "#/components/parameters/RevisionID" }
@@ -3235,11 +3245,12 @@ components:
       properties:
         id: { type: string }
         name: { type: string }
-        kind: { type: string, enum: [auto, named, submit, pre_update, pre_restore] }
+        kind: { type: string, enum: [save, auto, named, submit, pre_update, pre_restore], description: "save: a Save all commit; the others are from before checkpoints were commits" }
         created_by: { type: string }
         created_by_name: { type: string }
         created_at: { type: string, format: date-time }
         file_count: { type: integer }
+        commit_sha: { type: string, description: "The commit on the revision's branch" }
     CheckpointFile:
       type: object
       required: [path, op]
@@ -3320,12 +3331,13 @@ components:
       allOf:
         - $ref: "#/components/schemas/Revision"
         - type: object
-          required: [access, members, reviewers, file_count]
+          required: [access, members, reviewers, file_count, unsaved_changes]
           properties:
             access: { $ref: "#/components/schemas/RevisionAccess" }
             members: { type: array, items: { $ref: "#/components/schemas/RevisionMember" } }
             reviewers: { type: array, items: { $ref: "#/components/schemas/Reviewer" } }
             file_count: { type: integer }
+            unsaved_changes: { type: boolean, description: "The content differs from the last Save all" }
     RevisionCreate:
       type: object
       required: [title]

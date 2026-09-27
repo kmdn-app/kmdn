@@ -27,6 +27,8 @@ type View struct {
 	Members   []Member   `json:"members"`
 	Reviewers []Reviewer `json:"reviewers"`
 	Files     int        `json:"file_count"`
+	// UnsavedChanges: the content differs from the last Save all commit.
+	UnsavedChanges bool `json:"unsaved_changes"`
 }
 
 // Routes registers revision endpoints.
@@ -130,7 +132,11 @@ func (s *Service) view(r *http.Request, rev Revision, c Caller) (View, error) {
 	if err := store.QueryRow(r.Context(), s.DB, `SELECT COUNT(*) FROM revision_files WHERE revision_id = ?`, rev.ID).Scan(&n); err != nil {
 		return View{}, err
 	}
-	return View{Revision: rev, Access: a, Members: ms, Reviewers: rs, Files: n}, nil
+	unsaved, err := Unsaved(r.Context(), s.DB, rev.ID)
+	if err != nil {
+		return View{}, err
+	}
+	return View{Revision: rev, Access: a, Members: ms, Reviewers: rs, Files: n, UnsavedChanges: unsaved}, nil
 }
 
 func (s *Service) respond(w http.ResponseWriter, r *http.Request, status int, rev Revision, c Caller) {

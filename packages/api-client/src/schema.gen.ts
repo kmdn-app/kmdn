@@ -1381,8 +1381,29 @@ export interface paths {
         /** Checkpoints, newest first */
         get: operations["listCheckpoints"];
         put?: never;
-        /** Name the current state */
-        post: operations["nameCheckpoint"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save all
+         * @description Commits the revision's current content on its branch, authored by the caller, pushes it to the pull/merge request and records the commit as a checkpoint. 409 nothing_to_save when the content is what the last save committed; 409 branch_moved when someone pushed to the branch outside kmdn; 502 when the forge can't be reached.
+         */
+        post: operations["saveRevision"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3148,13 +3169,18 @@ export interface components {
         Checkpoint: {
             id: string;
             name?: string;
-            /** @enum {string} */
-            kind: "auto" | "named" | "submit" | "pre_update" | "pre_restore";
+            /**
+             * @description save: a Save all commit; the others are from before checkpoints were commits
+             * @enum {string}
+             */
+            kind: "save" | "auto" | "named" | "submit" | "pre_update" | "pre_restore";
             created_by?: string;
             created_by_name?: string;
             /** Format: date-time */
             created_at: string;
             file_count: number;
+            /** @description The commit on the revision's branch */
+            commit_sha?: string;
         };
         CheckpointFile: {
             path: string;
@@ -3242,6 +3268,8 @@ export interface components {
             members: components["schemas"]["RevisionMember"][];
             reviewers: components["schemas"]["Reviewer"][];
             file_count: number;
+            /** @description The content differs from the last Save all */
+            unsaved_changes: boolean;
         };
         RevisionCreate: {
             title: string;
@@ -6108,7 +6136,7 @@ export interface operations {
             };
         };
     };
-    nameCheckpoint: {
+    saveRevision: {
         parameters: {
             query?: never;
             header?: never;
@@ -6117,10 +6145,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": {
-                    name: string;
+                    /** @description Commit message; empty names the changed pages */
+                    message?: string;
                 };
             };
         };
@@ -6135,7 +6164,9 @@ export interface operations {
                 };
             };
             403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
         };
     };
     listCheckpointFiles: {

@@ -53,9 +53,13 @@ test.describe.serial("sign in, edit, review, publish", () => {
     await editor.getByText("Book trains through the travel desk.").click();
     await a.keyboard.press("End");
     await a.keyboard.type(" Flights need a manager's approval.");
-    await expect(a.getByText("Saved")).toBeVisible();
-    // Materialized after the quiet period: the overview shows the change.
-    await a.getByRole("link", { name: "Done" }).click();
+    await expect(a.getByText("Synced")).toBeVisible();
+    // Save all commits the revision to its merge request's branch.
+    await a.getByRole("button", { name: /Save all/ }).click();
+    await expect(a.getByText(/Saved as commit [0-9a-f]{7}/)).toBeVisible({ timeout: 15_000 });
+    const mr = (await forgeState()).merge_requests.find((m) => /^kmdn\/1-/.test(m.source_branch))!;
+    expect(mr.draft).toBe(true);
+    expect(await forgeFile(`${owner}/${name}`, "docs/travel.md", mr.source_branch)).toContain("Flights need a manager's approval.");
     await a.goto(`${repoPath}/revisions/1`);
     await expect(a.getByText("docs/travel.md")).toBeVisible();
     await expect(a.getByRole("main").getByText("+1")).toBeVisible({ timeout: 15_000 });

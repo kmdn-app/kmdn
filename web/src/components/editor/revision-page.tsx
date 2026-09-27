@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
-import { Check, ChevronRight, CloudOff, FilePen, Loader2, Lock, MessageSquarePlus, PenLine, TriangleAlert } from "lucide-react";
+import { Check, ChevronRight, CloudOff, FilePen, GitCommitHorizontal, Loader2, Lock, MessageSquarePlus, PenLine, TriangleAlert } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/shell/app-shell";
@@ -16,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, api, errorMessage, unwrap, useMe } from "@/lib/api";
 import { RoomProvider } from "@/lib/realtime";
 import { fileHref, type RepoView } from "@/lib/repos";
-import { revisionRawUrl, uploadAsset, useRevision, useRevisionContent, useRevisionDiff, useRevisionEvents, useRevisionFiles, type RevisionView } from "@/lib/revisions";
+import { revisionRawUrl, uploadAsset, useRevision, useRevisionContent, useRevisionDiff, useRevisionEvents, useRevisionFiles, useSaveRevision, type RevisionView } from "@/lib/revisions";
 import { CONTENT, listSuggestions, parse, readDoc } from "@kmdn/doc-engine";
 import { ChangesView, SourceDiff } from "@/components/revision/diff-views";
 import { cn } from "@/lib/utils";
@@ -170,11 +169,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
                 {rev.data && <RevisionPill rev={rev.data} />}
                 {rev.data?.access.can_review && !phone && <ReviewActions repo={repo} rev={rev.data} compact />}
                 {!phone && <SaveState status={status} />}
-                <Button asChild size="sm" variant="outline" className="max-md:hidden">
-                  <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: path }}>
-                    {t("revision.done")}
-                  </Link>
-                </Button>
+                {rev.data?.access.can_edit && !phone && <SaveAllButton repo={repo} rev={rev.data} />}
               </>
             }
           />
@@ -492,6 +487,39 @@ function RevisionPill({ rev }: { rev: RevisionView }) {
       </span>
       <span className="sr-only">{t(`revision.state.${rev.state}`)}</span>
     </span>
+  );
+}
+
+/**
+ * Save all: one commit on the revision's branch (docs/specs/05-collaboration.md#saving-and-checkpoints).
+ * A dot marks content that differs from the last commit.
+ */
+function SaveAllButton({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
+  const { t } = useTranslation();
+  const save = useSaveRevision(repo, rev);
+  const unsaved = rev.unsaved_changes;
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={save.isPending}
+      title={unsaved ? t("revision.unsavedHint") : t("revision.allSaved")}
+      onClick={() =>
+        save.mutate(undefined, {
+          onSuccess: (cp) => (cp ? toast.success(t("revision.savedAs", { sha: cp.commit_sha?.slice(0, 7) ?? "" })) : toast(t("revision.allSaved"))),
+          onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+        })
+      }
+    >
+      {save.isPending ? <Loader2 className="animate-spin" /> : <GitCommitHorizontal />}
+      {t("revision.saveAll")}
+      {unsaved && !save.isPending && (
+        <>
+          <span aria-hidden className="size-1.5 rounded-full bg-warning" />
+          <span className="sr-only">{t("revision.unsaved")}</span>
+        </>
+      )}
+    </Button>
   );
 }
 

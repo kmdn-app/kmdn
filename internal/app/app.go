@@ -153,11 +153,11 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}
 	a.Engine = eng
 	a.Realtime = &realtime.Hub{Origin: originOf(cfg.Server.BaseURL), Log: log, Authorize: a.authorizeScope}
-	a.Collab = &collab.Hub{DB: db, Engine: eng, Revisions: a.Revisions, Log: log, Publish: a.Realtime.Publish}
-	a.Realtime.Rooms = a.Collab
-	a.Collab.Routes(r)
 	a.Branches = &branches.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, DataDir: cfg.DataDir, Log: log}
 	a.Branches.Register()
+	a.Collab = &collab.Hub{DB: db, Engine: eng, Revisions: a.Revisions, Branches: a.Branches, Log: log, Publish: a.Realtime.Publish}
+	a.Realtime.Rooms = a.Collab
+	a.Collab.Routes(r)
 	a.Publish = &publish.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Docs: collabDocs{a}, Engine: eng, Jobs: a.Jobs, Branches: a.Branches, Log: log}
 	a.Publish.Register()
 	a.Publish.Routes(r)
@@ -244,8 +244,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}
 	a.Revisions.Removed = func(_ context.Context, rev revisions.Revision, p string) { a.Collab.FileRemoved(rev, p) }
 	a.Revisions.OnSubmitted = func(ctx context.Context, rev revisions.Revision, by string) {
-		if _, err := a.Collab.Checkpoint(ctx, rev, by, "", collab.CheckpointSubmit); err != nil {
-			log.Error("submit checkpoint", "err", err, "revision", rev.ID)
+		// What goes to review is committed on the pull request.
+		if err := a.saveAs(ctx, rev, by, "Save for review"); err != nil {
+			log.Error("save on submit", "err", err, "revision", rev.ID)
 		}
 		a.Summaries.RequestReview(ctx, rev.ID, by)
 		a.Consistency.RequestRevision(ctx, rev.ID, 0)
@@ -365,9 +366,21 @@ func (d collabDocs) ApplyDoc(ctx context.Context, repo repos.Repo, rev revisions
 func (d collabDocs) Suggest(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, markdown string, attrs docengine.SuggestAttrs, kind string) (bool, error) {
 	return d.a.Collab.Suggest(ctx, repo, rev, c, p, markdown, attrs, kind)
 }
-func (d collabDocs) CheckpointBeforeUpdate(ctx context.Context, rev revisions.Revision, by string) error {
-	_, err := d.a.Collab.Checkpoint(ctx, rev, by, "", collab.CheckpointPreUpdate)
-	return err
+func (d collabDocs) SaveBeforeUpdate(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller) error {
+	return d.a.Collab.SaveFirst(ctx, repo, rev, c.User, "Save before applying updates from Published")
+}
+
+// saveAs runs Save all as the user with id by (nothing to save is fine).
+func (a *App) saveAs(ctx context.Context, rev revisions.Revision, by, message string) error {
+	repo, err := repos.Get(ctx, a.DB, rev.RepoID)
+	if err != nil {
+		return err
+	}
+	u, err := users.ByID(ctx, a.DB, by)
+	if err != nil {
+		return err
+	}
+	return a.Collab.SaveFirst(ctx, repo, rev, u, message)
 }
 
 // originOf returns scheme://host of the base URL (the only allowed WebSocket Origin).
