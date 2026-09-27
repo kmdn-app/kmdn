@@ -64,7 +64,7 @@ function PublishedPage() {
     () => ({ path, pageHref: (p: string) => fileHref(repo, p), imageSrc: (p: string) => rawUrl(repo, p, sha) }),
     [repo, path, sha],
   );
-  const aside = useMemo(() => (blame.data ? blameAside(blame.data) : undefined), [blame.data]);
+  const aside = useMemo(() => (blame.data ? blameAside(blame.data, (names) => t("file.withOthers", { names })) : undefined), [blame.data, t]);
   // Discussions on the published version (not old ones).
   const discussable = !sha && !!file.data?.markdown;
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
@@ -302,7 +302,7 @@ function Byline({ commit, onHistory }: { commit: Commit; onHistory: () => void }
   );
 }
 
-function blameAside(lines: BlameLine[]) {
+function blameAside(lines: BlameLine[], withOthers: (names: string) => string) {
   return (_i: number, range: BlockLines) => {
     let best: BlameLine | undefined;
     for (let l = range.start; l <= range.end; l++) {
@@ -315,6 +315,7 @@ function blameAside(lines: BlameLine[]) {
         <Avatar name={best.author} id={best.email || best.author} size="xs" />
         <div className="min-w-0">
           <b className="block truncate font-medium text-foreground">{best.author}</b>
+          {best.co_authors.length > 0 && <span className="block truncate">{withOthers(best.co_authors.map((n) => n.split(" ")[0]).join(", "))}</span>}
           {new Date(best.time * 1000).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" })}
         </div>
       </div>

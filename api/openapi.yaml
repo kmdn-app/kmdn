@@ -3657,13 +3657,14 @@ components:
         path: { type: string }
     BlameLine:
       type: object
-      required: [line, sha, author, email, time]
+      required: [line, sha, author, email, time, co_authors]
       properties:
         line: { type: integer }
         sha: { type: string }
-        author: { type: string }
+        author: { type: string, description: "The commit's author; for a commit kmdn made, its first Co-authored-by" }
         email: { type: string }
         time: { type: integer }
+        co_authors: { type: array, items: { type: string }, description: "Other people credited on the commit" }
     Member:
       type: object
       required: [type, id, name, role]
