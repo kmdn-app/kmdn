@@ -21,21 +21,21 @@ const (
 
 // Entry is one audit event. Never put secret values in Data.
 type Entry struct {
-	ActorType  string
-	ActorID    string
-	IP         string
-	Action     string // e.g. "auth.sign_in", "user.invited"
-	TargetType string
-	TargetID   string
-	RepoID     string
-	Data       map[string]any
+	ActorType  string         `json:"actor_type"`
+	ActorID    string         `json:"actor_id,omitempty"`
+	IP         string         `json:"ip,omitempty"`
+	Action     string         `json:"action"` // e.g. "auth.sign_in", "user.invited"
+	TargetType string         `json:"target_type,omitempty"`
+	TargetID   string         `json:"target_id,omitempty"`
+	RepoID     string         `json:"repo_id,omitempty"`
+	Data       map[string]any `json:"data,omitempty"`
 }
 
 // Record is a stored entry.
 type Record struct {
 	Entry
-	ID string
-	At time.Time
+	ID string    `json:"id"`
+	At time.Time `json:"at"`
 }
 
 func nullable(s string) any {

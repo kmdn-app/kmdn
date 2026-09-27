@@ -15,7 +15,9 @@ import (
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
+	"github.com/kmdn-app/kmdn/internal/invites"
 	"github.com/kmdn-app/kmdn/internal/jobs"
+	"github.com/kmdn-app/kmdn/internal/linking"
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/secrets"
@@ -37,6 +39,7 @@ type App struct {
 	AuthH   *auth.HTTP
 	Setup   *setup.Service
 	Repos   *repos.Service
+	Invites *invites.Service
 }
 
 // New opens the database, applies migrations and builds the services.
@@ -97,6 +100,10 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Repos.Routes(r)
 	a.Repos.ForgeRoutes(r)
 	a.Server.Mount("/hooks", a.Repos.WebhookHandler())
+	(&admin.People{DB: db, Auth: a.Auth}).Routes(r)
+	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL}
+	a.Invites.Routes(r)
+	(&linking.Service{DB: db, Secrets: sec, AuthH: a.AuthH, BaseURL: a.Repos.BaseURL, HTTP: a.Repos.Adapters.HTTP}).Routes(r)
 	if _, err := repos.EnsureGitHost(ctx, db); err != nil {
 		db.Close()
 		return nil, err

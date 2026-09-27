@@ -161,8 +161,7 @@ func (s *Service) githubManifest(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
-	manifest := forge.AppManifest(s.BaseURL, name)
-	manifest["hook_attributes"] = map[string]any{"url": strings.TrimRight(s.BaseURL, "/") + "/hooks/github/" + hostID, "active": true}
+	manifest := forge.AppManifest(s.BaseURL, name, hostID)
 	action := base + "/settings/apps/new?state=" + url.QueryEscape(state)
 	if in.Organization != "" {
 		action = base + "/organizations/" + url.PathEscape(in.Organization) + "/settings/apps/new?state=" + url.QueryEscape(state)

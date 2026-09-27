@@ -469,18 +469,18 @@ func ConvertManifest(ctx context.Context, client *http.Client, apiURL, code stri
 }
 
 // AppManifest builds the manifest kmdn asks GitHub to create.
-func AppManifest(baseURL, name string) map[string]any {
+func AppManifest(baseURL, name, hostID string) map[string]any {
 	b := strings.TrimRight(baseURL, "/")
 	return map[string]any{
 		"name":         name,
 		"url":          b,
 		"redirect_url": b + "/api/v1/admin/forges/github/callback",
 		"callback_urls": []string{
-			b + "/api/v1/auth/oauth/github/callback",
+			b + "/api/v1/auth/oauth/" + hostID + "/callback",
 		},
 		"setup_url":       b + "/admin/repositories",
 		"public":          false,
-		"hook_attributes": map[string]any{"url": b + "/hooks/github", "active": true},
+		"hook_attributes": map[string]any{"url": b + "/hooks/github/" + hostID, "active": true},
 		"default_permissions": map[string]string{
 			"contents":       "write",
 			"metadata":       "read",

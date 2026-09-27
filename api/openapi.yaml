@@ -15,6 +15,7 @@ servers:
   - url: /api/v1
 tags:
   - name: repos
+  - name: people
   - name: auth
   - name: me
   - name: setup
@@ -509,6 +510,273 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/ForgeRepoInfo" } } } }
+  /users:
+    get:
+      tags: [people]
+      operationId: searchUsers
+      summary: Find active users by name or email (member pickers)
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Up to 20 users
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/UserRef" } } } }
+  /admin/users:
+    get:
+      tags: [admin]
+      operationId: listUsers
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [active, deactivated] } }
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } } } }
+  /admin/users/{id}:
+    patch:
+      tags: [admin]
+      operationId: updateUser
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_instance_admin: { type: boolean }
+                status: { type: string, enum: [active, deactivated] }
+                name: { type: string }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/AdminUser" } } } }
+        "409": { $ref: "#/components/responses/Problem" }
+  /admin/users/{id}/revoke-sessions:
+    post:
+      tags: [admin]
+      operationId: revokeUserSessions
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Sessions revoked }
+  /admin/groups:
+    get:
+      tags: [admin]
+      operationId: listGroups
+      responses:
+        "200":
+          description: Groups
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Group" } } } }
+    post:
+      tags: [admin]
+      operationId: createGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GroupInput" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Group" } } } }
+        "422": { $ref: "#/components/responses/Problem" }
+  /admin/groups/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [admin]
+      operationId: updateGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GroupInput" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Group" } } } }
+    delete:
+      tags: [admin]
+      operationId: deleteGroup
+      responses:
+        "204": { description: Deleted (its repository grants are removed too) }
+  /admin/groups/{id}/members:
+    get:
+      tags: [admin]
+      operationId: listGroupMembers
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } } } }
+  /admin/groups/{id}/members/{user}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: user, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [admin]
+      operationId: addGroupMember
+      responses:
+        "200":
+          description: Members after adding
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } } } }
+    delete:
+      tags: [admin]
+      operationId: removeGroupMember
+      responses:
+        "204": { description: Removed }
+  /admin/audit:
+    get:
+      tags: [admin]
+      operationId: listAudit
+      responses:
+        "200":
+          description: Latest 200 audit entries
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } } } }
+  /admin/invites:
+    post:
+      tags: [admin]
+      operationId: inviteUser
+      summary: Invite someone to the instance, optionally with a repository role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                repo_id: { type: string }
+                role: { $ref: "#/components/schemas/Role" }
+      responses:
+        "201": { description: Invited or granted, content: { application/json: { schema: { $ref: "#/components/schemas/InviteResult" } } } }
+        "409": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/invites:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    post:
+      tags: [repos]
+      operationId: inviteToRepo
+      summary: Invite someone to a repository (repository admins)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email: { type: string, format: email }
+                role: { $ref: "#/components/schemas/Role" }
+      responses:
+        "201": { description: Invited, or granted directly for an existing account, content: { application/json: { schema: { $ref: "#/components/schemas/InviteResult" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+  /invites/{token}:
+    get:
+      tags: [people]
+      operationId: getInvite
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Invite details, content: { application/json: { schema: { $ref: "#/components/schemas/InviteDetails" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /invites/{token}/accept:
+    post:
+      tags: [people]
+      operationId: acceptInvite
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string } } }
+      responses:
+        "200": { description: Accepted and signed in, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /auth/oauth/providers:
+    get:
+      tags: [auth]
+      operationId: listOAuthProviders
+      security: []
+      responses:
+        "200":
+          description: Forges people can sign in with
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { type: object, required: [id, kind, display_name], properties: { id: { type: string }, kind: { type: string }, display_name: { type: string } } } }
+  /auth/oauth/{host}/start:
+    get:
+      tags: [auth]
+      operationId: startOAuth
+      security: []
+      parameters:
+        - { name: host, in: path, required: true, schema: { type: string } }
+        - { name: mode, in: query, schema: { type: string, enum: [signin, link] } }
+        - { name: redirect, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Redirect to the forge }
+  /auth/oauth/{host}/callback:
+    get:
+      tags: [auth]
+      operationId: oauthCallback
+      security: []
+      parameters:
+        - { name: host, in: path, required: true, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Back to kmdn, signed in or linked (errors in query string) }
+  /me/linked-accounts:
+    get:
+      tags: [me]
+      operationId: listLinkedAccounts
+      responses:
+        "200":
+          description: Linked forge accounts
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/LinkedAccount" } } } }
+  /me/linked-accounts/{id}:
+    delete:
+      tags: [me]
+      operationId: unlinkAccount
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Unlinked }
+  /me/commit-email:
+    put:
+      tags: [me]
+      operationId: setCommitEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { type: string, enum: [forge_noreply, account, custom] }
+                custom: { type: string, format: email }
+      responses:
+        "204": { description: Saved }
 components:
   parameters:
     RepoID:
@@ -534,6 +802,81 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    UserRef:
+      type: object
+      required: [id, name, email]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+    AdminUser:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          required: [repos, sessions]
+          properties:
+            repos: { type: integer }
+            sessions: { type: integer }
+    Group:
+      type: object
+      required: [id, name, description, members, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        members: { type: integer }
+        created_at: { type: string, format: date-time }
+    GroupInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 80 }
+        description: { type: string }
+    AuditEntry:
+      type: object
+      required: [id, at, actor_type, action]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        actor_type: { type: string }
+        actor_id: { type: string }
+        ip: { type: string }
+        action: { type: string }
+        target_type: { type: string }
+        target_id: { type: string }
+        repo_id: { type: string }
+        data: { type: object, additionalProperties: true }
+    InviteResult:
+      type: object
+      required: [status, email]
+      properties:
+        status: { type: string, enum: [invited, granted] }
+        email: { type: string }
+        invite: { type: object, additionalProperties: true }
+    InviteDetails:
+      type: object
+      required: [email, inviter_name, expires_at, instance_name, has_account]
+      properties:
+        email: { type: string }
+        inviter_name: { type: string }
+        repo_name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        expires_at: { type: string, format: date-time }
+        instance_name: { type: string }
+        has_account: { type: boolean }
+    LinkedAccount:
+      type: object
+      required: [id, forge_host_id, forge_kind, host_name, forge_user_id, login, noreply_email, avatar_url, linked_at]
+      properties:
+        id: { type: string }
+        forge_host_id: { type: string }
+        forge_kind: { type: string }
+        host_name: { type: string }
+        forge_user_id: { type: string }
+        login: { type: string }
+        noreply_email: { type: string }
+        avatar_url: { type: string }
+        linked_at: { type: string, format: date-time }
     Role:
       type: string
       enum: [viewer, contributor, maintainer, admin, ""]
