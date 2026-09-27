@@ -1869,6 +1869,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{repo}/hooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** Outgoing webhooks (repository admins) */
+        get: operations["listHooks"];
+        put?: never;
+        post: operations["createHook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/hooks/{hook}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                hook: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteHook"];
+        options?: never;
+        head?: never;
+        patch: operations["updateHook"];
+        trace?: never;
+    };
+    "/repos/{repo}/hooks/{hook}/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                hook: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pingHook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/hooks/{hook}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                hook: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listHookDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/hooks/{hook}/deliveries/{delivery}/redeliver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                hook: string;
+                delivery: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["redeliverHook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{repo}/discussions": {
         parameters: {
             query?: never;
@@ -2021,6 +2117,41 @@ export interface components {
             push_available: boolean;
             /** @description Browsers subscribed to push */
             push_subscriptions: number;
+        };
+        Hook: {
+            id: string;
+            /** @enum {string} */
+            kind: "generic" | "slack";
+            /** @description The URL is kept secret; its host is shown */
+            url_host: string;
+            events: string[];
+            active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            last_delivery?: components["schemas"]["HookDelivery"];
+        };
+        HookInput: {
+            /** @enum {string} */
+            kind?: "generic" | "slack";
+            url?: string;
+            events?: string[];
+            active?: boolean;
+        };
+        HookDelivery: {
+            id: string;
+            event: string;
+            /** @enum {string} */
+            status: "pending" | "delivered" | "failed";
+            attempts: number;
+            response_code: number;
+            response_body?: string;
+            error?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_attempt_at?: string;
+            /** Format: date-time */
+            delivered_at?: string;
         };
         Follow: {
             repo_id: string;
@@ -5902,6 +6033,181 @@ export interface operations {
                 };
             };
             422: components["responses"]["Problem"];
+        };
+    };
+    listHooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hooks and the events they can subscribe to */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Hook"][];
+                        events: string[];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    createHook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HookInput"];
+            };
+        };
+        responses: {
+            /** @description The hook, and for generic hooks the signing secret (shown once) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        hook: components["schemas"]["Hook"];
+                        secret?: string;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteHook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                hook: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateHook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                hook: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HookInput"];
+            };
+        };
+        responses: {
+            /** @description Hook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Hook"];
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    pingHook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                hook: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A test delivery was queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listHookDeliveries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                hook: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent deliveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["HookDelivery"][];
+                    };
+                };
+            };
+        };
+    };
+    redeliverHook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                hook: string;
+                delivery: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued again */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
         };
     };
     listDiscussions: {

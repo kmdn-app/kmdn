@@ -31,6 +31,14 @@ type Config struct {
 	Assistant Assistant `yaml:"assistant"`
 	Limits    Limits    `yaml:"limits"`
 	Telemetry Telemetry `yaml:"telemetry"`
+	Hooks     Hooks     `yaml:"hooks"`
+}
+
+// Hooks configures outgoing webhooks.
+type Hooks struct {
+	// AllowPrivate lets webhooks reach loopback and private-network
+	// addresses (off: hooks can't probe the instance's own network).
+	AllowPrivate bool `yaml:"allow_private"`
 }
 
 type Server struct {

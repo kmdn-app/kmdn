@@ -20,6 +20,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/docengine"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
+	"github.com/kmdn-app/kmdn/internal/hooks"
 	"github.com/kmdn-app/kmdn/internal/invites"
 	"github.com/kmdn-app/kmdn/internal/jobs"
 	"github.com/kmdn-app/kmdn/internal/linking"
@@ -62,6 +63,7 @@ type App struct {
 	Threads   *threads.Service
 	Updates   *updates.Service
 	Notify    *notify.Service
+	Hooks     *hooks.Service
 	Invites   *invites.Service
 }
 
@@ -164,7 +166,14 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Notify.Register()
 	a.Notify.Routes(r)
 	a.Notify.FollowRoutes(r)
-	a.Threads.OnComment = a.Notify.Comment
+	a.Hooks = &hooks.Service{DB: db, Secrets: sec, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, AllowPrivate: cfg.Hooks.AllowPrivate, Log: log}
+	a.Hooks.Register()
+	a.Hooks.Routes(r)
+	a.Notify.OnEvent = a.Hooks.RevisionEvent
+	a.Threads.OnComment = func(ctx context.Context, t threads.Thread, c threads.Comment, by users.User) {
+		a.Notify.Comment(ctx, t, c, by)
+		a.Hooks.Discussion(ctx, t, c, by)
+	}
 	a.Threads.Routes(r)
 	a.Repos.OnHeadChanged = append(a.Repos.OnHeadChanged, a.Threads.Reanchor)
 	a.Updates = &updates.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Engine: eng, Docs: collabDocs{a}, Jobs: a.Jobs, Publish: a.Realtime.Publish, Log: log}

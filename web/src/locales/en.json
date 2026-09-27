@@ -846,5 +846,49 @@
     "hideChanges": "Hide changes",
     "noVisibleChange": "Nothing visible changed on the page.",
     "updatesTitle": "Updated since your last visit"
+  },
+  "hooks": {
+    "title": "Webhooks",
+    "desc": "Send revision and discussion events to Slack or your own tools. Deliveries are retried for 24 hours.",
+    "add": "Add webhook",
+    "create": "Add webhook",
+    "empty": "No webhooks yet.",
+    "kind": "Type",
+    "kinds": {
+      "generic": "Webhook",
+      "slack": "Slack"
+    },
+    "kindHelp": {
+      "slack": "Paste a Slack Incoming Webhook URL: kmdn posts formatted messages to its channel.",
+      "generic": "kmdn POSTs JSON signed with a secret (X-Kmdn-Signature: sha256=…)."
+    },
+    "url": "URL",
+    "events": "Events",
+    "active": "Active",
+    "eventNames": {
+      "revision_submitted": "Revision sent for review",
+      "revision_approved": "Every reviewer approved",
+      "revision_changes_requested": "Changes requested",
+      "revision_update_available": "Updates from Published",
+      "revision_published": "Revision published",
+      "revision_closed": "Revision closed",
+      "discussion_created": "New discussion on a page"
+    },
+    "secretOnce": "Save the signing secret: it won't be shown again.",
+    "secretHint": "Check X-Kmdn-Signature: the HMAC-SHA256 of the body with this secret.",
+    "secretSaved": "I saved it",
+    "status": {
+      "pending": "Pending",
+      "delivered": "Delivered",
+      "failed": "Failed"
+    },
+    "noDeliveries": "No deliveries yet.",
+    "ping": "Send test",
+    "pinged": "Test event queued",
+    "deliveries": "Deliveries",
+    "delete": "Delete webhook",
+    "redeliver": "Redeliver",
+    "attempts_one": "{{count}} attempt",
+    "attempts_other": "{{count}} attempts"
   }
 }
