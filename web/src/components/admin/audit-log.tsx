@@ -149,7 +149,7 @@ export function AuditLogPanel() {
           </Button>
         )}
       </div>
-      <div className="overflow-x-auto rounded-xl border">
+      <div className="overflow-x-auto rounded-xl border focus-visible:outline-2 focus-visible:outline-ring" tabIndex={0} role="region" aria-label={t("admin.audit")}>
         <table className="w-full text-[13px]">
           <thead className="text-left text-[12.5px] text-muted-foreground">
             <tr className="border-b">
