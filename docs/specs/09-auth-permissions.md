@@ -2,9 +2,9 @@
 
 ## Accounts
 
-- kmdn owns user accounts. Single-tenant instance: every user belongs to the instance.
+- kmdn owns user accounts. Accounts belong to the instance and join one or more **organizations** as owners, admins or members; a self-hosted install has a single default org that every account belongs to. Org roles, org-scoped invites and auto-join, and how instance admins relate to orgs are in [16 · Organizations](16-organizations.md#roles).
 - A user has: id, display name, primary email (unique, verified), avatar (uploaded or from linked forge), locale, theme, commit-email preference, status (active, deactivated), `is_instance_admin`.
-- New users only through **invites** (admin or repo admin) or **auto-join** rules: instance setting "Allow sign-up for emails in domains: northwind.dev" (off by default). Auto-joined users get no repo access until granted, unless a repo has "Default role for new members".
+- New users only through **invites** (org admin or repo admin) or **auto-join** rules: org setting "Allow sign-up for emails in domains: northwind.dev" (off by default). Auto-joined users get no repo access until granted, unless a repo has "Default role for new members".
 - First-run setup creates the first instance admin.
 
 ## Sign-in methods

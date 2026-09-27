@@ -17,7 +17,7 @@ kmdn closes that gap: a Docs-quality editor for everyone, with git as the source
 
 ## Non-goals (v1)
 
-- Multi-tenant SaaS: one instance is one organization. No workspaces, billing or quotas.
+- Billing, plans and quotas in the core. An instance can host several organizations ([16](16-organizations.md)); a self-hosted install has one by default, and a hosted service adds plans through extension points.
 - Horizontal scaling: single node by design.
 - Offline editing.
 - MDX in WYSIWYG, SSG presets, site preview builds.
@@ -42,6 +42,7 @@ kmdn closes that gap: a Docs-quality editor for everyone, with git as the source
 | Term | Meaning | Shown to non-technical users as |
 |------|---------|---------------------------------|
 | **Instance** | One kmdn deployment | — |
+| **Organization** | A group of people and the repos they connect; an instance hosts one or more ([16](16-organizations.md)) | Organization name |
 | **Repo** | A connected GitHub/GitLab repository with a content root and a target branch | "Space" name = repo display name |
 | **Content root** | Folder inside the repo exposed by kmdn (e.g. `docs/`) | Folder tree |
 | **Target branch** | The branch revisions publish into (default branch unless configured) | "Published" |

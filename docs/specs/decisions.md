@@ -1,6 +1,6 @@
 # Decision log
 
-Decisions from the design interview (D1–D45, 2026-09-26), the first mockup review (D46–D56, 2026-09-27) and the first round of feedback on the running app (D58–D60, 2026-09-27). Each links to the spec that details it.
+Decisions from the design interview (D1–D45, 2026-09-26), the first mockup review (D46–D56, 2026-09-27) and the first round of feedback on the running app (D58–D60, 2026-09-27) and the organizations decision (D61, 2026-09-27). Each links to the spec that details it.
 
 | # | Topic | Decision | Alternatives considered | Spec |
 |---|-------|----------|-------------------------|------|
@@ -18,7 +18,7 @@ Decisions from the design interview (D1–D45, 2026-09-26), the first mockup rev
 | D12 | Repo scope | **Configurable content root + globs + one target branch**, `.kmdn.yml` override (not for branch) | Whole repo any branch; multiple spaces | [06](06-git-and-forges.md) |
 | D13 | User identity | **kmdn-owned accounts**, optional forge linking | Forge OAuth only; + OIDC | [09](09-auth-permissions.md) |
 | D14 | Permissions | **kmdn-managed only**: Viewer / Contributor / Maintainer / Admin + groups | Forge-seeded; forge-mirrored | [09](09-auth-permissions.md) |
-| D15 | Tenancy | **Single-tenant instance** | Workspaces; full SaaS | [01](01-product.md) |
+| D15 | Tenancy | ~~**Single-tenant instance**~~ → superseded by D61 | Workspaces; full SaaS | [01](01-product.md) |
 | D16 | Storage | **SQLite default, Postgres optional, single node** | Postgres only; multi-node | [03](03-architecture.md), [10](10-data-model.md) |
 | D17 | Review features | **Inline threads, suggestion mode, rendered + source diff**; approval rules deferred | CODEOWNERS-like rules | [07](07-review.md) |
 | D18 | Lifecycle | ~~1 maintainer approval, editing open during review~~ → superseded by D48–D50. Still valid: self-approval off by default, explicit Publish | Approve = merge; freeze on submit | [07](07-review.md) |
@@ -64,6 +64,7 @@ Decisions from the design interview (D1–D45, 2026-09-26), the first mockup rev
 | D58 | Revision on the forge | **Every revision is a branch `kmdn/<number>-<slug>` with a draft PR/MR**, opened when the revision starts; Submit for review marks it ready, Withdraw and Request changes turn it back into a draft. Reviews still happen in kmdn (D1) | PR only at publish (D24); PR only for protected branches | [06](06-git-and-forges.md#revision-branches) |
 | D59 | Saving | **Save all** (replaces Done): one commit per click on the revision branch, authored by the person who clicked, pushed to the PR. **Checkpoints are those commits**; no automatic checkpoints | Automatic commits; checkpoints kmdn-internal | [05](05-collaboration.md#saving-and-checkpoints) |
 | D60 | Publish | **Publish merges the revision's PR with a merge commit**, protected target branch or not (auto-merge while required checks run). Git keeps the full history of validated changes: never squash, rebase away or force-push over it (`AGENTS.md`) | One squashed commit (D9); PR left for people to merge (D24) | [06](06-git-and-forges.md#publishing) |
+| D61 | Organizations | **An instance hosts one or more organizations.** Org-owned rows carry `org_id`; accounts are global and join orgs; URLs carry the org (`/{org}/{owner}/{repo}`). Self-hosted installs run in `single` mode with one default org. Plans and billing stay out of the core, behind a public embedding package ([ADR 0004](../adr/0004-organizations.md)) | One instance per customer; a private multi-tenant fork | [16](16-organizations.md) |
 
 ## Defaults chosen without a dedicated question
 

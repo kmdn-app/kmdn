@@ -11,6 +11,8 @@
 
 ## Resources (v1)
 
+With organizations ([16](16-organizations.md#urls-and-the-request-context)), collections move under `/orgs/{org}/…` (for example `GET /orgs/{org}/repos`, `/orgs/{org}/admin/audit`) and resources addressed by ID keep the paths below. `GET /orgs` lists the caller's orgs.
+
 ```
 Auth
   POST   /auth/magic-link                     {email}
