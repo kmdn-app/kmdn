@@ -1515,10 +1515,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/commit-preview": {
+        parameters: {
+            query?: {
+                title?: string;
+                body?: string;
+            };
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** The commit publishing would make (message, co-authors, reviewers) */
+        get: operations["commitPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish an approved revision (a job; a pull/merge request on protected branches) */
+        post: operations["publishRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CommitPerson: {
+            user_id?: string;
+            name: string;
+            email: string;
+        };
+        CommitPreview: {
+            title: string;
+            body: string;
+            co_authors: components["schemas"]["CommitPerson"][];
+            reviewers: components["schemas"]["CommitPerson"][];
+            assisted: boolean;
+            message: string;
+            target_branch: string;
+            protected: boolean;
+            blocked?: string;
+        };
         SubmitInput: {
             reviewers: string[];
             title?: string;
@@ -4598,6 +4655,64 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    commitPreview: {
+        parameters: {
+            query?: {
+                title?: string;
+                body?: string;
+            };
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommitPreview"];
+                };
+            };
+        };
+    };
+    publishRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title?: string;
+                    body?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        job_id: string;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
 }

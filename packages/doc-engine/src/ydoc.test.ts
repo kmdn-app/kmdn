@@ -113,3 +113,22 @@ describe("applyDoc", () => {
     expect(serialize(readDoc(y.getXmlFragment(CONTENT)))).toBe("## Heading soon\n\nBody.\n");
   });
 });
+
+test("edits inside a list item only touch that item", () => {
+  const src = "- one\n- two\n- three\n";
+  const a = new Y.Doc();
+  writeDoc(a.getXmlFragment(CONTENT), parse(src).doc);
+  const b = new Y.Doc();
+  Y.applyUpdate(b, Y.encodeStateAsUpdate(a));
+  // B edits the first item while the server edits the third.
+  const list = b.getXmlFragment(CONTENT).get(0) as Y.XmlElement;
+  const firstText = ((list.get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText;
+  firstText.insert(3, " (B)");
+  const sv = Y.encodeStateVector(a);
+  a.transact(() => applyDoc(a.getXmlFragment(CONTENT), parse("- one\n- two\n- three and more\n").doc, nodeHash));
+  const fromServer = Y.encodeStateAsUpdate(a, sv);
+  Y.applyUpdate(b, fromServer);
+  Y.applyUpdate(a, Y.encodeStateAsUpdate(b));
+  expect(serialize(readDoc(a.getXmlFragment(CONTENT)))).toBe("- one (B)\n- two\n- three and more\n");
+  expect(serialize(readDoc(b.getXmlFragment(CONTENT)))).toBe("- one (B)\n- two\n- three and more\n");
+});

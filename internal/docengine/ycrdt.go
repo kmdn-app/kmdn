@@ -217,3 +217,37 @@ func (e *Engine) RewriteLinks(ctx context.Context, markdown string, replace map[
 		return f(goja.Undefined(), v.rt.ToValue(markdown), v.rt.ToValue(string(b)))
 	})
 }
+
+// YContributions counts, per Yjs client id, the content it wrote that still
+// survives in the document.
+func (e *Engine) YContributions(ctx context.Context, state []byte) (map[uint64]int, error) {
+	if len(state) > MaxUpdateBytes {
+		return nil, ErrTooLarge
+	}
+	s, err := run(ctx, e, func(v *vm) (string, error) {
+		f, err := v.fn("yContributions")
+		if err != nil {
+			return "", err
+		}
+		out, err := f(goja.Undefined(), bin(v, state))
+		if err != nil {
+			return "", err
+		}
+		return out.String(), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	var raw map[string]int
+	if err := json.Unmarshal([]byte(s), &raw); err != nil {
+		return nil, err
+	}
+	out := make(map[uint64]int, len(raw))
+	for k, n := range raw {
+		var id uint64
+		if _, err := fmt.Sscan(k, &id); err == nil {
+			out[id] = n
+		}
+	}
+	return out, nil
+}

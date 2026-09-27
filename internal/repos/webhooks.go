@@ -95,6 +95,10 @@ func (s *Service) githubHook(w http.ResponseWriter, r *http.Request) {
 			_, _ = s.EnqueueSync(ctx, repo.ID)
 			s.Jobs.Notify()
 		}
+	case "change_request":
+		if repo, err := ByExternal(ctx, s.DB, h.ID, ev.Repo.ExternalID); err == nil {
+			s.changeRequest(ctx, repo, ev)
+		}
 	case "installation":
 		if ev.Install != nil {
 			if ev.Removed {
@@ -154,7 +158,29 @@ func (s *Service) repoHook(kind string) http.HandlerFunc {
 			_, _ = s.EnqueueSync(ctx, repo.ID)
 			s.Jobs.Notify()
 		}
+		if ev.Type == "change_request" {
+			s.changeRequest(ctx, repo, ev)
+		}
 		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// ChangeRequestHook reacts to a pull/merge request kmdn opened being merged or closed.
+type ChangeRequestHook func(ctx context.Context, r Repo, ev forge.ChangeRequestEvent) error
+
+func (s *Service) changeRequest(ctx context.Context, repo Repo, ev forge.Event) {
+	if ev.ChangeRequest == nil {
+		return
+	}
+	for _, f := range s.OnChangeRequest {
+		if err := f(ctx, repo, *ev.ChangeRequest); err != nil && s.Log != nil {
+			s.Log.Error("change request webhook", "err", err, "repo", repo.ID, "ref", ev.ChangeRequest.Ref)
+		}
+	}
+	// A merge moved the target branch.
+	if ev.ChangeRequest.Merged {
+		_, _ = s.EnqueueSync(ctx, repo.ID)
+		s.Jobs.Notify()
 	}
 }
 

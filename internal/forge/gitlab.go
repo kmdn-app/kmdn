@@ -148,15 +148,39 @@ func (g *GitLab) ParseWebhook(r *http.Request, body []byte, secret string) (Even
 			ID                int64  `json:"id"`
 			PathWithNamespace string `json:"path_with_namespace"`
 		} `json:"project"`
+		ObjectAttributes *struct {
+			IID            int64  `json:"iid"`
+			Action         string `json:"action"`
+			State          string `json:"state"`
+			SourceBranch   string `json:"source_branch"`
+			MergeCommitSHA string `json:"merge_commit_sha"`
+		} `json:"object_attributes"`
 	}
 	if err := json.Unmarshal(body, &p); err != nil {
 		return ev, err
 	}
 	ev.Repo = Repo{Owner: path.Dir(p.Project.PathWithNamespace), Name: path.Base(p.Project.PathWithNamespace), ExternalID: strconv.FormatInt(p.Project.ID, 10)}
-	if r.Header.Get("X-Gitlab-Event") == "Push Hook" {
+	switch r.Header.Get("X-Gitlab-Event") {
+	case "Push Hook":
 		ev.Type = "push"
 		ev.Branch = strings.TrimPrefix(p.Ref, "refs/heads/")
 		ev.After = p.After
+	case "Merge Request Hook":
+		if a := p.ObjectAttributes; a != nil && (a.Action == "merge" || a.Action == "close") {
+			ev.Type = "change_request"
+			ev.ChangeRequest = &ChangeRequestEvent{Ref: strconv.FormatInt(a.IID, 10), Head: a.SourceBranch, Merged: a.Action == "merge", Closed: a.Action == "close", MergeSHA: a.MergeCommitSHA}
+		}
 	}
 	return ev, nil
+}
+
+// OpenChangeRequest opens a merge request from head into base.
+func (g *GitLab) OpenChangeRequest(ctx context.Context, repo Repo, head, base, title, body string) (ChangeRequest, error) {
+	var mr struct {
+		IID    int64  `json:"iid"`
+		WebURL string `json:"web_url"`
+	}
+	err := g.do(ctx, http.MethodPost, "/projects/"+projectRef(repo)+"/merge_requests",
+		map[string]any{"source_branch": head, "target_branch": base, "title": title, "description": body, "remove_source_branch": true}, &mr)
+	return ChangeRequest{URL: mr.WebURL, Ref: strconv.FormatInt(mr.IID, 10)}, err
 }

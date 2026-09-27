@@ -64,12 +64,34 @@ type Protection struct {
 // Event is a normalized webhook event.
 type Event struct {
 	DeliveryID string
-	Type       string // push | installation | ping | other
+	Type       string // push | installation | change_request | ping | other
 	Repo       Repo
 	Branch     string
 	After      string // new head sha (push)
 	Install    *Install
 	Removed    bool // installation removed / repo access revoked
+	// ChangeRequest is set for pull/merge request events (Type change_request).
+	ChangeRequest *ChangeRequestEvent
+}
+
+// ChangeRequest is a pull request (GitHub) or merge request (GitLab) kmdn opened.
+type ChangeRequest struct {
+	URL string `json:"url"`
+	Ref string `json:"ref"` // PR number / MR iid
+}
+
+// ChangeRequestEvent says a pull/merge request was merged or closed.
+type ChangeRequestEvent struct {
+	Ref      string // number / iid
+	Head     string // source branch
+	Merged   bool
+	Closed   bool // closed without merging
+	MergeSHA string
+}
+
+// ChangeRequester opens pull/merge requests for protected branches.
+type ChangeRequester interface {
+	OpenChangeRequest(ctx context.Context, repo Repo, head, base, title, body string) (ChangeRequest, error)
 }
 
 // Install is a GitHub App installation.

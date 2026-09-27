@@ -529,7 +529,11 @@
       "changes_requested": "asked for changes",
       "withdrawn": "withdrew it from review",
       "reviewer_added": "added a reviewer",
-      "reviewer_removed": "removed a reviewer"
+      "reviewer_removed": "removed a reviewer",
+      "publishing": "opened a pull request",
+      "published": "published it",
+      "publish_blocked": "Publishing stopped: Published changed these pages",
+      "change_request_closed": "The pull request was closed without merging"
     },
     "updateLinks_one": "Update {{count}} link in {{pages}} page",
     "updateLinks_other": "Update {{count}} links in {{pages}} pages",
@@ -618,6 +622,32 @@
       "pending": "Waiting",
       "approved": "Approved",
       "changes_requested": "Asked for changes"
+    }
+  },
+  "publish": {
+    "action": "Publish",
+    "title": "Publish to {{branch}}",
+    "desc": "kmdn commits the revision as one commit, co-signed by the people who wrote it.",
+    "descProtected": "The branch is protected, so kmdn opens a pull request with the revision as one commit.",
+    "commitTitle": "Commit title",
+    "commitBody": "Commit message",
+    "coAuthors": "Co-authors:",
+    "reviewedBy": "Reviewed by:",
+    "nobody": "—",
+    "assisted": "Parts were written with the assistant.",
+    "viaPR": "Opens a pull request into {{branch}}",
+    "direct": "Commits to {{branch}}",
+    "openPR": "Open pull request",
+    "publishing": "Publishing…",
+    "openingPR": "Opening the pull request…",
+    "done": "Published to {{branch}} as",
+    "waitingForMerge": "Waiting for the pull request to be merged.",
+    "openThePR": "Open it",
+    "blocked": {
+      "not_approved": "Every reviewer has to approve first.",
+      "conflicts": "Resolve the conflicts first.",
+      "updates_pending": "Apply the updates from Published first.",
+      "other": "This revision can't be published right now."
     }
   }
 }

@@ -204,6 +204,9 @@ func TestYjsRoundTrip(t *testing.T) {
 	if got, _ := e.YMaterialize(ctx, edited, sm); got != strings.Replace(md, "Badge", "Badge and keys", 1) {
 		t.Fatalf("after edit: %q", got)
 	}
+	if c, err := e.YContributions(ctx, edited); err != nil || c[7] == 0 || c[9] != len(" and keys") {
+		t.Fatalf("contributions: %v %v", c, err)
+	}
 	if noop, err := e.YApplyMarkdown(ctx, edited, strings.Replace(md, "Badge", "Badge and keys", 1), 9); err != nil || len(noop) > 2 {
 		t.Fatalf("no-op edit: %v %d bytes", err, len(noop))
 	}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Check, CircleCheck, CircleDashed, Loader2, MessageSquareWarning, Send, TriangleAlert, Undo2, UserPlus, X } from "lucide-react";
+import { Check, CircleCheck, CircleDashed, GitPullRequest, Loader2, MessageSquareWarning, Rocket, Send, TriangleAlert, Undo2, UserPlus, X } from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -43,6 +43,7 @@ export function ReviewActions({ repo, rev, compact }: { repo: RepoView; rev: Rev
   const refresh = useRefresh(repo, rev);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
   const onError = (e: unknown) => toast.error(errorMessage(e, t("errors.generic")));
   const approve = useMutation({
     mutationFn: () => unwrap(api.POST("/revisions/{revision}/approve", { params: { path: { revision: rev.id } } })),
@@ -85,6 +86,13 @@ export function ReviewActions({ repo, rev, compact }: { repo: RepoView; rev: Rev
           </Button>
         </>
       )}
+      {rev.state === "approved" && a.can_publish && (
+        <Button size="sm" onClick={() => setPublishOpen(true)}>
+          <Rocket />
+          {t("publish.action")}
+        </Button>
+      )}
+      {publishOpen && <PublishDialog repo={repo} rev={rev} onClose={() => setPublishOpen(false)} onDone={refresh} />}
       {submitOpen && <SubmitDialog rev={rev} onClose={() => setSubmitOpen(false)} onDone={refresh} />}
       {changesOpen && <RequestChangesDialog rev={rev} onClose={() => setChangesOpen(false)} onDone={refresh} />}
     </>
@@ -288,5 +296,84 @@ export function ReviewersSection({ repo, rev }: { repo: RepoView; rev: RevisionV
             ))}
       </div>
     </section>
+  );
+}
+
+function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: RevisionView; onClose: () => void; onDone: () => void }) {
+  const { t } = useTranslation();
+  const preview = useQuery({
+    queryKey: ["commit-preview", rev.id, rev.updated_at],
+    queryFn: () => unwrap(api.GET("/revisions/{revision}/commit-preview", { params: { path: { revision: rev.id } } })),
+  });
+  const [title, setTitle] = useState<string | null>(null);
+  const [body, setBody] = useState<string | null>(null);
+  const p = preview.data;
+  const publish = useMutation({
+    mutationFn: () => unwrap(api.POST("/revisions/{revision}/publish", { params: { path: { revision: rev.id } }, body: { title: title ?? p?.title ?? rev.title, body: body ?? p?.body ?? "" } })),
+    onSuccess: () => {
+      toast.success(p?.protected ? t("publish.openingPR") : t("publish.publishing"));
+      onDone();
+      onClose();
+    },
+  });
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{t("publish.title", { branch: repo.target_branch })}</DialogTitle>
+          <DialogDescription>{p?.protected ? t("publish.descProtected") : t("publish.desc")}</DialogDescription>
+        </DialogHeader>
+        {!p ? (
+          <Loader2 className="mx-auto animate-spin" />
+        ) : (
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              publish.mutate();
+            }}
+          >
+            <div className="grid gap-1.5">
+              <Label htmlFor="pub-title">{t("publish.commitTitle")}</Label>
+              <Input id="pub-title" value={title ?? p.title} onChange={(e) => setTitle(e.target.value)} maxLength={72} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="pub-body">{t("publish.commitBody")}</Label>
+              <Textarea id="pub-body" rows={4} value={body ?? p.body} onChange={(e) => setBody(e.target.value)} className="font-mono text-[13px]" />
+            </div>
+            <div className="grid gap-2 rounded-lg border p-3 text-[13px]">
+              <div>
+                <span className="text-muted-foreground">{t("publish.coAuthors")}</span>{" "}
+                {p.co_authors.length ? p.co_authors.map((c) => c.name).join(", ") : t("publish.nobody")}
+              </div>
+              <div>
+                <span className="text-muted-foreground">{t("publish.reviewedBy")}</span> {p.reviewers.map((c) => c.name).join(", ") || t("publish.nobody")}
+              </div>
+              {p.assisted && <div className="text-muted-foreground">{t("publish.assisted")}</div>}
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                {p.protected && <GitPullRequest className="size-3.5" />}
+                {p.protected ? t("publish.viaPR", { branch: p.target_branch }) : t("publish.direct", { branch: p.target_branch })}
+              </div>
+            </div>
+            {p.blocked && (
+              <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-[13px]">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+                {t(`publish.blocked.${p.blocked}`, { defaultValue: t("publish.blocked.other") })}
+              </p>
+            )}
+            {publish.error && <p className="text-[13px] text-destructive">{errorMessage(publish.error, t("errors.generic"))}</p>}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={onClose}>
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={!!p.blocked || publish.isPending || !(title ?? p.title).trim()}>
+                {publish.isPending && <Loader2 className="animate-spin" />}
+                {p.protected ? t("publish.openPR") : t("publish.action")}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

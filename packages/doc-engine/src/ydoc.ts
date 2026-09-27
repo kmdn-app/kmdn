@@ -180,16 +180,25 @@ function patchText(t: Y.XmlText, from: Run[], to: Run[]): void {
   }
 }
 
+/** Containers whose children are diffed recursively when their type and attrs match. */
+const CONTAINERS = new Set(["bulletList", "orderedList", "listItem", "blockquote", "footnoteDefinition", "table", "tableRow"]);
+/** Nodes holding only inline content, patched in place. */
+const INLINE_HOLDERS = new Set([...TEXTBLOCKS, "tableCell", "tableHeader"]);
+
 /**
- * Turns the fragment into `target` with a minimal set of block operations:
- * unchanged top-level blocks (by content hash) are left alone, text blocks
- * whose type and attributes match are patched in place, everything else is
- * deleted and re-inserted. Used for edits made outside an editor (the
- * assistant, applying updates from Published, restoring a checkpoint).
+ * Turns the fragment into `target` with a minimal set of operations:
+ * unchanged nodes (by content hash) are left alone, same-shaped text blocks
+ * are patched in place, same-shaped containers (lists, quotes, tables) are
+ * diffed recursively, and everything else is deleted and re-inserted. Used
+ * for edits made outside an editor (the assistant, applying updates from
+ * Published, restoring a checkpoint, source mode), so concurrent edits,
+ * comment anchors and authorship elsewhere survive.
  */
 export function applyDoc(frag: Y.XmlFragment, target: DocNode, hash: (n: unknown) => string): void {
-  const current = readDoc(frag).content as AnyNode[];
-  const next = target.content as AnyNode[];
+  applyChildren(frag, readDoc(frag).content as AnyNode[], target.content as AnyNode[], hash, true);
+}
+
+function applyChildren(parent: Y.XmlFragment | Y.XmlElement, current: AnyNode[], next: AnyNode[], hash: (n: unknown) => string, top: boolean): void {
   const ha = current.map(hash);
   const hb = next.map(hash);
   const common = lcs(ha, hb);
@@ -201,27 +210,33 @@ export function applyDoc(frag: Y.XmlFragment, target: DocNode, hash: (n: unknown
     const oldIdx = a0 + 1;
     const oldCount = a1 - oldIdx;
     const repl = next.slice(b0 + 1, b1);
-    // Pair up same-shaped text blocks one-to-one from the start of the gap.
+    // Pair up same-shaped nodes one-to-one from the start of the gap.
     let k = 0;
     while (k < oldCount && k < repl.length) {
       const o = current[oldIdx + k] as ElementJSON;
       const n = repl[k] as ElementJSON;
-      const el = frag.get(oldIdx + k);
-      const sameShape = o.type === n.type && TEXTBLOCKS.has(o.type) && JSON.stringify(sortedAttrs(o.attrs)) === JSON.stringify(sortedAttrs(n.attrs));
-      const from = runs(o.content);
-      const to = runs(n.content);
-      if (!sameShape || !from || !to || !(el instanceof Y.XmlElement) || el.length > 1 || (el.length === 1 && !(el.get(0) instanceof Y.XmlText))) break;
-      let t = el.get(0) as Y.XmlText | undefined;
-      if (!t) {
-        t = new Y.XmlText();
-        el.insert(0, [t]);
+      const el = parent.get(oldIdx + k);
+      if (!(el instanceof Y.XmlElement) || o.type !== n.type || JSON.stringify(sortedAttrs(o.attrs)) !== JSON.stringify(sortedAttrs(n.attrs))) break;
+      if (INLINE_HOLDERS.has(o.type)) {
+        const from = runs(o.content);
+        const to = runs(n.content);
+        if (!from || !to || el.length > 1 || (el.length === 1 && !(el.get(0) instanceof Y.XmlText))) break;
+        let t = el.get(0) as Y.XmlText | undefined;
+        if (!t) {
+          t = new Y.XmlText();
+          el.insert(0, [t]);
+        }
+        patchText(t, from, to);
+      } else if (CONTAINERS.has(o.type)) {
+        applyChildren(el, o.content ?? [], n.content ?? [], hash, false);
+      } else {
+        break;
       }
-      patchText(t, from, to);
       k++;
     }
-    if (oldCount - k > 0) frag.delete(oldIdx + k, oldCount - k);
-    const inserts = repl.slice(k).map(stripSids) as ElementJSON[];
-    if (inserts.length) frag.insert(oldIdx + k, inserts.map(toY));
+    if (oldCount - k > 0) parent.delete(oldIdx + k, oldCount - k);
+    const inserts = (top ? repl.slice(k).map(stripSids) : repl.slice(k)) as ElementJSON[];
+    if (inserts.length) parent.insert(oldIdx + k, inserts.map(toY));
   }
 }
 
