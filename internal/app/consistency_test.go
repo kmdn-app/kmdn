@@ -4,12 +4,16 @@ import (
 	"context"
 	"hash/fnv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/kmdn-app/kmdn/internal/access"
+	"github.com/kmdn-app/kmdn/internal/consistency/evalcorpus"
 	"github.com/kmdn-app/kmdn/internal/llm"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
+	"github.com/kmdn-app/kmdn/internal/settings"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
@@ -258,5 +262,58 @@ func TestConsistencyScanJudgeFailures(t *testing.T) {
 	sc, err := a.Consistency.LastScan(ctx, repoID)
 	if err != nil || sc == nil || sc.Status != "error" || !strings.Contains(sc.Error, "gpt-nope") {
 		t.Fatalf("last scan: %+v %v", sc, err)
+	}
+}
+
+// slowJudge answers "related" after a pause, counting calls in flight.
+type slowJudge struct {
+	mu           sync.Mutex
+	now, peak, n int
+}
+
+func (*slowJudge) Name() string { return "fake" }
+
+func (*slowJudge) CountTokens(context.Context, llm.ChatRequest) (int, error) { return 1, nil }
+
+func (j *slowJudge) Stream(context.Context, llm.ChatRequest) (<-chan llm.ChatEvent, error) {
+	j.mu.Lock()
+	j.now, j.n = j.now+1, j.n+1
+	j.peak = max(j.peak, j.now)
+	j.mu.Unlock()
+	time.Sleep(30 * time.Millisecond)
+	j.mu.Lock()
+	j.now--
+	j.mu.Unlock()
+	evs := call("j", "judge_pair", `{"verdict":"related","explanation":"Same topic."}`)
+	ch := make(chan llm.ChatEvent, len(evs))
+	for _, e := range evs {
+		ch <- e
+	}
+	close(ch)
+	return ch, nil
+}
+
+// Scans judge several pairs at once and still stop at the call cap.
+func TestConsistencyScanConcurrency(t *testing.T) {
+	a, admin := newApp(t, nil)
+	ctx := context.Background()
+	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
+	signIn(t, a, admin, maya)
+	repoID := connectLocal(t, a, admin, evalcorpus.Generate(40, 2, 1, 1).Files)
+	judge := &slowJudge{}
+	a.LLM.Override = judge
+	a.LLM.EmbedOverride = bagOfWords{}
+	a.Consistency.Concurrency = 4
+	st, _ := a.LLM.Settings(ctx)
+	st.Consistency.ScanMaxCalls = 10
+	if err := settings.Set(ctx, a.DB, "ai", st); err != nil {
+		t.Fatal(err)
+	}
+	sc, err := a.Consistency.Scan(ctx, repoID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if judge.n != 10 || judge.peak < 2 || judge.peak > 4 || sc.Judged != 10 || sc.Status != "capped" {
+		t.Fatalf("calls %d, peak %d in flight, scan %+v", judge.n, judge.peak, sc)
 	}
 }

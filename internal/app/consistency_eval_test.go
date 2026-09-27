@@ -68,8 +68,9 @@ func (alwaysRelated) Stream(context.Context, llm.ChatRequest) (<-chan llm.ChatEv
 //	KMDN_EVAL_EMBED_MODEL=…       default text-embedding-3-small on openai
 //	KMDN_EVAL_NEAR=0.78 KMDN_EVAL_DUP=0.92   thresholds to try
 //	KMDN_EVAL_MAX_CALLS=…         judgments per scan (default 10000; 20 is a cheap smoke run)
+//	KMDN_EVAL_CONCURRENCY=8       pairs judged at once
 //
-//	KMDN_EVAL_KEY=sk-… go test ./internal/app -run TestConsistencyQuality -v -timeout 60m
+//	KMDN_EVAL_KEY=sk-… go test ./internal/app -run TestConsistencyQuality -v -timeout 3h
 //
 // KMDN_EVAL_FAKE=1 runs the pipeline with a local embedder and a judge that
 // finds every pair merely related, to check the harness itself.
@@ -156,8 +157,34 @@ func TestConsistencyQuality(t *testing.T) {
 		a.Consistency.Duplicate = float32(v)
 	}
 
+	a.Consistency.Concurrency = 8
+	if n, err := strconv.Atoi(os.Getenv("KMDN_EVAL_CONCURRENCY")); err == nil {
+		a.Consistency.Concurrency = n
+	}
+
+	// Progress while the scan runs: judgments cached so far and tokens spent.
 	start := time.Now()
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		tick := time.NewTicker(30 * time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-tick.C:
+				var judged, calls, tokens int
+				_ = store.QueryRow(ctx, a.DB, `SELECT COUNT(*) FROM consistency_judgments`).Scan(&judged)
+				_ = store.QueryRow(ctx, a.DB, `SELECT COUNT(*), COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens), 0) FROM assistant_runs`).Scan(&calls, &tokens)
+				t.Logf("… %s: %d pairs judged, %d model calls, %d tokens", time.Since(start).Round(time.Second), judged, calls, tokens)
+			}
+		}
+	}()
 	sc, err := a.Consistency.Scan(ctx, repoID, "")
+	close(done)
+	<-stopped
 	if err != nil {
 		t.Fatal(err)
 	}
