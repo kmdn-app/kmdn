@@ -17,6 +17,29 @@ kmdn gives anyone on a team a Google Docs-style editor over the markdown in a Gi
 - Read-only MCP server for external agents
 - Single Go binary with the web app embedded; SQLite by default, Postgres optional
 
+## Install
+
+With Docker (the image includes git; data lives in `/data`):
+
+```bash
+docker run -d -p 8080:8080 -v kmdn-data:/data \
+  -e KMDN_SECRET_KEY="$(head -c32 /dev/urandom | base64)" \
+  -e KMDN_SERVER_BASE_URL=http://localhost:8080 \
+  ghcr.io/kmdn-app/kmdn:latest
+```
+
+Keep the secret key: stored credentials can't be decrypted without it. For Postgres or TLS with Caddy, see [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
+
+Or download a binary from the [releases](https://github.com/kmdn-app/kmdn/releases) (linux and macOS, amd64 and arm64; needs git ≥ 2.40 on PATH), then:
+
+```bash
+kmdn init        # writes kmdn.yaml with a new secret key
+kmdn doctor      # checks git, the data dir, the database…
+kmdn serve
+```
+
+Backups: `kmdn backup -out kmdn.tar.zst` (safe while running), `kmdn restore -in kmdn.tar.zst`.
+
 ## Repository layout
 
 ```
@@ -27,6 +50,7 @@ web/                 TanStack Router SPA (shadcn/ui)
 packages/doc-engine  shared TypeScript document engine (browser + embedded in Go)
 docs/specs/          specifications and decision log
 docs/mockups/        clickable HTML mockups
+deploy/              docker-compose example (Postgres, Caddy)
 ```
 
 ## Development

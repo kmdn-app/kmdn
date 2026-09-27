@@ -1,0 +1,9 @@
+# TLS in front of kmdn (docker compose --profile caddy). Caddy gets a
+# certificate for KMDN_DOMAIN; WebSockets are proxied as is.
+{$KMDN_DOMAIN} {
+	encode zstd gzip
+	# /metrics is for your monitoring, not the internet.
+	@metrics path /metrics
+	respond @metrics 404
+	reverse_proxy kmdn:8080
+}

@@ -4,7 +4,8 @@
 
 - Single static binary `kmdn` (linux/darwin × amd64/arm64), `CGO_ENABLED=0`. Requires `git` ≥ 2.40 on PATH.
 - Docker image `ghcr.io/<org>/kmdn:<version>` (multi-arch), non-root user, `/data` volume, includes git.
-- Example `docker-compose.yml` (kmdn + optional Postgres + optional Caddy for TLS).
+- Example `deploy/docker-compose.yml` (kmdn + optional Postgres + optional Caddy for TLS, as compose profiles) with `deploy/kmdn.env.example`.
+- Releases: GoReleaser on `v*` tags (`.goreleaser.yaml`, `.github/workflows/release.yml`) builds the binaries and a linux/amd64+arm64 image (`Dockerfile.release`, Alpine + git, uid 10001, healthcheck on `/healthz`). `Dockerfile` builds the same image from source; CI validates the release config and builds and smoke-tests that image on every PR.
 - Behind a reverse proxy by default; can terminate TLS itself with ACME (`server.tls.acme`) for simple installs.
 
 ## CLI

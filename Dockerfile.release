@@ -1,0 +1,16 @@
+# Release image: GoReleaser's static binary on Alpine with git.
+FROM alpine:3.22
+ARG TARGETPLATFORM
+RUN apk add --no-cache git ca-certificates tzdata \
+ && adduser -D -H -u 10001 -s /sbin/nologin kmdn \
+ && mkdir /data && chown kmdn /data
+COPY ${TARGETPLATFORM}/kmdn /usr/local/bin/kmdn
+USER kmdn
+ENV KMDN_DATA_DIR=/data \
+    KMDN_DB_URL=sqlite:///data/kmdn.db \
+    KMDN_SERVER_LISTEN=:8080
+VOLUME /data
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
+ENTRYPOINT ["kmdn"]
+CMD ["serve"]

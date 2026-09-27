@@ -1,0 +1,58 @@
+# Releases: static binaries (linux/darwin × amd64/arm64) and a multi-arch
+# image on ghcr.io (docs/specs/13-operations.md#distribution).
+# Run by .github/workflows/release.yml on a v* tag.
+version: 2
+project_name: kmdn
+
+before:
+  hooks:
+    - pnpm install --frozen-lockfile
+    - make web
+
+builds:
+  - id: kmdn
+    main: ./cmd/kmdn
+    binary: kmdn
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X github.com/kmdn-app/kmdn/internal/version.Version={{ .Version }}
+      - -X github.com/kmdn-app/kmdn/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/kmdn-app/kmdn/internal/version.Date={{ .Date }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, README.md, deploy/*]
+
+checksum:
+  name_template: checksums.txt
+
+dockers_v2:
+  - id: kmdn
+    dockerfile: Dockerfile.release
+    images: [ghcr.io/kmdn-app/kmdn]
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}{{ .Major }}.{{ .Minor }}{{ end }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms: [linux/amd64, linux/arm64]
+    labels:
+      org.opencontainers.image.title: kmdn
+      org.opencontainers.image.description: Collaborative markdown editing with a git backend
+      org.opencontainers.image.source: https://github.com/kmdn-app/kmdn
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: AGPL-3.0-only
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude: ["^Merge "]
+
+release:
+  prerelease: auto

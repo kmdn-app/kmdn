@@ -16,6 +16,7 @@ export default defineConfig({
       "/ws": { target: api.replace(/^http/, "ws"), ws: true },
       "/hooks": api,
       "/version": api,
+      "/mcp": api,
     },
   },
   build: { outDir: "dist", emptyOutDir: true, sourcemap: true },
