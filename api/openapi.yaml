@@ -348,6 +348,43 @@ paths:
       responses:
         "200": { description: File, content: { application/json: { schema: { $ref: "#/components/schemas/RepoFile" } } } }
         "404": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/raw/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { $ref: "#/components/parameters/FilePath" }
+      - { name: sha, in: query, schema: { type: string } }
+    get:
+      tags: [repos]
+      operationId: getRawFile
+      summary: File bytes for images, PDFs and markdown (sandboxed)
+      responses:
+        "200": { description: File content with a type fixed by extension }
+        "304": { description: Not modified }
+        "415": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/activity:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [repos]
+      operationId: getRepoActivity
+      summary: Recent published changes to pages in scope
+      responses:
+        "200":
+          description: Commits with the pages they changed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: "#/components/schemas/Commit"
+                        - type: object
+                          required: [paths]
+                          properties: { paths: { type: array, items: { type: string } } }
   /repos/{repo}/history/{path}:
     parameters:
       - { $ref: "#/components/parameters/RepoID" }
@@ -392,6 +429,19 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/SearchHit" } } } }
+  /repos/{repo}/webhook:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [repos]
+      operationId: getRepoWebhook
+      summary: Where to send push events (plain git and GitLab)
+      responses:
+        "200":
+          description: Webhook endpoint and secret
+          content:
+            application/json:
+              schema: { type: object, required: [url, secret, header], properties: { url: { type: string }, secret: { type: string }, header: { type: string } } }
   /repos/{repo}/members:
     parameters:
       - { $ref: "#/components/parameters/RepoID" }
@@ -539,6 +589,17 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/UserRef" } } } }
+  /groups:
+    get:
+      tags: [people]
+      operationId: listGroupsPublic
+      summary: Groups (for granting repository roles)
+      responses:
+        "200":
+          description: Groups
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Group" } } } }
   /admin/users:
     get:
       tags: [admin]

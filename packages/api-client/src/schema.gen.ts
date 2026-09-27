@@ -298,6 +298,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{repo}/raw/{path}": {
+        parameters: {
+            query?: {
+                sha?: string;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        /** File bytes for images, PDFs and markdown (sandboxed) */
+        get: operations["getRawFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** Recent published changes to pages in scope */
+        get: operations["getRepoActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{repo}/history/{path}": {
         parameters: {
             query?: {
@@ -358,6 +400,25 @@ export interface paths {
          * @description Matched terms in `snippet` are wrapped in U+0002 … U+0003.
          */
         get: operations["searchRepo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** Where to send push events (plain git and GitLab) */
+        get: operations["getRepoWebhook"];
         put?: never;
         post?: never;
         delete?: never;
@@ -514,6 +575,23 @@ export interface paths {
         };
         /** Find active users by name or email (member pickers) */
         get: operations["searchUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Groups (for granting repository roles) */
+        get: operations["listGroupsPublic"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1692,6 +1770,64 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    getRawFile: {
+        parameters: {
+            query?: {
+                sha?: string;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description File content with a type fixed by extension */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not modified */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            415: components["responses"]["Problem"];
+        };
+    };
+    getRepoActivity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Commits with the pages they changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: (components["schemas"]["Commit"] & {
+                            paths: string[];
+                        })[];
+                    };
+                };
+            };
+        };
+    };
     getFileHistory: {
         parameters: {
             query?: {
@@ -1768,6 +1904,32 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["SearchHit"][];
+                    };
+                };
+            };
+        };
+    };
+    getRepoWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook endpoint and secret */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        url: string;
+                        secret: string;
+                        header: string;
                     };
                 };
             };
@@ -2051,6 +2213,28 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["UserRef"][];
+                    };
+                };
+            };
+        };
+    };
+    listGroupsPublic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Groups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Group"][];
                     };
                 };
             };

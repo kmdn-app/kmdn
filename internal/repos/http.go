@@ -3,6 +3,8 @@ package repos
 import (
 	"errors"
 	"net/http"
+	"net/url"
+	"path"
 	"strconv"
 	"strings"
 
@@ -39,8 +41,11 @@ func (s *Service) Routes(r chi.Router) {
 			r.Post("/refresh", s.refresh)
 			r.Get("/tree", s.tree)
 			r.Get("/files/*", s.file)
+			r.Get("/raw/*", s.raw)
+			r.Get("/activity", s.activity)
 			r.Get("/history/*", s.history)
 			r.Get("/blame/*", s.blame)
+			r.Get("/webhook", s.webhook)
 			r.Get("/members", s.members)
 			r.Put("/members/{type}/{id}", s.putMember)
 			r.Delete("/members/{type}/{id}", s.deleteMember)
@@ -204,7 +209,16 @@ func (s *Service) tree(w http.ResponseWriter, r *http.Request) {
 	api.JSON(w, http.StatusOK, map[string]any{"head_sha": repo.HeadSHA, "root": repo.Scope().Root, "items": nodes})
 }
 
-func filePath(r *http.Request) string { return strings.TrimPrefix(chi.URLParam(r, "*"), "/") }
+// filePath returns the {path} wildcard. chi matches on the escaped path, so a
+// client that encodes "/" as %2F (openapi-fetch does) needs it decoded here.
+// Cleaning after decoding keeps "docs/..%2F.." from leaving the content root.
+func filePath(r *http.Request) string {
+	p := chi.URLParam(r, "*")
+	if u, err := url.PathUnescape(p); err == nil {
+		p = u
+	}
+	return strings.TrimPrefix(path.Clean("/"+p), "/")
+}
 
 func readErr(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
@@ -228,6 +242,85 @@ func (s *Service) file(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.JSON(w, http.StatusOK, f)
+}
+
+var rawTypes = map[string]string{
+	".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
+	".avif": "image/avif", ".svg": "image/svg+xml", ".pdf": "application/pdf", ".md": "text/plain; charset=utf-8",
+	".markdown": "text/plain; charset=utf-8", ".mdx": "text/plain; charset=utf-8",
+}
+
+// raw serves file bytes (images in pages). Content is untrusted: types are
+// fixed by extension, sniffing is off, and SVG/PDF run in a CSP sandbox.
+func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
+	repo, _, ok := s.load(w, r, access.Viewer)
+	if !ok {
+		return
+	}
+	p := filePath(r)
+	ct, known := rawTypes[strings.ToLower(path.Ext(p))]
+	if !known {
+		api.Error(w, r, api.Err(http.StatusUnsupportedMediaType, "unsupported_type", "Only images, PDFs and markdown can be served."))
+		return
+	}
+	f, err := s.ReadFile(r.Context(), repo, p, r.URL.Query().Get("sha"))
+	if err != nil {
+		readErr(w, r, err)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", ct)
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	h.Set("Content-Disposition", "inline")
+	if r.URL.Query().Get("sha") != "" {
+		h.Set("Cache-Control", "private, max-age=31536000, immutable")
+	} else {
+		h.Set("Cache-Control", "private, no-cache")
+		h.Set("ETag", `"`+repo.HeadSHA+`"`)
+		if r.Header.Get("If-None-Match") == `"`+repo.HeadSHA+`"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+	_, _ = w.Write([]byte(f.Content))
+}
+
+func (s *Service) activity(w http.ResponseWriter, r *http.Request) {
+	repo, _, ok := s.load(w, r, access.Viewer)
+	if !ok {
+		return
+	}
+	if repo.HeadSHA == "" {
+		api.JSON(w, http.StatusOK, map[string]any{"items": []any{}})
+		return
+	}
+	list, err := s.Mirror(repo).Recent(r.Context(), repo.HeadSHA, 30)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	sc := repo.Scope()
+	type item struct {
+		gitmirror.Commit
+		Paths []string `json:"paths"`
+	}
+	out := []item{}
+	for _, c := range list {
+		var paths []string
+		for _, p := range c.Paths {
+			if sc.Contains(p) && IsMarkdown(p) {
+				paths = append(paths, p)
+			}
+		}
+		if len(paths) > 0 {
+			out = append(out, item{Commit: c.Commit, Paths: paths})
+		}
+		if len(out) >= 15 {
+			break
+		}
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"items": out})
 }
 
 func (s *Service) history(w http.ResponseWriter, r *http.Request) {
@@ -261,6 +354,28 @@ func (s *Service) blame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.JSON(w, http.StatusOK, map[string]any{"items": lines})
+}
+
+// webhook shows repository admins where forges should send push events
+// (plain git and GitLab; GitHub Apps are configured automatically).
+func (s *Service) webhook(w http.ResponseWriter, r *http.Request) {
+	repo, _, ok := s.load(w, r, access.Admin)
+	if !ok {
+		return
+	}
+	url, secret, err := s.WebhookInfo(r.Context(), repo)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	header := ""
+	switch repo.ForgeKind {
+	case "git":
+		header = "X-Kmdn-Token"
+	case "gitlab":
+		header = "X-Gitlab-Token"
+	}
+	api.JSON(w, http.StatusOK, map[string]string{"url": url, "secret": secret, "header": header})
 }
 
 func (s *Service) members(w http.ResponseWriter, r *http.Request) {

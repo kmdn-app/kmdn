@@ -26,6 +26,7 @@ type People struct {
 
 func (h *People) Routes(r chi.Router) {
 	r.With(auth.Require).Get("/users", h.directory)
+	r.With(auth.Require).Get("/groups", h.listGroups)
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireAdmin)
 		r.Get("/admin/users", h.listUsers)

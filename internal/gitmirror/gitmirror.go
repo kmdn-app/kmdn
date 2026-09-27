@@ -365,10 +365,52 @@ func (m *Mirror) Log(ctx context.Context, rev, path string, n int) ([]Commit, er
 	return commits, nil
 }
 
+// CommitWithPaths is a commit and the files it changed.
+type CommitWithPaths struct {
+	Commit
+	Paths []string
+}
+
+// Recent returns the latest n commits on rev with their changed paths.
+func (m *Mirror) Recent(ctx context.Context, rev string, n int) ([]CommitWithPaths, error) {
+	out, err := m.Git.run(ctx, m.Path, nil, nil, "log", fmt.Sprintf("-n%d", n), "--name-only", "--no-renames",
+		"--format=%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b%x1d", rev)
+	if err != nil {
+		return nil, notFoundIf(err)
+	}
+	var res []CommitWithPaths
+	for _, rec := range strings.Split(string(out), "\x1e") {
+		if strings.TrimSpace(rec) == "" {
+			continue
+		}
+		fieldsPart, names, _ := strings.Cut(rec, "\x1d")
+		f := strings.SplitN(fieldsPart, "\x1f", 7)
+		if len(f) < 7 {
+			continue
+		}
+		date, _ := time.Parse(time.RFC3339, f[4])
+		c := Commit{SHA: f[0], AuthorName: f[2], AuthorEmail: f[3], Date: date.UTC(), Title: f[5]}
+		if f[1] != "" {
+			c.Parents = strings.Fields(f[1])
+		}
+		c.Body, c.CoAuthors, c.ReviewedBy, c.Revision = parseTrailers(strings.TrimRight(f[6], "\n"))
+		var paths []string
+		for _, l := range strings.Split(names, "\n") {
+			if l = strings.TrimSpace(l); l != "" {
+				paths = append(paths, l)
+			}
+		}
+		res = append(res, CommitWithPaths{Commit: c, Paths: paths})
+	}
+	return res, nil
+}
+
 var trailerRe = regexp.MustCompile(`(?m)^([A-Za-z-]+):\s*(.+?)\s*$`)
 var personRe = regexp.MustCompile(`^(.*?)\s*<([^>]+)>$`)
 
 func parseTrailers(body string) (rest string, co, rev []Person, revision string) {
+	// Empty slices, not nil: they encode as [] in the API.
+	co, rev = []Person{}, []Person{}
 	lines := strings.Split(body, "\n")
 	end := len(lines)
 	for end > 0 && strings.TrimSpace(lines[end-1]) == "" {
@@ -379,7 +421,7 @@ func parseTrailers(body string) (rest string, co, rev []Person, revision string)
 		start--
 	}
 	if start == end || (start > 0 && strings.TrimSpace(lines[start-1]) != "") {
-		return strings.TrimSpace(body), nil, nil, ""
+		return strings.TrimSpace(body), co, rev, ""
 	}
 	for _, l := range lines[start:end] {
 		mm := trailerRe.FindStringSubmatch(l)
