@@ -227,3 +227,36 @@ func TestConsistencyChecks(t *testing.T) {
 		t.Fatalf("closed: %v (all: %v)", closed, rep["findings"])
 	}
 }
+
+// failing is a provider whose every call fails, like a wrong model name.
+type failing struct{}
+
+func (failing) Name() string { return "fake" }
+
+func (failing) CountTokens(context.Context, llm.ChatRequest) (int, error) { return 1, nil }
+
+func (failing) Stream(context.Context, llm.ChatRequest) (<-chan llm.ChatEvent, error) {
+	return nil, &llm.APIError{Status: 404, Message: "The model `gpt-nope` does not exist"}
+}
+
+// A provider failing every judgment fails the scan with its error, instead
+// of reporting a capped scan with nothing judged.
+func TestConsistencyScanJudgeFailures(t *testing.T) {
+	a, admin := newApp(t, nil)
+	ctx := context.Background()
+	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
+	signIn(t, a, admin, maya)
+	repoID := connectLocal(t, a, admin, map[string]string{
+		"docs/travel.md": "# Travel\n\n## Working abroad\n\nEmployees can work abroad for up to 30 working days per year. Ask your manager first and tell HR before you go.\n",
+		"docs/remote.md": "# Remote work\n\n## From another country\n\nYou may work from abroad for up to 20 working days each year, as long as your manager agrees and HR knows.\n",
+	})
+	a.LLM.Override = failing{}
+	a.LLM.EmbedOverride = topicEmbedder{}
+	if _, err := a.Consistency.Scan(ctx, repoID, ""); err == nil || !strings.Contains(err.Error(), "every judgment failed (1 pairs)") || !strings.Contains(err.Error(), "gpt-nope") {
+		t.Fatalf("scan error: %v", err)
+	}
+	sc, err := a.Consistency.LastScan(ctx, repoID)
+	if err != nil || sc == nil || sc.Status != "error" || !strings.Contains(sc.Error, "gpt-nope") {
+		t.Fatalf("last scan: %+v %v", sc, err)
+	}
+}

@@ -36,6 +36,23 @@ func (bagOfWords) Embed(_ context.Context, _ string, texts []string) ([][]float3
 	return out, len(texts), nil
 }
 
+// alwaysRelated judges every pair "related", to check the plumbing.
+type alwaysRelated struct{}
+
+func (alwaysRelated) Name() string { return "fake" }
+
+func (alwaysRelated) CountTokens(context.Context, llm.ChatRequest) (int, error) { return 1, nil }
+
+func (alwaysRelated) Stream(context.Context, llm.ChatRequest) (<-chan llm.ChatEvent, error) {
+	evs := call("j", "judge_pair", `{"verdict":"related","explanation":"Same topic."}`)
+	ch := make(chan llm.ChatEvent, len(evs))
+	for _, e := range evs {
+		ch <- e
+	}
+	close(ch)
+	return ch, nil
+}
+
 // TestConsistencyQuality is spike S8 (docs/specs/14-roadmap.md#spikes):
 // on a seeded 300-page corpus with 20 planted contradictions, the repo scan
 // should find at least 80% of them with at most one false positive per 50
@@ -50,11 +67,12 @@ func (bagOfWords) Embed(_ context.Context, _ string, texts []string) ([][]float3
 //	KMDN_EVAL_EMBED_KEY=…         default KMDN_EVAL_KEY on openai
 //	KMDN_EVAL_EMBED_MODEL=…       default text-embedding-3-small on openai
 //	KMDN_EVAL_NEAR=0.78 KMDN_EVAL_DUP=0.92   thresholds to try
+//	KMDN_EVAL_MAX_CALLS=…         judgments per scan (default 10000; 20 is a cheap smoke run)
 //
 //	KMDN_EVAL_KEY=sk-… go test ./internal/app -run TestConsistencyQuality -v -timeout 60m
 //
 // KMDN_EVAL_FAKE=1 runs the pipeline with a local embedder and a judge that
-// never finds anything, to check the harness itself.
+// finds every pair merely related, to check the harness itself.
 func TestConsistencyQuality(t *testing.T) {
 	fake := os.Getenv("KMDN_EVAL_FAKE") == "1"
 	if !fake && os.Getenv("KMDN_EVAL_KEY") == "" {
@@ -69,9 +87,12 @@ func TestConsistencyQuality(t *testing.T) {
 
 	st, _ := a.LLM.Settings(ctx)
 	st.Consistency.ScanMaxCalls = 10_000
+	if n, err := strconv.Atoi(os.Getenv("KMDN_EVAL_MAX_CALLS")); err == nil {
+		st.Consistency.ScanMaxCalls = n
+	}
 	if fake {
 		a.LLM.EmbedOverride = bagOfWords{}
-		a.LLM.Override = &scripted{} // answers "(no more steps)": no verdict, pairs stay undecided
+		a.LLM.Override = alwaysRelated{}
 	} else {
 		st.Provider = envOr("KMDN_EVAL_PROVIDER", llm.ProviderOpenAI)
 		openai := st.Provider == llm.ProviderOpenAI
@@ -87,10 +108,13 @@ func TestConsistencyQuality(t *testing.T) {
 		if st.Models == nil {
 			st.Models = map[string]string{}
 		}
-		if m := os.Getenv("KMDN_EVAL_MODEL"); m != "" {
-			st.Models[llm.TaskShortText] = m
-		} else if openai {
-			st.Models[llm.TaskShortText] = "gpt-5.6-terra"
+		model := os.Getenv("KMDN_EVAL_MODEL")
+		if model == "" && openai {
+			model = "gpt-5.6-terra"
+		}
+		if model != "" {
+			// The judge uses the short-text model; the provider check uses chat.
+			st.Models[llm.TaskShortText], st.Models[llm.TaskChat] = model, model
 		}
 		st.Embeddings.BaseURL, st.Embeddings.Model = os.Getenv("KMDN_EVAL_EMBED_URL"), os.Getenv("KMDN_EVAL_EMBED_MODEL")
 		embedKey := os.Getenv("KMDN_EVAL_EMBED_KEY")
@@ -113,7 +137,14 @@ func TestConsistencyQuality(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		st.Check = &llm.Check{OK: true, At: time.Now()}
+		// Fail fast with the provider's own error (a model name, a key, a
+		// permission) rather than after embedding the whole corpus.
+		c := a.LLM.RunCheck(ctx, st, "")
+		if !c.OK || strings.Contains(c.Message, "Embeddings failed") {
+			t.Fatalf("provider check: %s", c.Message)
+		}
+		t.Logf("provider check: %s", c.Message)
+		st.Check = &c
 	}
 	if err := settings.Set(ctx, a.DB, "ai", st); err != nil {
 		t.Fatal(err)
@@ -175,11 +206,14 @@ func TestConsistencyQuality(t *testing.T) {
 	t.Logf("scan: %d passages, %d candidate pairs, %d judged, status %s, %s, %d tokens", sc.Passages, sc.Candidates, sc.Judged, sc.Status, time.Since(start).Round(time.Second), tokens)
 	t.Logf("contradictions: %d/%d found (recall %.0f%%), %d false positives (%.2f per 50 pages)", len(found), len(corpus.Contradictions), recall*100, falsePositives, fpPer50)
 	t.Logf("duplicates: %d/%d found; traps (scoped rules): %d pages", dupFound, len(corpus.Duplicates), len(corpus.Traps))
+	if sc.Error != "" {
+		t.Logf("scan error: %s", sc.Error)
+	}
 	for _, ex := range fpExamples {
 		t.Logf("  false positive: %s", ex)
 	}
 	if fake {
-		if sc.Passages < 600 || sc.Candidates == 0 {
+		if sc.Passages < 600 || sc.Candidates == 0 || sc.Judged == 0 {
 			t.Fatalf("the harness didn't index the corpus: %+v", sc)
 		}
 		return
