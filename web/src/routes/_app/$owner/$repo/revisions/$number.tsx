@@ -15,6 +15,7 @@ import {
   FilePen,
   FilePlus,
   FileText,
+  GitPullRequest,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -196,6 +197,12 @@ function Header({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
             <span>
               #{rev.number} · {t("revision.startedBy", { name: owner?.name ?? "—" })} <Time iso={rev.created_at} />
             </span>
+            {rev.change_request_url && (
+              <a href={rev.change_request_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground hover:underline">
+                <GitPullRequest className="size-3.5" />
+                {t(`revision.changeRequest.${repo.forge_kind === "gitlab" ? "mr" : "pr"}${rev.change_request_draft ? "Draft" : ""}`)}
+              </a>
+            )}
           </div>
           {rev.description ? (
             <p className="mt-4 text-[14.5px] whitespace-pre-wrap">{rev.description}</p>

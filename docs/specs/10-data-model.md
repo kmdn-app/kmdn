@@ -47,6 +47,8 @@ revisions           id, repo_id, number (per repo, for URLs), slug, title, descr
                  state (editing|in_review|approved|publishing|published|closed),
                  changes_requested bool, has_conflicts bool, review_round int, base_sha, created_by, created_at, updated_at, submitted_at,
                  published_at, published_sha, change_request_url, change_request_ref,
+                 change_request_node, change_request_draft bool,
+                 branch, branch_sha, branch_base_sha,        -- the revision's branch on the forge
                  closed_at, archived_at
 revision_members    revision_id, user_id, role (owner|editor), invited_by, added_at
 revision_files      id, revision_id, path, op (modify|add|delete|rename), from_path?,
@@ -56,8 +58,8 @@ revision_assets     id, revision_id, path, upload_id, size, mime, sha256
 revision_events     id, revision_id, actor_type (user|assistant|system), actor_id, kind, data_json, created_at
                  -- created, submitted, approved, changes_requested, synced, conflict, resolved,
                  -- file_added/renamed/deleted, published, closed, reopened, version_named
-revision_checkpoints   id, revision_id, name?, kind (auto|named|pre_update|submit|pre_restore),
-                 created_by?, created_at
+revision_checkpoints   id, revision_id, name?, kind (save; legacy: auto|named|pre_update|submit|pre_restore),
+                 commit_sha, content_hash, created_by?, created_at   -- one per commit on the branch
 revision_checkpoint_files version_id, path, ydoc_snapshot_id, content_md
 approvals        id, revision_id, user_id, review_round, state (approved|changes_requested|dismissed),
                  content_hash, created_at, dismissed_at

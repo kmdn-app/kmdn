@@ -11,8 +11,8 @@ stateDiagram-v2
     Approved --> InReview: Content changed (approvals reset)
     InReview --> Editing: Applied updates brought conflicts
     Approved --> Editing: Applied updates brought conflicts
-    Approved --> Publishing: Publish (protected branch → PR/MR)
-    Approved --> Published: Publish (direct)
+    Approved --> Publishing: Publish (required checks still running → auto-merge)
+    Approved --> Published: Publish (PR/MR merged)
     Publishing --> Published: Forge merged
     Publishing --> Approved: PR/MR closed unmerged
     Editing --> Closed
@@ -49,7 +49,7 @@ Rules:
 
 ## Submit for review
 
-Dialog: title, description (the assistant can write it from the diff), reviewers (suggested, editable, at least one), checks summary (broken links, pending suggestions, unresolved threads: warnings, not blockers). Revision → In review; assigned reviewers get an inbox item (and a browser push if enabled).
+Dialog: title, description (the assistant can write it from the diff), reviewers (suggested, editable, at least one), checks summary (broken links, pending suggestions, unresolved threads: warnings, not blockers). Unsaved changes are saved first (a commit). Revision → In review, and its pull/merge request leaves Draft ([06](06-git-and-forges.md#revision-branches)); assigned reviewers get an inbox item (and a browser push if enabled). Going back to Editing (withdraw, request changes, conflicts) turns the pull request back into a draft.
 
 ## Comments
 

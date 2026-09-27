@@ -25,10 +25,28 @@ type Identity struct {
 // ErrStale is returned when the remote branch moved since lease (push rejected).
 var ErrStale = errors.New("gitmirror: remote branch moved")
 
+// CommitInput describes a commit to write.
+type CommitInput struct {
+	// From is the commit whose tree Changes apply to.
+	From    string
+	Changes []Change
+	// Parents default to From. A merge lists more than one.
+	Parents   []string
+	Message   string
+	Author    Identity
+	Committer Identity // defaults to Author
+}
+
 // BuildCommit writes a commit on top of parent with changes applied, without
-// touching any ref. It works in the partial clone: only the new blobs and
-// trees are created; unchanged content is referenced by id.
+// touching any ref.
 func (m *Mirror) BuildCommit(ctx context.Context, parent string, changes []Change, message string, who Identity) (string, error) {
+	return m.Commit(ctx, CommitInput{From: parent, Changes: changes, Message: message, Author: who})
+}
+
+// Commit writes a commit without touching any ref. It works in the partial
+// clone: only the new blobs and trees are created; unchanged content is
+// referenced by id.
+func (m *Mirror) Commit(ctx context.Context, in CommitInput) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	idx, err := os.CreateTemp("", "kmdn-index-*")
@@ -39,13 +57,13 @@ func (m *Mirror) BuildCommit(ctx context.Context, parent string, changes []Chang
 	_ = os.Remove(idx.Name()) // git creates it
 	defer func() { _ = os.Remove(idx.Name()) }()
 	env := []string{"GIT_INDEX_FILE=" + idx.Name()}
-	if _, err := m.Git.runEnv(ctx, m.Path, nil, nil, env, "read-tree", parent); err != nil {
+	if _, err := m.Git.runEnv(ctx, m.Path, nil, nil, env, "read-tree", in.From); err != nil {
 		return "", err
 	}
 	// --index-info works without a work tree (the mirror is bare); mode 0
 	// removes an entry.
 	var info strings.Builder
-	for _, c := range changes {
+	for _, c := range in.Changes {
 		p := strings.TrimPrefix(filepath.ToSlash(c.Path), "/")
 		if strings.ContainsAny(p, "\n\t") {
 			return "", errors.New("gitmirror: path with a tab or newline")
@@ -69,15 +87,64 @@ func (m *Mirror) BuildCommit(ctx context.Context, parent string, changes []Chang
 	if err != nil {
 		return "", err
 	}
-	idEnv := []string{
-		"GIT_AUTHOR_NAME=" + who.Name, "GIT_AUTHOR_EMAIL=" + who.Email,
-		"GIT_COMMITTER_NAME=" + who.Name, "GIT_COMMITTER_EMAIL=" + who.Email,
+	committer := in.Committer
+	if committer.Name == "" {
+		committer = in.Author
 	}
-	out, err := m.Git.runEnv(ctx, m.Path, nil, strings.NewReader(message), idEnv, "commit-tree", strings.TrimSpace(string(tree)), "-p", parent, "-F", "-")
+	idEnv := []string{
+		"GIT_AUTHOR_NAME=" + in.Author.Name, "GIT_AUTHOR_EMAIL=" + in.Author.Email,
+		"GIT_COMMITTER_NAME=" + committer.Name, "GIT_COMMITTER_EMAIL=" + committer.Email,
+	}
+	parents := in.Parents
+	if len(parents) == 0 {
+		parents = []string{in.From}
+	}
+	args := []string{"commit-tree", strings.TrimSpace(string(tree))}
+	for _, p := range parents {
+		args = append(args, "-p", p)
+	}
+	out, err := m.Git.runEnv(ctx, m.Path, nil, strings.NewReader(in.Message), idEnv, append(args, "-F", "-")...)
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// KeepRef points a kmdn-private ref (refs/kmdn/...) at sha so the commit
+// survives gc until kmdn drops it.
+func (m *Mirror) KeepRef(ctx context.Context, ref, sha string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, err := m.Git.run(ctx, m.Path, nil, nil, "update-ref", ref, sha)
+	return err
+}
+
+// HasCommit says whether the mirror holds commit sha.
+func (m *Mirror) HasCommit(ctx context.Context, sha string) bool {
+	if sha == "" {
+		return false
+	}
+	_, err := m.Git.run(ctx, m.Path, nil, nil, "cat-file", "-e", sha+"^{commit}")
+	return err == nil
+}
+
+// FetchBranch fetches a remote branch into a local ref and returns its tip
+// (ErrNotFound when the remote has no such branch).
+func (m *Mirror) FetchBranch(ctx context.Context, cred *Credential, branch, ref string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out, err := m.Git.run(ctx, m.Path, cred, nil, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(string(out)) == "" {
+		return "", ErrNotFound
+	}
+	if _, err := m.Git.run(ctx, m.Path, cred, nil, "fetch", "--quiet", "--no-tags", "--filter=blob:none", "origin", "+refs/heads/"+branch+":"+ref); err != nil {
+		return "", err
+	}
+	tip, err := m.Git.run(ctx, m.Path, nil, nil, "rev-parse", "--verify", ref+"^{commit}")
+	return strings.TrimSpace(string(tip)), err
 }
 
 // Push sets the remote branch to sha if it's still at lease ("" means the

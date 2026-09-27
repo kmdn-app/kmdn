@@ -48,7 +48,7 @@ export async function forgeFile(project: string, path: string, ref = "main"): Pr
 
 export type ForgeState = {
   projects: { path_with_namespace: string; branches: Record<string, string>; log: string[] }[];
-  merge_requests: { source_branch: string; target_branch: string; title: string; web_url: string }[];
+  merge_requests: { iid: number; source_branch: string; target_branch: string; title: string; web_url: string; state: string; draft: boolean }[];
 };
 
 export async function forgeState(): Promise<ForgeState> {

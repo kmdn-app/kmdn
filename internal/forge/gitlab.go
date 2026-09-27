@@ -173,14 +173,3 @@ func (g *GitLab) ParseWebhook(r *http.Request, body []byte, secret string) (Even
 	}
 	return ev, nil
 }
-
-// OpenChangeRequest opens a merge request from head into base.
-func (g *GitLab) OpenChangeRequest(ctx context.Context, repo Repo, head, base, title, body string) (ChangeRequest, error) {
-	var mr struct {
-		IID    int64  `json:"iid"`
-		WebURL string `json:"web_url"`
-	}
-	err := g.do(ctx, http.MethodPost, "/projects/"+projectRef(repo)+"/merge_requests",
-		map[string]any{"source_branch": head, "target_branch": base, "title": title, "description": body, "remove_source_branch": true}, &mr)
-	return ChangeRequest{URL: mr.WebURL, Ref: strconv.FormatInt(mr.IID, 10)}, err
-}

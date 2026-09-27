@@ -1,10 +1,10 @@
 # Decision log
 
-Decisions from the design interview (D1–D45, 2026-09-26) and the first mockup review (D46–D56, 2026-09-27). Each links to the spec that details it.
+Decisions from the design interview (D1–D45, 2026-09-26), the first mockup review (D46–D56, 2026-09-27) and the first round of feedback on the running app (D58–D60, 2026-09-27). Each links to the spec that details it.
 
 | # | Topic | Decision | Alternatives considered | Spec |
 |---|-------|----------|-------------------------|------|
-| D1 | Core model | Reviews happen **inside kmdn**. On approval kmdn writes to the target branch. Forge is storage (plus PR/MR only for protected branches, D24) | Revision = branch + forge PR; live main + optional review; per-repo configurable | [06](06-git-and-forges.md), [07](07-review.md) |
+| D1 | Core model | Reviews happen **inside kmdn**. ~~On approval kmdn writes to the target branch. Forge is storage (plus PR/MR only for protected branches, D24)~~ → the forge side superseded by D58 and D60 | Revision = branch + forge PR; live main + optional review; per-repo configurable | [06](06-git-and-forges.md), [07](07-review.md) |
 | D2 | Revision unit | **Multi-file changeset** | One doc per revision; per-doc pending layer | [05](05-collaboration.md) |
 | D3 | Co-editing | **Live multiplayer CRDT (Yjs)** | Turn-based locks; single-author revisions | [05](05-collaboration.md) |
 | D4 | Runtime shape | **Static SPA (TanStack Router) embedded in the Go binary**; no Node at runtime | Go supervising TanStack Start; two services | [03](03-architecture.md) |
@@ -12,7 +12,7 @@ Decisions from the design interview (D1–D45, 2026-09-26) and the first mockup 
 | D6 | Doc engine host | **Shared TS doc engine run in Go via an embedded JS runtime**, server authoritative | Go relays + clients serialize; yrs wasm + Go serializer | [04](04-doc-engine.md) |
 | D7 | Markdown scope | **GFM core, YAML frontmatter (properties panel), Mermaid + KaTeX**; everything else raw blocks | Admonitions/callouts native (deferred) | [04](04-doc-engine.md) |
 | D8 | Source mode | **Live bidirectional** | Source takes a file lock; source read-only | [04](04-doc-engine.md) |
-| D9 | Commit shape | **One squashed commit** per published revision | Per-person commits; maintainer chooses | [06](06-git-and-forges.md) |
+| D9 | Commit shape | ~~**One squashed commit** per published revision~~ → superseded by D59/D60 | Per-person commits; maintainer chooses | [06](06-git-and-forges.md) |
 | D10 | Git access | **Bare mirror** for reads and tree building | Forge APIs only; hybrid | [06](06-git-and-forges.md) |
 | D11 | Divergence | ~~Continuous auto-sync~~ → superseded by D52 | Rebase at approval; manual update | [06](06-git-and-forges.md) |
 | D12 | Repo scope | **Configurable content root + globs + one target branch**, `.kmdn.yml` override (not for branch) | Whole repo any branch; multiple spaces | [06](06-git-and-forges.md) |
@@ -26,8 +26,8 @@ Decisions from the design interview (D1–D45, 2026-09-26) and the first mockup 
 | D20 | Assistant runtime | **Server-side Go loop, pluggable providers** (Anthropic default + OpenAI-compatible) | Anthropic only; Agent SDK sidecar | [08](08-assistant.md) |
 | D21 | Assistant scope | **Repo Q&A with citations, edits as suggestions, multi-file revisions, review assistant** | — | [08](08-assistant.md) |
 | D22 | Assistant threads | **One shared thread per revision**; outside revisions, private repo Q&A that hands off to a revision | Private shareable threads; both | [08](08-assistant.md) |
-| D23 | Signing | **GitHub: commit via Git Data API (signed, Verified). GitLab: git push (unsigned)** | Plain push everywhere; machine-user signing key | [06](06-git-and-forges.md) |
-| D24 | Branch protection | **Protected target → always open a PR/MR on publish**, tracked to merge | Bypass with PR fallback; require bypass | [06](06-git-and-forges.md) |
+| D23 | Signing | ~~**GitHub: commit via Git Data API (signed, Verified). GitLab: git push (unsigned)**~~ → commits are authored by people (D59) and pushed with git on every forge; GitHub signs the merge commit it makes on publish | Plain push everywhere; machine-user signing key | [06](06-git-and-forges.md) |
+| D24 | Branch protection | ~~**Protected target → always open a PR/MR on publish**, tracked to merge~~ → superseded by D58/D60 | Bypass with PR fallback; require bypass | [06](06-git-and-forges.md) |
 | D25 | Attribution | **Co-authored-by for surviving content contributors (forge noreply first), Reviewed-by approvers, Assisted-by for assistant** | Everyone who touched; no AI trailer | [06](06-git-and-forges.md) |
 | D26 | GitLab connection | **OAuth app for users + Project/Group Access Token for repos**, gitlab.com + self-managed; GitHub.com + GHES | Bot user PAT; cloud only | [06](06-git-and-forges.md) |
 | D27 | API | **REST + OpenAPI 3.1**, generated Go server and TS hooks, one multiplexed WebSocket | Connect-RPC; GraphQL | [11](11-api.md) |
@@ -61,6 +61,9 @@ Decisions from the design interview (D1–D45, 2026-09-26) and the first mockup 
 | D55 | Consistency | **Duplicate/contradiction check on every revision + weekly repo scan**, embeddings for candidates + LLM judgment, advisory | Revisions only; scan only | [08](08-assistant.md#consistency-check-duplicates-and-contradictions) |
 | D56 | Link graph | **Links tab with local graph per page + repo graph page** from the link index | Graph page only; backlinks lists only | [04](04-doc-engine.md#link-index-and-graph) |
 | D57 | Server rooms (implementation) | **Rooms in Go holding encoded updates; stateless Yjs calls in the goja pool** (merge/diff/state vector/validate/materialize). The server creates documents; clients never seed | One goja runtime per room holding a live Y.Doc; a Go CRDT port | [05](05-collaboration.md#server-side-room) |
+| D58 | Revision on the forge | **Every revision is a branch `kmdn/<number>-<slug>` with a draft PR/MR**, opened when the revision starts; Submit for review marks it ready, Withdraw and Request changes turn it back into a draft. Reviews still happen in kmdn (D1) | PR only at publish (D24); PR only for protected branches | [06](06-git-and-forges.md#revision-branches) |
+| D59 | Saving | **Save all** (replaces Done): one commit per click on the revision branch, authored by the person who clicked, pushed to the PR. **Checkpoints are those commits**; no automatic checkpoints | Automatic commits; checkpoints kmdn-internal | [05](05-collaboration.md#saving-and-checkpoints) |
+| D60 | Publish | **Publish merges the revision's PR with a merge commit**, protected target branch or not (auto-merge while required checks run). Git keeps the full history of validated changes: never squash, rebase away or force-push over it (`AGENTS.md`) | One squashed commit (D9); PR left for people to merge (D24) | [06](06-git-and-forges.md#publishing) |
 
 ## Defaults chosen without a dedicated question
 

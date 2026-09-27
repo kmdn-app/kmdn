@@ -2,7 +2,7 @@
 
 Collaborative markdown editing with a git backend.
 
-kmdn gives anyone on a team a Google Docs-style editor over the markdown in a GitHub or GitLab repository. People co-edit **revisions** live, assigned maintainers review them in the same editor, and kmdn publishes each approved revision as a single commit by the kmdn bot, co-signed by the people who wrote it.
+kmdn gives anyone on a team a Google Docs-style editor over the markdown in a GitHub or GitLab repository. People co-edit **revisions** live, assigned maintainers review them in the same editor, and kmdn keeps each revision as a branch with a draft pull request: every **Save all** is a commit by the person who saved, and publishing merges the pull request, co-signed by the people who wrote it.
 
 > **Status:** early development. The design is in [`docs/specs/`](docs/specs/README.md) and the UI mockups are in [`docs/mockups/`](docs/mockups/index.html). Work is tracked in [GitHub issues](https://github.com/kmdn-app/kmdn/issues) by milestone.
 
@@ -12,7 +12,7 @@ kmdn gives anyone on a team a Google Docs-style editor over the markdown in a Gi
 - Live multiplayer editing (Yjs) with presence
 - Multi-file revisions, reviewed inside kmdn: comments, suggestions, result and diff views, approval by every assigned reviewer
 - Updates from Published previewed and applied into open revisions; inline conflict resolution
-- One squashed commit per published revision with `Co-authored-by` trailers (signed and Verified on GitHub)
+- Each revision is a branch and a draft pull/merge request; Save all commits to it, publishing merges it with a merge commit carrying `Co-authored-by` trailers, protected branches included
 - Server-side assistant: repo Q&A with citations, edits as tracked suggestions, review summaries, consistency checks
 - Read-only MCP server for external agents
 - Single Go binary with the web app embedded; SQLite by default, Postgres optional

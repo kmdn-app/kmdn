@@ -72,12 +72,15 @@ The marks and attributes are the whole record: author and time live in the CRDT 
 
 The materialized markdown used for diff and publish treats pending suggestions as **not applied**: the serializer rejects them all first (insertions excluded, deletions kept, splits joined back). Publishing is blocked while suggestions are pending. Source mode is read-only on a page with pending suggestions. Edits made outside the editor (link updates, the assistant) diff against the settled page, so blocks they don't touch keep their suggestions.
 
-## Checkpoints (history inside a revision)
+## Saving and checkpoints
 
-- **Automatic checkpoints**: after 10 minutes of activity in a revision, on submit for review, before applying updates from Published, before a restore.
-- **Named checkpoints**: user action "Name this checkpoint".
-- A checkpoint stores, per file in the manifest: Yjs state vector + snapshot reference, and the materialized markdown. Old checkpoints are browsable rendered with per-author coloring (computed from Yjs item client IDs → user mapping stored per connection).
-- **Restore** applies the inverse diff as a new change (never rewinds the CRDT), so collaborators' clients stay consistent.
+Live edits sync continuously (the editor shows "Synced"), but a revision's history is its commits ([D59](decisions.md)):
+
+- **Save all** (editor top bar, where Done was) flushes the live rooms and writes **one commit** on the revision's branch with the revision's current content, then pushes it to the pull request ([06](06-git-and-forges.md#revision-branches)). The commit is authored by the person who clicked (their commit email), committed by kmdn, and titled after the changed pages ("Update onboarding.md and faq.md") unless they typed a message in the Checkpoints panel. When a second person clicks Save all, that's another commit, authored by them. Nothing changed since the last save → "All changes saved", no commit.
+- **Checkpoints are those commits**: each save records a checkpoint with its commit SHA and the content it saved (per file: Yjs snapshot reference and materialized markdown), listed in the Checkpoints panel with a link to the commit on the forge. There are no automatic checkpoints.
+- Actions that would otherwise lose track of unsaved work save first, as a commit by the person acting: **Submit for review**, **applying updates from Published**, **restoring a checkpoint** and **publishing**.
+- The revision shows **Unsaved changes** when its content differs from the last commit (the content hash of manifest, materialized pages and assets).
+- **Restore** brings back a checkpoint's content as new changes (never rewinds the CRDT or git), which the next Save all commits.
 
 ## Contribution tracking (for attribution)
 

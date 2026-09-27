@@ -46,7 +46,11 @@ type mergeRequest struct {
 	Title        string `json:"title"`
 	Description  string `json:"description"`
 	WebURL       string `json:"web_url"`
+	State        string `json:"state"` // opened | merged | closed
+	Draft        bool   `json:"draft"`
 }
+
+func isDraft(title string) bool { return strings.HasPrefix(strings.ToLower(title), "draft:") }
 
 type forge struct {
 	root, token, base, gitBin string
@@ -174,13 +178,58 @@ func (f *forge) api(w http.ResponseWriter, r *http.Request) {
 		var mr mergeRequest
 		_ = json.NewDecoder(r.Body).Decode(&mr)
 		f.mu.Lock()
-		mr.IID, mr.Project = int64(len(f.mrs)+1), pr.ID
+		mr.IID, mr.Project, mr.State, mr.Draft = int64(len(f.mrs)+1), pr.ID, "opened", isDraft(mr.Title)
 		mr.WebURL = fmt.Sprintf("%s/%s/-/merge_requests/%d", f.base, pr.Path, mr.IID)
 		f.mrs = append(f.mrs, mr)
 		f.mu.Unlock()
 		writeJSON(w, http.StatusCreated, mr)
+	case sub == "merge_requests" && r.Method == http.MethodGet:
+		q := r.URL.Query()
+		list := []mergeRequest{}
+		f.mu.Lock()
+		for _, mr := range f.mrs {
+			if mr.Project == pr.ID && (q.Get("source_branch") == "" || mr.SourceBranch == q.Get("source_branch")) && (q.Get("state") == "" || mr.State == q.Get("state")) {
+				list = append(list, mr)
+			}
+		}
+		f.mu.Unlock()
+		writeJSON(w, http.StatusOK, list)
+	case strings.HasPrefix(sub, "merge_requests/"):
+		f.mergeRequest(w, r, pr, strings.TrimPrefix(sub, "merge_requests/"))
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "404 Not Found"})
+	}
+}
+
+// mergeRequest serves GET and PUT (title) on one merge request.
+func (f *forge) mergeRequest(w http.ResponseWriter, r *http.Request, pr *project, rest string) {
+	iid, _ := strconv.ParseInt(rest, 10, 64)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var mr *mergeRequest
+	for i := range f.mrs {
+		if f.mrs[i].Project == pr.ID && f.mrs[i].IID == iid {
+			mr = &f.mrs[i]
+		}
+	}
+	if mr == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "404 Not Found"})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, mr)
+	case http.MethodPut:
+		var in struct {
+			Title *string `json:"title"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		if in.Title != nil {
+			mr.Title, mr.Draft = *in.Title, isDraft(*in.Title)
+		}
+		writeJSON(w, http.StatusOK, mr)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "405 Method Not Allowed"})
 	}
 }
 

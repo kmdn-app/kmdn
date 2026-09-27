@@ -119,7 +119,11 @@ func (g *GitHubApp) do(ctx context.Context, method, path, auth string, body, out
 		}
 		rd = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(g.APIURL, "/")+path, rd)
+	u := path
+	if !strings.HasPrefix(path, "https://") && !strings.HasPrefix(path, "http://") {
+		u = strings.TrimRight(g.APIURL, "/") + path
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, rd)
 	if err != nil {
 		return err
 	}
@@ -460,17 +464,6 @@ func (g *GitHubApp) ParseWebhook(r *http.Request, body []byte, secret string) (E
 		}
 	}
 	return ev, nil
-}
-
-// OpenChangeRequest opens a pull request from head into base.
-func (g *GitHubApp) OpenChangeRequest(ctx context.Context, repo Repo, head, base, title, body string) (ChangeRequest, error) {
-	var pr struct {
-		Number  int64  `json:"number"`
-		HTMLURL string `json:"html_url"`
-	}
-	err := g.asInstall(ctx, repo, http.MethodPost, "/repos/"+url.PathEscape(repo.Owner)+"/"+url.PathEscape(repo.Name)+"/pulls",
-		map[string]any{"title": title, "head": head, "base": base, "body": body, "maintainer_can_modify": true}, &pr)
-	return ChangeRequest{URL: pr.HTMLURL, Ref: strconv.FormatInt(pr.Number, 10)}, err
 }
 
 // ManifestConversion is the result of the GitHub App manifest flow.

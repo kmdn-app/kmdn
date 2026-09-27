@@ -512,6 +512,12 @@
     "reviewSoon": "Review and publishing arrive in the next milestone.",
     "editDetails": "Edit title and description",
     "startedBy": "started by {{name}}",
+    "changeRequest": {
+      "pr": "Pull request",
+      "prDraft": "Draft pull request",
+      "mr": "Merge request",
+      "mrDraft": "Draft merge request"
+    },
     "addDescription": "Add a description",
     "addPage": "Add page",
     "addPageDesc": "Creates a new page in this revision. It's published with the rest of the revision.",
@@ -567,6 +573,8 @@
       "published": "published it",
       "publish_blocked": "Publishing stopped: Published changed these pages",
       "change_request_closed": "The pull request was closed without merging",
+      "branch_created": "Started the branch {{branch}}",
+      "change_request_opened": "Opened its pull request on the forge",
       "thread_opened": "commented on {{path}}",
       "suggestions_accepted": "accepted suggestions in {{path}}",
       "suggestions_rejected": "rejected suggestions in {{path}}",

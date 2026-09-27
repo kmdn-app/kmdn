@@ -17,6 +17,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/assistant"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/branches"
 	"github.com/kmdn-app/kmdn/internal/collab"
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/consistency"
@@ -67,6 +68,7 @@ type App struct {
 	Collab      *collab.Hub
 	Links       *links.Service
 	Publish     *publish.Service
+	Branches    *branches.Service
 	Threads     *threads.Service
 	Updates     *updates.Service
 	Notify      *notify.Service
@@ -154,7 +156,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Collab = &collab.Hub{DB: db, Engine: eng, Revisions: a.Revisions, Log: log, Publish: a.Realtime.Publish}
 	a.Realtime.Rooms = a.Collab
 	a.Collab.Routes(r)
-	a.Publish = &publish.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Docs: collabDocs{a}, Engine: eng, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, DataDir: cfg.DataDir, Log: log}
+	a.Branches = &branches.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, DataDir: cfg.DataDir, Log: log}
+	a.Branches.Register()
+	a.Publish = &publish.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Docs: collabDocs{a}, Engine: eng, Jobs: a.Jobs, Branches: a.Branches, Log: log}
 	a.Publish.Register()
 	a.Publish.Routes(r)
 	a.Threads = &threads.Service{DB: db, Publish: a.Realtime.Publish, Repos: a.Repos, Revisions: a.Revisions, Text: eng.PlainText,
@@ -225,6 +229,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}))
 	a.Revisions.Changed = func(ctx context.Context, rev revisions.Revision, kind string) {
 		a.Collab.RevisionChanged(ctx, rev)
+		a.Branches.Changed(ctx, rev)
 		a.Notify.Kick(ctx)
 		if kind == "published" {
 			a.Summaries.RequestChanges(ctx, rev)
