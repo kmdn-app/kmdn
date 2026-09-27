@@ -68,6 +68,10 @@ make test       # Go and TypeScript tests
 make build      # single binary in ./bin/kmdn
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions need the [Contributor License Agreement](CLA.md), accepted once through the CLA bot on your first pull request.
+
 ## License
 
-[AGPL-3.0](LICENSE)
+Copyright © 2026 nlsio LLC. Licensed under the [GNU Affero General Public License v3.0](LICENSE).

@@ -149,7 +149,7 @@ Append-only table ([10](10-data-model.md)). Recorded actions include: sign-in (m
 
 ## License and project
 
-- AGPL-3.0 for the whole repo. `CONTRIBUTING.md` with DCO sign-off. Security policy with private disclosure.
+- AGPL-3.0 for the whole repo, copyright nlsio LLC. [`CONTRIBUTING.md`](../../CONTRIBUTING.md) and a [Contributor License Agreement](../../CLA.md) accepted once per contributor through a CLA bot (`.github/workflows/cla.yml`, signatures on the `cla-signatures` branch). The CLA replaces the DCO sign-off planned earlier: it lets nlsio LLC also distribute contributions under other terms, while kmdn stays AGPL. Security policy with private disclosure.
 - CI (GitHub Actions): Go lint/test (race), TS typecheck/lint/test, fidelity corpus in both hosts, Playwright E2E against the built binary with a fake forge server, GoReleaser on tags.
 
 ## Capacity
