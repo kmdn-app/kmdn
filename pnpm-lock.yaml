@@ -186,6 +186,9 @@ importers:
       codemirror:
         specifier: ^6.0.2
         version: 6.0.2
+      d3-force:
+        specifier: ^3.0.0
+        version: 3.0.0
       dompurify:
         specifier: ^3.4.16
         version: 3.4.16
@@ -250,6 +253,9 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@types/d3-force':
+        specifier: ^3.0.10
+        version: 3.0.10
       '@types/node':
         specifier: ^26.6.3
         version: 26.6.3

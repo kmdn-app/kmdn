@@ -1965,6 +1965,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{repo}/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** Pages and the links between them (published, or as a revision sees them) */
+        get: operations["getLinkGraph"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{repo}/discussions": {
         parameters: {
             query?: never;
@@ -2117,6 +2136,23 @@ export interface components {
             push_available: boolean;
             /** @description Browsers subscribed to push */
             push_subscriptions: number;
+        };
+        LinkGraph: {
+            nodes: {
+                path: string;
+                title: string;
+                folder: string;
+                in: number;
+                out: number;
+                orphan?: boolean;
+                changed?: boolean;
+            }[];
+            edges: {
+                from: string;
+                to: string;
+                count: number;
+                broken?: boolean;
+            }[];
         };
         Hook: {
             id: string;
@@ -6206,6 +6242,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    getLinkGraph: {
+        parameters: {
+            query?: {
+                scope?: string;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Graph */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkGraph"];
+                };
             };
             404: components["responses"]["Problem"];
         };
