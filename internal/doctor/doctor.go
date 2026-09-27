@@ -311,27 +311,39 @@ func (d *Doctor) forges(ctx context.Context, db *store.DB) []Check {
 	return out
 }
 
+// ai checks the provider the assistant uses: the server config's
+// (assistant.provider, KMDN_ASSISTANT_*) on top of the admin console's, as
+// kmdn serve resolves it.
 func (d *Doctor) ai(ctx context.Context, db *store.DB, sec *secrets.Store) Check {
-	st, err := (&llm.Service{DB: db, Secrets: sec}).Settings(ctx)
+	if !d.Config.Assistant.Enabled {
+		return Check{"ai", OK, "the assistant is off (assistant.enabled is false)"}
+	}
+	svc := &llm.Service{DB: db, Secrets: sec, Env: llm.EnvFrom(d.Config.Assistant)}
+	st, err := svc.Settings(ctx)
 	if err != nil {
 		return Check{"ai", Fail, err.Error()}
 	}
 	if st.Provider == "" {
 		return Check{"ai", OK, "no AI provider (the assistant is off)"}
 	}
+	from, fix := "set in the admin console", "Admin → AI provider → Save and check"
+	if svc.Managed() {
+		from, fix = "from the server config", "fix assistant.* or KMDN_ASSISTANT_* and restart kmdn serve"
+	}
 	target := st.BaseURL
 	if target == "" && st.Provider == llm.ProviderAnthropic {
 		target = "https://api.anthropic.com"
 	}
 	if err := d.reach(ctx, target); err != nil {
-		return Check{"ai", Fail, fmt.Sprintf("%s isn't reachable: %v", target, err)}
+		return Check{"ai", Fail, fmt.Sprintf("%s (%s): %s isn't reachable: %v", st.Provider, from, target, err)}
 	}
-	if st.Check == nil || !st.Check.OK {
-		msg := "the last capability check didn't pass"
-		if st.Check != nil {
-			msg += ": " + st.Check.Message
-		}
-		return Check{"ai", Warn, msg + " (Admin → AI provider → Save and check)"}
+	switch {
+	case st.Check == nil && svc.Managed():
+		return Check{"ai", Warn, fmt.Sprintf("%s (%s): %s is reachable, but it hasn't been checked yet (kmdn serve checks it when it starts)", st.Provider, from, target)}
+	case st.Check == nil:
+		return Check{"ai", Warn, fmt.Sprintf("%s (%s): the capability check hasn't run (%s)", st.Provider, from, fix)}
+	case !st.Check.OK:
+		return Check{"ai", Warn, fmt.Sprintf("%s (%s): the last capability check didn't pass on %s: %s (%s)", st.Provider, from, st.Check.At.Format(time.DateOnly), st.Check.Message, fix)}
 	}
-	return Check{"ai", OK, fmt.Sprintf("%s reachable; last check passed %s", target, st.Check.At.Format(time.DateOnly))}
+	return Check{"ai", OK, fmt.Sprintf("%s (%s): %s is reachable; last check passed %s: %s", st.Provider, from, target, st.Check.At.Format(time.DateOnly), st.Check.Message)}
 }

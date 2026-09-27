@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 
+	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/settings"
 )
 
@@ -23,6 +24,21 @@ type Env struct {
 		Model   string
 	}
 }
+
+// EnvFrom is the AI provider fixed by the server config, if any. kmdn serve
+// and kmdn doctor both use it, so they see the same provider.
+func EnvFrom(c config.Assistant) *Env {
+	if c.Provider == "" && c.Embeddings.Model == "" {
+		return nil
+	}
+	e := &Env{Provider: c.Provider, APIKey: c.APIKey, BaseURL: c.BaseURL,
+		Models: map[string]string{TaskChat: c.Model, TaskReviewSummary: c.ReviewModel, TaskShortText: c.ShortModel}}
+	e.Embeddings.BaseURL, e.Embeddings.APIKey, e.Embeddings.Model = c.Embeddings.BaseURL, c.Embeddings.APIKey, c.Embeddings.Model
+	return e
+}
+
+// Managed reports whether the provider comes from the server config.
+func (s *Service) Managed() bool { return s.managed() }
 
 const openAIBaseURL = "https://api.openai.com/v1"
 
