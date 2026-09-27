@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/branches"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
+	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -25,15 +27,34 @@ var ErrNothingToSave = &revisions.ErrConflict{Code: "nothing_to_save", Msg: "All
 // message is the commit's title and body; empty names the changed pages.
 func (h *Hub) Save(ctx context.Context, repo repos.Repo, rev revisions.Revision, u users.User, message string) (CheckpointView, error) {
 	h.init()
+	ctx, current, release, err := h.Revisions.Mutate(ctx, rev.ID)
+	if err != nil {
+		return CheckpointView{}, err
+	}
+	defer release()
 	unlock := h.Branches.Lock(rev.ID)
 	defer unlock()
-	return h.SaveLocked(ctx, repo, rev, u, message)
+	return h.SaveLocked(ctx, repo, current, u, message)
 }
 
 // SaveLocked is Save for callers that hold the branch lock (publish).
 func (h *Hub) SaveLocked(ctx context.Context, repo repos.Repo, rev revisions.Revision, u users.User, message string) (CheckpointView, error) {
 	h.init()
-	h.FlushRevision(ctx, rev.ID)
+	if cp, recovered, err := h.RecoverSaveLocked(ctx, repo, rev); err != nil || recovered {
+		return cp, err
+	}
+	var err error
+	rev, err = revisions.Get(ctx, h.DB, rev.ID)
+	if err != nil {
+		return CheckpointView{}, err
+	}
+	if err := h.FlushRevisionChecked(ctx, rev.ID); err != nil {
+		return CheckpointView{}, err
+	}
+	files, payload, err := h.captureSave(ctx, rev.ID)
+	if err != nil {
+		return CheckpointView{}, err
+	}
 	unsaved, err := revisions.Unsaved(ctx, h.DB, rev.ID)
 	if err != nil {
 		return CheckpointView{}, err
@@ -41,14 +62,7 @@ func (h *Hub) SaveLocked(ctx context.Context, repo repos.Repo, rev revisions.Rev
 	if !unsaved {
 		return CheckpointView{}, ErrNothingToSave
 	}
-	files, err := revisions.Files(ctx, h.DB, rev.ID)
-	if err != nil {
-		return CheckpointView{}, err
-	}
-	hash, err := revisions.ContentHash(ctx, h.DB, rev.ID)
-	if err != nil {
-		return CheckpointView{}, err
-	}
+	hash := revisions.SnapshotHash(files, payload.Assets)
 	saved, err := revisions.SavedHash(ctx, h.DB, rev.ID)
 	if err != nil {
 		return CheckpointView{}, err
@@ -58,34 +72,44 @@ func (h *Hub) SaveLocked(ctx context.Context, repo repos.Repo, rev revisions.Rev
 	switch {
 	case title != "":
 	case hash == saved:
-		// Only updates from Published to merge (revisions.UnmergedUpdates).
 		title = "Merge updates from Published"
 	default:
 		title = saveTitle(files)
 	}
-	msg := title + "\n\nKmdn-Revision: " + h.Branches.RevisionURL(repo, rev) + "\n"
-	author := gitmirror.Identity{Name: u.Name, Email: branches.CommitEmail(ctx, h.DB, u, repo.ForgeHostID)}
-	rev, sha, err := h.Branches.Commit(ctx, repo, rev, msg, author)
+	rev, err = h.Branches.Ensure(ctx, repo, rev)
 	if err != nil {
 		return CheckpointView{}, err
 	}
-	cp, err := h.checkpoint(ctx, rev, files, u.ID, name, sha, hash)
+	changes, _, err := h.Branches.SnapshotChanges(files, payload.Assets)
 	if err != nil {
-		return cp, err
+		return CheckpointView{}, err
 	}
-	cp.CreatedByName = u.Name
-	h.Revisions.Notify(ctx, rev.ID, "saved")
-	return cp, nil
+	msg := title + "\n\nKmdn-Revision: " + h.Branches.RevisionURL(repo, rev) + "\n"
+	payload.Author = gitmirror.Identity{Name: u.Name, Email: branches.CommitEmail(ctx, h.DB, u, repo.ForgeHostID)}
+	sha, objects, err := h.Branches.PrepareSave(ctx, repo, rev, changes, msg, payload.Author)
+	if err != nil {
+		return CheckpointView{}, err
+	}
+	cp := CheckpointView{ID: ids.New(ids.Checkpoint), Name: name, Kind: CheckpointSave, CreatedBy: u.ID, CreatedByName: u.Name, CreatedAt: time.Now().UTC(), Files: len(files), CommitSHA: sha}
+	intent := saveIntent{Checkpoint: cp, Branch: rev.Branch, PriorSHA: rev.BranchSHA, BaseSHA: rev.BaseSHA, Hash: hash, Objects: objects, Payload: payload}
+	if err := h.putSaveIntent(ctx, rev.ID, intent); err != nil {
+		return CheckpointView{}, err
+	}
+	cp, _, err = h.RecoverSaveLocked(ctx, repo, rev)
+	return cp, err
 }
 
 // SaveFirst saves unsaved work before an action that replaces content
 // (submit, applying updates, restoring). Nothing to save is fine.
 func (h *Hub) SaveFirst(ctx context.Context, repo repos.Repo, rev revisions.Revision, u users.User, message string) error {
-	_, err := h.Save(ctx, repo, rev, u, message)
-	if errors.Is(err, ErrNothingToSave) {
-		return nil
+	ctx, current, release, err := h.Revisions.Mutate(ctx, rev.ID)
+	if err != nil {
+		return err
 	}
-	return err
+	defer release()
+	unlock := h.Branches.Lock(rev.ID)
+	defer unlock()
+	return h.SaveCurrentLocked(ctx, repo, current, u, message)
 }
 
 // saveTitle names what changed: "Update onboarding.md", "Add faq.md and

@@ -16,7 +16,6 @@ import (
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/auth"
-	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
@@ -41,6 +40,11 @@ const (
 // block, so concurrent edits elsewhere survive. kind labels the writer's
 // Yjs client (restore, assistant).
 func (h *Hub) Apply(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, markdown, kind string) error {
+	ctx, rev, release, err := h.Revisions.Mutate(ctx, rev.ID)
+	if err != nil {
+		return err
+	}
+	defer release()
 	h.init()
 	room, err := h.room(ctx, repo, rev, p, true, c.User.ID)
 	if err != nil {
@@ -65,6 +69,11 @@ func (h *Hub) Apply(ctx context.Context, repo repos.Repo, rev revisions.Revision
 // "comments" map), on the commenter's behalf, so it moves with the text. Pages
 // without a document (nobody edited them yet) keep the quote-only anchor.
 func (h *Hub) PutAnchor(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, threadID string, anchorJSON []byte) error {
+	ctx, release, err := h.Revisions.Gate(ctx, rev.ID)
+	if err != nil {
+		return err
+	}
+	defer release()
 	h.init()
 	room, err := h.room(ctx, repo, rev, p, false, c.User.ID)
 	if err != nil {
@@ -182,60 +191,6 @@ type CheckpointView struct {
 	CommitSHA string `json:"commit_sha,omitempty"`
 }
 
-// checkpoint records every manifest file (its operation, markdown, and a
-// snapshot of its document, kept through compaction) for the commit sha
-// that saved them. Rooms are flushed already.
-func (h *Hub) checkpoint(ctx context.Context, rev revisions.Revision, files []revisions.File, by, name, sha, hash string) (CheckpointView, error) {
-	type snap struct {
-		docID string
-		state []byte
-	}
-	snaps := map[string]snap{}
-	for _, f := range files {
-		if f.Op == revisions.OpDelete {
-			continue
-		}
-		docID, state, err := h.stateOf(ctx, rev.ID, f.Path)
-		if err != nil {
-			return CheckpointView{}, err
-		}
-		if state != nil {
-			snaps[f.Path] = snap{docID, state}
-		}
-	}
-	now := time.Now()
-	cp := CheckpointView{ID: ids.New(ids.Checkpoint), Name: strings.TrimSpace(name), Kind: CheckpointSave, CreatedBy: by, CreatedAt: now.UTC(), Files: len(files), CommitSHA: sha}
-	err := h.DB.InTx(ctx, func(tx *store.Tx) error {
-		var creator any
-		if by != "" {
-			creator = by
-		}
-		if _, err := store.Exec(ctx, tx, `INSERT INTO revision_checkpoints (id, revision_id, name, kind, created_by, created_at, commit_sha, content_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			cp.ID, rev.ID, cp.Name, CheckpointSave, creator, store.Millis(now), sha, hash); err != nil {
-			return err
-		}
-		for _, f := range files {
-			var snapID any
-			if s, ok := snaps[f.Path]; ok {
-				id := ids.New(ids.YSnapshot)
-				// update_seq -1 keeps this snapshot out of room loads (they
-				// start from the newest snapshot); it only serves the checkpoint.
-				if _, err := store.Exec(ctx, tx, `INSERT INTO ydoc_snapshots (id, ydoc_id, state, update_seq, created_at) VALUES (?, ?, ?, -1, ?)`,
-					id, s.docID, s.state, store.Millis(now)); err != nil {
-					return err
-				}
-				snapID = id
-			}
-			if _, err := store.Exec(ctx, tx, `INSERT INTO revision_checkpoint_files (checkpoint_id, path, op, from_path, ydoc_snapshot_id, content_md) VALUES (?, ?, ?, ?, ?, ?)`,
-				cp.ID, f.Path, f.Op, f.FromPath, snapID, f.ContentMD); err != nil {
-				return err
-			}
-		}
-		return revisions.Record(ctx, tx, rev.ID, revisions.ActorUser, by, "saved", map[string]any{"checkpoint": cp.ID, "sha": sha, "message": cp.Name})
-	})
-	return cp, err
-}
-
 // CheckpointFile is one file as it was at a checkpoint.
 type CheckpointFile struct {
 	Path     string `json:"path"`
@@ -265,6 +220,11 @@ func checkpointFiles(ctx context.Context, q store.Querier, cpID string) ([]Check
 // next Save all to commit): unsaved work is saved first, then the manifest is reconciled and every page's
 // content applied through its room, so open editors follow along.
 func (h *Hub) Restore(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, cpID string) error {
+	ctx, rev, release, err := h.Revisions.Mutate(ctx, rev.ID)
+	if err != nil {
+		return err
+	}
+	defer release()
 	h.init()
 	acc, err := h.Revisions.AccessFor(ctx, rev, c)
 	if err != nil {

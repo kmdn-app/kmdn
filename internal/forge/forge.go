@@ -128,6 +128,17 @@ type MergeResult struct {
 	Queued bool
 }
 
+// ChangeRequestStatusReader reconciles a merge after an uncertain response or
+// missed webhook. Reading status must not start another merge.
+type ChangeRequestStatusReader interface {
+	ChangeRequestStatus(ctx context.Context, repo Repo, ref string) (ChangeRequestStatus, error)
+}
+
+type ChangeRequestStatus struct {
+	HeadSHA, MergeSHA            string
+	Open, Closed, Merged, Queued bool
+}
+
 // Reasons a forge refuses to merge that kmdn can't fix by retrying.
 var (
 	ErrMergeCommitsDisabled = errors.New("forge: the repository doesn't allow merge commits")

@@ -89,6 +89,12 @@ type ResolveInput struct {
 // any suggestion (editors too while In review); anyone else who can edit
 // only their own.
 func (h *Hub) ResolveSuggestions(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, in ResolveInput) (int, error) {
+	ctx, current, unlock, gateErr := h.Revisions.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return 0, gateErr
+	}
+	defer unlock()
+	rev = current
 	h.init()
 	if in.Action != "accept" && in.Action != "reject" {
 		return 0, errors.New("collab: action is accept or reject")
@@ -150,6 +156,12 @@ func (h *Hub) ResolveSuggestions(ctx context.Context, repo repos.Repo, rev revis
 // ApplyDoc turns a page into the JSON document (which may carry suggestion
 // marks) as a change written on c's behalf; kind labels the writer's client.
 func (h *Hub) ApplyDoc(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p string, doc json.RawMessage, kind string) error {
+	ctx, current, unlock, gateErr := h.Revisions.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	rev = current
 	h.init()
 	room, err := h.room(ctx, repo, rev, p, true, c.User.ID)
 	if err != nil {
@@ -232,6 +244,12 @@ func (h *Hub) resolveSuggestions(w http.ResponseWriter, r *http.Request) {
 // Suggest proposes markdown as a page's content, as suggestions by attrs
 // (the assistant's edits, on c's behalf; the client is labeled kind).
 func (h *Hub) Suggest(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, markdown string, attrs docengine.SuggestAttrs, kind string) (bool, error) {
+	ctx, current, unlock, gateErr := h.Revisions.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return false, gateErr
+	}
+	defer unlock()
+	rev = current
 	h.init()
 	room, err := h.room(ctx, repo, rev, p, true, c.User.ID)
 	if err != nil {

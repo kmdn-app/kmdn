@@ -99,25 +99,36 @@ func (s *Service) headChanged(ctx context.Context, repo repos.Repo, _, to string
 		return err
 	}
 	for _, rev := range list {
-		if rev.BaseSHA == "" || rev.BaseSHA == to {
-			continue
-		}
-		touched, err := s.touched(ctx, repo, rev, to)
-		if err != nil {
-			s.Log.Error("updates: changed paths", "revision", rev.ID, "err", err)
-			continue
-		}
-		if len(touched) == 0 {
-			if _, err := store.Exec(ctx, s.DB, `UPDATE revisions SET base_sha = ? WHERE id = ? AND base_sha = ?`, to, rev.ID, rev.BaseSHA); err != nil {
-				return err
-			}
-			continue
-		}
-		if _, err := s.Jobs.Enqueue(ctx, s.DB, JobPrepare, map[string]string{"revision_id": rev.ID}, jobs.EnqueueOptions{Key: JobPrepare + ":" + rev.ID}); err != nil {
+		if err := s.headChangedRevision(ctx, repo, rev.ID, to); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (s *Service) headChangedRevision(ctx context.Context, repo repos.Repo, revID, to string) error {
+	ctx, unlock, err := s.Revisions.Gate(ctx, revID)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	rev, err := revisions.Get(ctx, s.DB, revID)
+	if err != nil {
+		return err
+	}
+	if !rev.State.Open() || rev.State == revisions.Publishing || rev.BaseSHA == "" || rev.BaseSHA == to {
+		return nil
+	}
+	touched, err := s.touched(ctx, repo, rev, to)
+	if err != nil {
+		return err
+	}
+	if len(touched) == 0 {
+		_, err = store.Exec(ctx, s.DB, `UPDATE revisions SET base_sha = ? WHERE id = ? AND base_sha = ?`, to, rev.ID, rev.BaseSHA)
+		return err
+	}
+	_, err = s.Jobs.Enqueue(ctx, s.DB, JobPrepare, map[string]string{"revision_id": rev.ID}, jobs.EnqueueOptions{Key: JobPrepare + ":" + rev.ID})
+	return err
 }
 
 // touched returns the revision's files Published changed between the
@@ -156,6 +167,11 @@ func upstreamPath(f revisions.File) string {
 // Prepare computes the revision's pending update against the current
 // Published head, replacing any older one. Nothing touches the documents.
 func (s *Service) Prepare(ctx context.Context, revID string) error {
+	ctx, unlock, gateErr := s.Revisions.Gate(ctx, revID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
 	rev, err := revisions.Get(ctx, s.DB, revID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -305,6 +321,12 @@ type Result struct {
 // and written as one change by a "sync" client (never credited). The base
 // moves to the update's target.
 func (s *Service) Apply(ctx context.Context, rev revisions.Revision, c revisions.Caller, updateID string) (Result, error) {
+	ctx, current, unlock, gateErr := s.Revisions.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return Result{}, gateErr
+	}
+	defer unlock()
+	rev = current
 	var res Result
 	acc, err := s.Revisions.AccessFor(ctx, rev, c)
 	if err != nil {
@@ -403,6 +425,12 @@ func (s *Service) Apply(ctx context.Context, rev revisions.Revision, c revisions
 // revision edits. "keep" keeps the revision's version (publishing adds the
 // page back); "delete" accepts the deletion and drops the page from the revision.
 func (s *Service) ResolvePage(ctx context.Context, rev revisions.Revision, c revisions.Caller, p, choice string) error {
+	ctx, current, unlock, gateErr := s.Revisions.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	rev = current
 	acc, err := s.Revisions.AccessFor(ctx, rev, c)
 	if err != nil {
 		return err

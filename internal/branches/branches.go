@@ -92,6 +92,11 @@ func (s *Service) Changed(ctx context.Context, rev revisions.Revision) {
 // Sync makes sure the revision's branch and pull request exist and the pull
 // request's draft state matches the revision's state.
 func (s *Service) Sync(ctx context.Context, revID string) error {
+	ctx, release, err := s.Revisions.Gate(ctx, revID)
+	if err != nil {
+		return err
+	}
+	defer release()
 	unlock := s.Lock(revID)
 	defer unlock()
 	for range 3 {
@@ -386,10 +391,18 @@ func (s *Service) Changes(ctx context.Context, rev revisions.Revision) ([]gitmir
 	if err != nil {
 		return nil, nil, err
 	}
+	assets, err := revisions.Assets(ctx, s.DB, rev.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.SnapshotChanges(files, assets)
+}
+
+// SnapshotChanges builds a patch from captured data without reading live state.
+func (s *Service) SnapshotChanges(files []revisions.File, assets []revisions.Asset) ([]gitmirror.Change, map[string]bool, error) {
 	touched := map[string]bool{}
 	var out []gitmirror.Change
-	// Clear old paths before writing the final manifest. A renamed page's
-	// source can be reused by an added page or another rename.
+	// A renamed source can be reused by an added page or another rename.
 	for _, f := range files {
 		touched[f.Path] = true
 		switch f.Op {
@@ -405,10 +418,6 @@ func (s *Service) Changes(ctx context.Context, rev revisions.Revision) ([]gitmir
 			out = append(out, gitmirror.Change{Path: f.Path, Content: []byte(f.ContentMD)})
 		}
 	}
-	assets, err := revisions.Assets(ctx, s.DB, rev.ID)
-	if err != nil {
-		return nil, nil, err
-	}
 	for _, a := range assets {
 		b, err := os.ReadFile(filepath.Join(s.DataDir, "uploads", a.SHA256[:2], a.SHA256))
 		if err != nil {
@@ -423,33 +432,25 @@ func (s *Service) Changes(ctx context.Context, rev revisions.Revision) ([]gitmir
 // ErrBranchMoved: someone pushed to the revision's branch outside kmdn.
 var ErrBranchMoved = errors.New("the revision's branch changed outside kmdn")
 
-// Commit writes the revision's content as a new commit on its branch and
-// pushes it. The tree is the revision's base with its changes applied; when
-// the base moved since the branch last merged it (updates from Published),
-// the commit also has the new base as a second parent, so the pull request
-// only shows the revision's own changes. Callers hold Lock.
-func (s *Service) Commit(ctx context.Context, repo repos.Repo, rev revisions.Revision, message string, author gitmirror.Identity) (revisions.Revision, string, error) {
-	rev, err := s.Ensure(ctx, repo, rev)
-	if err != nil {
-		return rev, "", err
-	}
+// SaveRef retains a prepared save before its intent is persisted and pushed.
+func SaveRef(revID string) string { return "refs/kmdn/saves/" + revID }
+
+// PrepareSave writes an immutable commit and retains it locally. Callers hold
+// Lock and have ensured the revision branch exists. It never pushes.
+func (s *Service) PrepareSave(ctx context.Context, repo repos.Repo, rev revisions.Revision, changes []gitmirror.Change, message string, author gitmirror.Identity) (string, []byte, error) {
 	_, cred, err := s.Forge(ctx, repo)
 	if err != nil {
-		return rev, "", err
+		return "", nil, err
 	}
 	tip, err := s.Tip(ctx, repo, rev, cred)
 	if err != nil {
-		return rev, "", err
+		return "", nil, err
 	}
 	m := s.Repos.Mirror(repo)
 	if !m.HasCommit(ctx, rev.BaseSHA) {
 		if err := m.Fetch(ctx, cred); err != nil {
-			return rev, "", err
+			return "", nil, err
 		}
-	}
-	changes, _, err := s.Changes(ctx, rev)
-	if err != nil {
-		return rev, "", err
 	}
 	parents := []string{tip}
 	if rev.BaseSHA != rev.BranchBaseSHA {
@@ -457,20 +458,64 @@ func (s *Service) Commit(ctx context.Context, repo repos.Repo, rev revisions.Rev
 	}
 	sha, err := m.Commit(ctx, gitmirror.CommitInput{From: rev.BaseSHA, Changes: changes, Parents: parents, Message: message, Author: author, Committer: s.Bot(ctx, repo)})
 	if err != nil {
-		return rev, "", err
+		return "", nil, err
 	}
-	if err := m.Push(ctx, cred, sha, rev.Branch, tip); err != nil {
-		if errors.Is(err, gitmirror.ErrStale) {
-			return rev, "", ErrBranchMoved
+	if err := m.KeepRef(ctx, SaveRef(rev.ID), sha); err != nil {
+		return "", nil, err
+	}
+	objects, err := m.PackCommit(ctx, cred, sha, []string{tip, rev.BaseSHA})
+	return sha, objects, err
+}
+
+// PushSave resumes only the exact prepared commit or its recorded parent.
+// Metadata and the checkpoint are finalized together by the save journal.
+func (s *Service) PushSave(ctx context.Context, repo repos.Repo, rev revisions.Revision, sha, prior string, objects []byte) error {
+	_, cred, err := s.Forge(ctx, repo)
+	if err != nil {
+		return err
+	}
+	m := s.Repos.Mirror(repo)
+	if !m.Exists() {
+		if err := m.Init(ctx, cred); err != nil {
+			return err
 		}
-		return rev, "", err
 	}
-	if err := m.KeepRef(ctx, LocalRef(rev), sha); err != nil {
-		return rev, "", err
+	remote, err := m.FetchBranch(ctx, cred, rev.Branch, "refs/kmdn/save-remote/"+rev.ID)
+	if errors.Is(err, gitmirror.ErrNotFound) {
+		return ErrBranchMoved
 	}
-	if _, err := store.Exec(ctx, s.DB, `UPDATE revisions SET branch_sha = ?, branch_base_sha = ? WHERE id = ?`, sha, rev.BaseSHA, rev.ID); err != nil {
-		return rev, "", err
+	if err != nil {
+		return err
 	}
-	rev, err = revisions.Get(ctx, s.DB, rev.ID)
-	return rev, sha, err
+	switch remote {
+	case sha:
+		// A prior attempt pushed successfully. Never replace its commit.
+	case prior:
+		if !m.HasCommit(ctx, sha) {
+			if err := m.RestoreCommitPack(ctx, cred, sha, objects); err != nil {
+				return &revisions.ErrConflict{Code: "save_commit_missing", Msg: "The prepared save could not be recovered from its saved Git objects: " + err.Error()}
+			}
+			if err := m.KeepRef(ctx, SaveRef(rev.ID), sha); err != nil {
+				return err
+			}
+		}
+		if err := m.Push(ctx, cred, sha, rev.Branch, prior); err != nil {
+			if errors.Is(err, gitmirror.ErrStale) {
+				return ErrBranchMoved
+			}
+			return err
+		}
+	default:
+		return ErrBranchMoved
+	}
+	return m.KeepRef(ctx, LocalRef(rev), sha)
+}
+
+// FinishSave releases temporary refs only after database finalization.
+func (s *Service) FinishSave(ctx context.Context, repo repos.Repo, revID string) {
+	for _, ref := range []string{SaveRef(revID), "refs/kmdn/save-remote/" + revID} {
+		if err := s.Repos.Mirror(repo).DropRef(ctx, ref); err != nil {
+			s.Log.Warn("remove completed save ref", "err", err, "ref", ref)
+		}
+	}
 }

@@ -32,6 +32,7 @@ const (
 
 // Service runs revision operations.
 type Service struct {
+	gates revisionGates
 	DB    *store.DB
 	Repos *repos.Service
 	Log   *slog.Logger
@@ -229,6 +230,12 @@ type UpdateInput struct {
 
 // Update changes title and description.
 func (s *Service) Update(ctx context.Context, rev Revision, c Caller, in UpdateInput) (Revision, error) {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return Revision{}, gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return rev, err
@@ -265,6 +272,12 @@ func (s *Service) Update(ctx context.Context, rev Revision, c Caller, in UpdateI
 
 // Close stops work on a revision. It can be reopened for 90 days.
 func (s *Service) Close(ctx context.Context, rev Revision, c Caller) (Revision, error) {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return Revision{}, gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return rev, err
@@ -280,6 +293,16 @@ func (s *Service) Close(ctx context.Context, rev Revision, c Caller) (Revision, 
 
 // Reopen returns a closed revision to Editing.
 func (s *Service) Reopen(ctx context.Context, rev Revision, c Caller) (Revision, error) {
+	ctx, unlock, gateErr := s.Gate(ctx, rev.ID)
+	if gateErr != nil {
+		return Revision{}, gateErr
+	}
+	defer unlock()
+	current, err := Get(ctx, s.DB, rev.ID)
+	if err != nil {
+		return rev, err
+	}
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return rev, err
@@ -325,6 +348,12 @@ type FileOp struct {
 
 // ApplyFileOp changes the manifest.
 func (s *Service) ApplyFileOp(ctx context.Context, repo repos.Repo, rev Revision, c Caller, op FileOp) (File, error) {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return File{}, gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return File{}, err
@@ -351,6 +380,12 @@ func (s *Service) ApplyFileOp(ctx context.Context, repo repos.Repo, rev Revision
 // EnsureFile adds path to the manifest as modified if it isn't there yet (the
 // first edit to an untouched page).
 func (s *Service) EnsureFile(ctx context.Context, repo repos.Repo, rev Revision, c Caller, p string) (File, error) {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return File{}, gateErr
+	}
+	defer unlock()
+	rev = current
 	if f, err := FileAt(ctx, s.DB, rev.ID, cleanPath(p)); err == nil {
 		if f.Op == OpDelete {
 			return File{}, conflict("file_deleted", "This page is deleted in the revision.")
@@ -623,6 +658,12 @@ func titleFromPath(p string) string {
 // SetContent stores a file's materialized markdown (from the collaborative
 // document) and refreshes its +/− counts.
 func (s *Service) SetContent(ctx context.Context, revID, p, md string, by []string) error {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, revID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	_ = current
 	f, err := FileAt(ctx, s.DB, revID, p)
 	if err != nil {
 		return err
@@ -732,6 +773,12 @@ func (s *Service) Tree(ctx context.Context, repo repos.Repo, rev Revision) ([]Tr
 
 // AddMember invites a repo contributor to edit the revision.
 func (s *Service) AddMember(ctx context.Context, rev Revision, c Caller, userID string, targetRole access.Role) error {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return err
@@ -761,6 +808,12 @@ func (s *Service) AddMember(ctx context.Context, rev Revision, c Caller, userID 
 // RemoveMember removes an editor. People can always remove themselves; the
 // owner stays.
 func (s *Service) RemoveMember(ctx context.Context, rev Revision, c Caller, userID string) error {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	rev = current
 	if userID != c.User.ID {
 		a, err := s.AccessFor(ctx, rev, c)
 		if err != nil {
@@ -789,6 +842,12 @@ func (s *Service) RemoveMember(ctx context.Context, rev Revision, c Caller, user
 // DropFile takes a page out of the revision without recording a file
 // operation (Published deleted it too, so there's nothing left to publish).
 func (s *Service) DropFile(ctx context.Context, rev Revision, p string) error {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	rev = current
 	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
 		if _, err := store.Exec(ctx, tx, `DELETE FROM revision_files WHERE revision_id = ? AND path = ?`, rev.ID, p); err != nil {
 			return err
@@ -810,6 +869,12 @@ func (s *Service) Notify(ctx context.Context, revID, kind string) {
 // when it materializes). The revision's flag follows its pages: when the last
 // conflict is resolved it clears, and an editor can resubmit.
 func (s *Service) SetConflicts(ctx context.Context, revID, p string, pending bool) error {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, revID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	_ = current
 	if pending {
 		res, err := store.Exec(ctx, s.DB, `UPDATE revision_files SET has_conflicts = TRUE WHERE revision_id = ? AND path = ? AND has_conflicts = FALSE`, revID, p)
 		if err != nil {
@@ -836,6 +901,12 @@ func (s *Service) SetConflicts(ctx context.Context, revID, p string, pending boo
 // SettleConflicts clears the revision's conflict flag once none of its pages
 // has one, recording who resolved the last.
 func (s *Service) SettleConflicts(ctx context.Context, revID, p string) error {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, revID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	_ = current
 	var left int
 	if err := store.QueryRow(ctx, s.DB, `SELECT COUNT(*) FROM revision_files WHERE revision_id = ? AND has_conflicts = TRUE`, revID).Scan(&left); err != nil {
 		return err

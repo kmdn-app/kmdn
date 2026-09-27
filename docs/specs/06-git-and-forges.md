@@ -146,6 +146,8 @@ Publishing **merges the revision's pull request** with a merge commit, whether t
 
 Idempotency: publish is a job with a stable key per revision. A crash resumes the durable claim for the same saved commit, reconciling the exact Git or forge outcome before retrying or releasing it. A timeout alone does not prove a merge failed. Keep the revision read-only while the outcome is unknown; release only a matching claim whose merge is known not to have happened or remain queued. A merge commit carries the `Kmdn-Revision: <revision url>` trailer for history linking.
 
+Plain-git claims retain the prepared merge's Git objects in the database so built-in backup restore can recover the same commit after rebuilding mirrors. Concurrent jobs and webhook reconciliation serialize attempts for the same claim and reload its phase before acting. Completion verifies that the merge is reachable from the claimed target branch and has the exact claimed source commit as its second parent. Repository sync runs outside revision and branch locks because its hooks can touch other revisions. Unknown or transitional forge states do not prove a merge stopped; unresolved claims remain available to recovery after the ordinary job retry budget expires.
+
 ## Attribution
 
 The merge commit that publishes a revision (and, on plain git, the merge kmdn writes) has this message. The commits saved on the branch are authored by the person who clicked Save all (commit email below), committed by kmdn, and carry the `Kmdn-Revision:` trailer.

@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/kmdn-app/kmdn/internal/access"
@@ -32,6 +33,7 @@ const JobPublish = "revision.publish"
 // Docs gives the revision's collaborative documents (collab.Hub).
 type Docs interface {
 	FlushRevision(ctx context.Context, revID string)
+	FlushRevisionChecked(ctx context.Context, revID string) error
 	StateOf(ctx context.Context, revID, p string) (docID string, state []byte, err error)
 	// SaveBeforePublish commits unsaved work on the branch (Save all) as by;
 	// the caller holds the branch lock.
@@ -40,6 +42,7 @@ type Docs interface {
 
 // Service publishes revisions.
 type Service struct {
+	claimRuns sync.Map
 	DB        *store.DB
 	Repos     *repos.Service
 	Revisions *revisions.Service
@@ -80,6 +83,7 @@ type Preview struct {
 
 // Register wires the publish job and pull/merge request webhooks.
 func (s *Service) Register() {
+	s.Jobs.Register(JobRecover, func(ctx context.Context, _ jobs.Job) (any, error) { return nil, s.Recover(ctx) })
 	s.Jobs.Register(JobPublish, func(ctx context.Context, j jobs.Job) (any, error) {
 		var p jobInput
 		if err := j.Decode(&p); err != nil {
@@ -284,7 +288,7 @@ func (s *Service) blocked(ctx context.Context, rev revisions.Revision) string {
 		return "conflicts"
 	}
 	if s.Revisions.PendingUpdates != nil {
-		if pending, err := s.Revisions.PendingUpdates(ctx, rev); err == nil && pending {
+		if pending, err := s.Revisions.PendingUpdates(ctx, rev); err != nil || pending {
 			return "updates_pending"
 		}
 	}
@@ -374,135 +378,134 @@ func (s *Service) run(ctx context.Context, in jobInput) (string, string, error) 
 	if rev.State == revisions.Published {
 		return rev.PublishedSHA, "", nil
 	}
-	if rev.State == revisions.Publishing && rev.ChangeRequestURL != "" {
-		return "", rev.ChangeRequestURL, nil // waiting for the merge
+	c, claimed, err := s.loadClaim(ctx, rev.ID)
+	if err != nil {
+		return "", "", err
 	}
-	if rev.State != revisions.Approved {
-		return "", "", jobs.Permanent(errors.New("revision isn't approved"))
+	// Claims introduced after an older forge auto-merge was queued cannot
+	// reconstruct that historical approval boundary. Its webhook still works.
+	if !claimed && rev.State == revisions.Publishing && rev.ChangeRequestURL != "" {
+		return "", rev.ChangeRequestURL, nil
 	}
 	repo, err := repos.Get(ctx, s.DB, rev.RepoID)
 	if err != nil {
-		return "", "", jobs.Permanent(err)
-	}
-	by, err := users.ByID(ctx, s.DB, in.By)
-	if err != nil {
-		return "", "", jobs.Permanent(err)
-	}
-	role, err := access.Effective(ctx, s.DB, by, repo.ID)
-	if err != nil {
 		return "", "", err
 	}
-	if a, err := s.Revisions.AccessFor(ctx, rev, revisions.Caller{User: by, Role: role}); err != nil || !a.CanPublish {
-		return "", "", jobs.Permanent(errors.New("not allowed to publish"))
+	if claimed {
+		repo.TargetBranch = c.TargetBranch
 	}
-	adapter, err := s.Repos.Adapters.ForRepo(ctx, repo)
-	if err != nil {
-		return "", "", err
-	}
-	cred, err := adapter.Credential(ctx, repo.ForgeRepo())
+	adapter, cred, err := s.Branches.Forge(ctx, repo)
 	if err != nil {
 		return "", "", err
 	}
 	m := s.Repos.Mirror(repo)
-	if err := m.Fetch(ctx, cred); err != nil {
+	if err := m.Init(ctx, cred); err != nil {
 		return "", "", err
 	}
 	head, err := m.Head(ctx)
 	if err != nil {
 		return "", "", err
 	}
-	trailer := "Kmdn-Revision: " + s.Branches.RevisionURL(repo, rev)
-	// Resume: a previous attempt may have pushed before crashing.
-	if sha, ok, err := m.FindTrailer(ctx, rev.BaseSHA, head, trailer); err == nil && ok {
-		return sha, "", s.finish(ctx, repo, rev, in.By, sha)
+	if !claimed {
+		c, rev, err = s.claimForPublish(ctx, repo, rev, in, head, adapter)
+		if err != nil {
+			return "", "", err
+		}
+	}
+	return s.resumeClaim(ctx, repo, rev, c, adapter, cred)
+}
+
+func (s *Service) claimForPublish(ctx context.Context, repo repos.Repo, rev revisions.Revision, in jobInput, head string, adapter forge.Adapter) (claim, revisions.Revision, error) {
+	ctx, rev, unlock, err := s.Revisions.Mutate(ctx, rev.ID)
+	if err != nil {
+		return claim{}, rev, err
+	}
+	defer unlock()
+	if rev.State != revisions.Approved {
+		return claim{}, rev, jobs.Permanent(errors.New("revision isn't approved"))
+	}
+	by, err := users.ByID(ctx, s.DB, in.By)
+	if err != nil {
+		return claim{}, rev, err
+	}
+	role, err := access.Effective(ctx, s.DB, by, repo.ID)
+	if err != nil {
+		return claim{}, rev, err
+	}
+	if a, err := s.Revisions.AccessFor(ctx, rev, revisions.Caller{User: by, Role: role}); err != nil || !a.CanPublish {
+		return claim{}, rev, jobs.Permanent(errors.New("not allowed to publish"))
+	}
+	branchUnlock := s.Branches.Lock(rev.ID)
+	defer branchUnlock()
+	if err := s.Docs.SaveBeforePublish(ctx, repo, rev, by); err != nil {
+		return claim{}, rev, err
+	}
+	if rev, err = revisions.Get(ctx, s.DB, rev.ID); err != nil {
+		return claim{}, rev, err
+	}
+	if rev, err = s.Branches.Ensure(ctx, repo, rev); err != nil {
+		return claim{}, rev, err
 	}
 	_, touched, err := s.Branches.Changes(ctx, rev)
 	if err != nil {
-		return "", "", err
+		return claim{}, rev, err
 	}
-	// Published moved: fine unless it touched the revision's pages.
 	if head != rev.BaseSHA {
-		moved, err := m.ChangedPaths(ctx, rev.BaseSHA, head)
+		moved, err := s.Repos.Mirror(repo).ChangedPaths(ctx, rev.BaseSHA, head)
 		if err != nil {
-			return "", "", err
+			return claim{}, rev, err
 		}
 		for _, p := range moved {
 			if touched[p] {
 				_ = s.Revisions.PublishStopped(ctx, rev.ID, "publish_blocked", map[string]any{"reason": "published_moved", "path": p})
-				return "", "", jobs.Permanent(&revisions.ErrConflict{Code: "published_moved", Msg: blockedMessage("published_moved")})
+				return claim{}, rev, jobs.Permanent(&revisions.ErrConflict{Code: "published_moved", Msg: blockedMessage("published_moved")})
 			}
 		}
-	}
-
-	unlock := s.Branches.Lock(rev.ID)
-	defer unlock()
-	// What gets merged is committed on the branch first.
-	if err := s.Docs.SaveBeforePublish(ctx, repo, rev, by); err != nil {
-		return "", "", err
-	}
-	if rev, err = revisions.Get(ctx, s.DB, rev.ID); err != nil {
-		return "", "", err
-	}
-	if rev, err = s.Branches.Ensure(ctx, repo, rev); err != nil {
-		return "", "", err
 	}
 	preview, err := s.Preview(ctx, repo, rev, in.Title, in.Body)
 	if err != nil {
-		return "", "", err
+		return claim{}, rev, err
 	}
-	// Preview flushes live rooms too: a reviewer may have edited since the
-	// job was queued, dismissing another reviewer's approval.
 	if rev, err = revisions.Get(ctx, s.DB, rev.ID); err != nil {
-		return "", "", err
+		return claim{}, rev, err
 	}
 	if blocked := s.blocked(ctx, rev); blocked != "" {
-		return "", "", jobs.Permanent(&revisions.ErrConflict{Code: blocked, Msg: blockedMessage(blocked)})
+		return claim{}, rev, jobs.Permanent(&revisions.ErrConflict{Code: blocked, Msg: blockedMessage(blocked)})
 	}
-	title, body, _ := strings.Cut(preview.Message, "\n")
-
-	cr, ok := adapter.(forge.ChangeRequester)
-	if !ok || rev.ChangeRequestRef == "" {
-		// Plain git: kmdn writes the merge commit itself.
-		sha, err := s.mergeLocally(ctx, repo, rev, head, preview.Message)
+	if dirty, err := revisions.Unsaved(ctx, s.DB, rev.ID); err != nil || dirty {
+		if err == nil {
+			err = errors.New("the revision changed after its saved snapshot")
+		}
+		return claim{}, rev, err
+	}
+	merge := ""
+	var objects []byte
+	if _, ok := adapter.(forge.ChangeRequester); !ok || rev.ChangeRequestRef == "" {
+		merge, err = s.prepareMerge(ctx, repo, rev, head, preview.Message)
 		if err != nil {
-			return "", "", err
+			return claim{}, rev, err
 		}
-		return sha, "", s.finish(ctx, repo, rev, in.By, sha)
-	}
-	if err := s.Branches.MarkReady(ctx, repo, rev); err != nil {
-		return "", "", err
-	}
-	ref := forge.ChangeRequest{URL: rev.ChangeRequestURL, Ref: rev.ChangeRequestRef, Node: rev.ChangeRequestNode}
-	res, err := cr.MergeChangeRequest(ctx, repo.ForgeRepo(), ref, forge.MergeInput{Title: title, Body: strings.TrimSpace(body), HeadSHA: rev.BranchSHA})
-	if err != nil {
-		for code, e := range map[string]error{"merge_commits_disabled": forge.ErrMergeCommitsDisabled, "approvals_required": forge.ErrApprovalsRequired, "not_mergeable": forge.ErrNotMergeable} {
-			if errors.Is(err, e) {
-				_ = s.Revisions.PublishStopped(ctx, rev.ID, "publish_blocked", map[string]any{"reason": code, "detail": err.Error()})
-				return "", "", jobs.Permanent(&revisions.ErrConflict{Code: code, Msg: blockedMessage(code)})
-			}
+		if err := s.Repos.Mirror(repo).KeepRef(ctx, "refs/kmdn/publishing/"+rev.ID, merge); err != nil {
+			return claim{}, rev, err
 		}
-		return "", "", err // forge down, head changed: retried
-	}
-	if res.Queued {
-		// Required checks are running: the forge merges when they pass and
-		// its webhook finishes the publish.
-		if err := s.Revisions.MarkPublishing(ctx, rev.ID, in.By, rev.ChangeRequestURL, rev.ChangeRequestRef); err != nil {
-			return "", "", err
+		_, cred, err := s.Branches.Forge(ctx, repo)
+		if err != nil {
+			return claim{}, rev, err
 		}
-		_ = audit.Write(ctx, s.DB, audit.Entry{ActorType: "user", ActorID: in.By, Action: "revision.auto_merge_enabled", TargetType: "revision", TargetID: rev.ID, RepoID: repo.ID, Data: map[string]any{"url": rev.ChangeRequestURL}})
-		return "", rev.ChangeRequestURL, nil
+		objects, err = s.Repos.Mirror(repo).PackCommit(ctx, cred, merge, []string{head, rev.BranchSHA})
+		if err != nil {
+			return claim{}, rev, err
+		}
 	}
-	if err := s.finish(ctx, repo, rev, in.By, res.SHA); err != nil {
-		return res.SHA, "", err
-	}
-	s.deleteBranch(ctx, repo, rev.Branch)
-	return res.SHA, "", nil
+	c, err := s.createClaim(ctx, rev, repo, head, merge, preview.Message, in.By, objects)
+	return c, rev, err
 }
 
-// mergeLocally merges the revision's branch into the target branch in the
+// prepareMerge builds the exact candidate before claiming; it does not push.
+// It merges the revision's branch into the target branch in the
 // mirror (plain git remotes have no pull requests): the tree is the target's
 // head with the revision's changes, the parents the head and the branch tip.
-func (s *Service) mergeLocally(ctx context.Context, repo repos.Repo, rev revisions.Revision, head, message string) (string, error) {
+func (s *Service) prepareMerge(ctx context.Context, repo repos.Repo, rev revisions.Revision, head, message string) (string, error) {
 	_, cred, err := s.Branches.Forge(ctx, repo)
 	if err != nil {
 		return "", err
@@ -535,10 +538,6 @@ func (s *Service) mergeLocally(ctx context.Context, repo repos.Repo, rev revisio
 	if err != nil {
 		return "", err
 	}
-	if err := m.Push(ctx, cred, sha, repo.TargetBranch, head); err != nil {
-		return "", err // the target moved while we built (ErrStale): the job retries on the new head
-	}
-	s.deleteBranch(ctx, repo, rev.Branch)
 	return sha, nil
 }
 
@@ -564,6 +563,30 @@ func (s *Service) finish(ctx context.Context, repo repos.Repo, rev revisions.Rev
 			s.Log.Warn("queue sync after publish", "err", err, "repo", repo.ID)
 		}
 	}
+	ctx, unlock, err := s.Revisions.Gate(ctx, rev.ID)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	rev, err = revisions.Get(ctx, s.DB, rev.ID)
+	if err != nil {
+		return err
+	}
+	if rev.State == revisions.Published {
+		return nil
+	}
+	if err := s.Docs.FlushRevisionChecked(ctx, rev.ID); err != nil {
+		return err
+	}
+	if dirty, err := revisions.Unsaved(ctx, s.DB, rev.ID); err != nil || dirty {
+		if err != nil {
+			return err
+		}
+		return &revisions.ErrConflict{Code: "merged_with_unsaved_changes", Msg: "The forge merged an earlier saved version. This revision still has unsaved changes."}
+	}
+	if err := s.verifyClaimMerge(ctx, repo, claim{BranchSHA: rev.BranchSHA}, sha); err != nil {
+		return err
+	}
 	if err := s.Revisions.MarkPublished(ctx, rev.ID, by, sha); err != nil {
 		return err
 	}
@@ -580,6 +603,22 @@ func (s *Service) onChangeRequest(ctx context.Context, repo repos.Repo, ev forge
 		return nil // not ours
 	}
 	if err != nil {
+		return err
+	}
+	if c, claimed, err := s.loadClaim(ctx, rev.ID); err != nil {
+		return err
+	} else if claimed {
+		// A delayed close event must not release a reopened request's newer
+		// claim. Reconcile current forge status instead of trusting the event.
+		adapter, cred, err := s.Branches.Forge(ctx, repo)
+		if err != nil {
+			return err
+		}
+		hint := ""
+		if ev.Merged {
+			hint = ev.MergeSHA
+		}
+		_, _, err = s.resumeClaim(ctx, repo, rev, c, adapter, cred, hint)
 		return err
 	}
 	if ev.Merged {

@@ -4,7 +4,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 
@@ -327,6 +326,7 @@ func (a *App) Run(ctx context.Context) error {
 	// Events recorded without a revision change (updates prepared, threads)
 	// still reach people within a minute.
 	go a.periodic(ctx, time.Minute, notify.JobDrain)
+	go a.periodic(ctx, time.Minute, publish.JobRecover)
 	a.catchUpIndexes(ctx)
 	done := make(chan struct{})
 	go func() { a.Jobs.Run(ctx); close(done) }()
@@ -361,6 +361,10 @@ func (a *App) catchUpIndexes(ctx context.Context) {
 // collabDocs lets publishing reach the current hub (tests swap it).
 type collabDocs struct{ a *App }
 
+func (d collabDocs) FlushRevisionChecked(ctx context.Context, revID string) error {
+	return d.a.Collab.FlushRevisionChecked(ctx, revID)
+}
+
 func (d collabDocs) FlushRevision(ctx context.Context, revID string) {
 	d.a.Collab.FlushRevision(ctx, revID)
 }
@@ -374,11 +378,7 @@ func (d collabDocs) Suggest(ctx context.Context, repo repos.Repo, rev revisions.
 	return d.a.Collab.Suggest(ctx, repo, rev, c, p, markdown, attrs, kind)
 }
 func (d collabDocs) SaveBeforePublish(ctx context.Context, repo repos.Repo, rev revisions.Revision, by users.User) error {
-	_, err := d.a.Collab.SaveLocked(ctx, repo, rev, by, "Save before publishing")
-	if errors.Is(err, collab.ErrNothingToSave) {
-		return nil
-	}
-	return err
+	return d.a.Collab.SaveCurrentLocked(ctx, repo, rev, by, "Save before publishing")
 }
 func (d collabDocs) SaveBeforeUpdate(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller) error {
 	return d.a.Collab.SaveFirst(ctx, repo, rev, c.User, "Save before applying updates from Published")

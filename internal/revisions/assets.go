@@ -197,6 +197,12 @@ func relativeTo(page, target string) string {
 
 // Upload adds an image to the revision, next to the page it's inserted in.
 func (s *Service) Upload(ctx context.Context, repo repos.Repo, rev Revision, c Caller, page, filename string, r io.Reader) (UploadResult, error) {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return UploadResult{}, gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return UploadResult{}, err
@@ -275,6 +281,9 @@ func (s *Service) Upload(ctx context.Context, repo repos.Repo, rev Revision, c C
 	out.Src = relativeTo(page, out.Path)
 	alt := strings.ReplaceAll(name, "-", " ")
 	out.Markdown = "![" + alt + "](" + out.Src + ")"
+	if err := s.ContentChanged(ctx, rev.ID, []string{c.User.ID}); err != nil {
+		return UploadResult{}, err
+	}
 	s.changed(ctx, rev.ID, "assets")
 	return out, nil
 }
