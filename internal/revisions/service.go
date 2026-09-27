@@ -46,7 +46,9 @@ type Service struct {
 	// Removed is called when a file's collaborative document goes away
 	// (deleted add, revision closed). Optional.
 	Removed func(ctx context.Context, rev Revision, path string)
-	// OnSubmitted runs after a revision goes in review (the submit checkpoint). Optional.
+	// BeforeSubmit saves pending work before changing review state. Optional.
+	BeforeSubmit func(ctx context.Context, repo repos.Repo, rev Revision, c Caller) error
+	// OnSubmitted starts advisory checks after a revision goes in review. Optional.
 	OnSubmitted Submitted
 	// OnContent runs after a page's materialized content changed. Optional.
 	OnContent func(ctx context.Context, revID, path string)

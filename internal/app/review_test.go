@@ -140,7 +140,7 @@ func TestReviewLifecycle(t *testing.T) {
 		}
 	}
 	// Each submit saves what goes to review.
-	want := "created,submitted,saved,approval,approval,approved,approvals_reset,in_review_again,changes_requested,file_added,submitted,saved,reviewer_removed,approval,approved,withdrawn"
+	want := "created,saved,submitted,approval,approval,approved,approvals_reset,in_review_again,changes_requested,file_added,saved,submitted,reviewer_removed,approval,approved,withdrawn"
 	if got := strings.Join(kinds, ","); got != want {
 		t.Fatalf("events:\n%s\nwant\n%s", got, want)
 	}

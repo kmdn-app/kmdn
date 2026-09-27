@@ -248,11 +248,10 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		return len(list), err
 	}
 	a.Revisions.Removed = func(_ context.Context, rev revisions.Revision, p string) { a.Collab.FileRemoved(rev, p) }
+	a.Revisions.BeforeSubmit = func(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller) error {
+		return a.Collab.SaveFirst(ctx, repo, rev, c.User, "Save for review")
+	}
 	a.Revisions.OnSubmitted = func(ctx context.Context, rev revisions.Revision, by string) {
-		// What goes to review is committed on the pull request.
-		if err := a.saveAs(ctx, rev, by, "Save for review"); err != nil {
-			log.Error("save on submit", "err", err, "revision", rev.ID)
-		}
 		a.Summaries.RequestReview(ctx, rev.ID, by)
 		a.Consistency.RequestRevision(ctx, rev.ID, 0)
 	}
@@ -383,19 +382,6 @@ func (d collabDocs) SaveBeforePublish(ctx context.Context, repo repos.Repo, rev 
 }
 func (d collabDocs) SaveBeforeUpdate(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller) error {
 	return d.a.Collab.SaveFirst(ctx, repo, rev, c.User, "Save before applying updates from Published")
-}
-
-// saveAs runs Save all as the user with id by (nothing to save is fine).
-func (a *App) saveAs(ctx context.Context, rev revisions.Revision, by, message string) error {
-	repo, err := repos.Get(ctx, a.DB, rev.RepoID)
-	if err != nil {
-		return err
-	}
-	u, err := users.ByID(ctx, a.DB, by)
-	if err != nil {
-		return err
-	}
-	return a.Collab.SaveFirst(ctx, repo, rev, u, message)
 }
 
 // originOf returns scheme://host of the base URL (the only allowed WebSocket Origin).
