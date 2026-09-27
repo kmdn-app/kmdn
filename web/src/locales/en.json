@@ -538,14 +538,17 @@
       "suggestions_accepted": "accepted suggestions in {{path}}",
       "suggestions_rejected": "rejected suggestions in {{path}}",
       "update_available": "Published changed pages in this revision",
-      "updates_applied": "applied updates from Published"
+      "updates_applied": "applied updates from Published",
+      "conflicts_resolved": "All conflicts are resolved",
+      "conflict_resolved": "resolved a conflict on {{path}}"
     },
     "updateLinks_one": "Update {{count}} link in {{pages}} page",
     "updateLinks_other": "Update {{count}} links in {{pages}} pages",
     "checks": "Checks",
     "linksOk": "All links in this revision work.",
     "brokenLink": "links to {{url}}",
-    "breaksInbound": "links to {{target}}, which this revision removes"
+    "breaksInbound": "links to {{target}}, which this revision removes",
+    "hasConflicts": "has conflicts with Published to resolve"
   },
   "common": {
     "cancel": "Cancel",
@@ -764,6 +767,15 @@
     "pages_other": "{{count}} pages of this revision changed on Published.",
     "conflictCount_one": "{{count}} conflict with this revision's edits.",
     "conflictCount_other": "{{count}} conflicts with this revision's edits.",
-    "noConflicts": "Everything merges cleanly."
+    "noConflicts": "Everything merges cleanly.",
+    "conflict": {
+      "title": "Conflict with Published",
+      "keepPublished": "Keep Published",
+      "keepRevision": "Keep this revision",
+      "keepBoth": "Keep both",
+      "pageDeleted": "Published deleted this page after the revision started changing it.",
+      "keepPage": "Keep this revision's page",
+      "deletePage": "Delete it too"
+    }
   }
 }

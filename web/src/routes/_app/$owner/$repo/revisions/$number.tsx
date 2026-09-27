@@ -700,8 +700,10 @@ function Checks({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
     queryKey: ["revision-checks", rev.id, rev.updated_at],
     queryFn: () => unwrap(api.GET("/revisions/{revision}/checks", { params: { path: { revision: rev.id } } })),
   });
+  const files = useRevisionFiles(rev);
   if (!checks.data) return null;
   const { broken_links: broken, breaks_inbound: inbound } = checks.data;
+  const conflicted = (files.data ?? []).filter((f) => f.has_conflicts);
   const page = (p: string, line: number) => (
     <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: p }} search={{ revision: rev.number }} className="font-medium hover:underline">
       {p}:{line}
@@ -711,6 +713,17 @@ function Checks({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
     <section>
       <SectionTitle title={t("revision.checks")} />
       <div className="overflow-hidden rounded-xl border text-[13.5px]">
+        {conflicted.map((f) => (
+          <p key={"c" + f.path} className="flex items-start gap-2 border-b px-4 py-2.5">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <span>
+              <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: f.path }} search={{ revision: rev.number }} className="font-medium hover:underline">
+                {f.path}
+              </Link>{" "}
+              {f.conflict === "deleted_upstream" ? t("updates.conflict.pageDeleted") : t("revision.hasConflicts")}
+            </span>
+          </p>
+        ))}
         {broken.length === 0 && inbound.length === 0 ? (
           <p className="flex items-center gap-2 px-4 py-3 text-muted-foreground">
             <CircleCheck className="size-4 text-success" />

@@ -86,9 +86,12 @@ type File struct {
 	ContentHash    string     `json:"content_hash,omitempty"`
 	MaterializedAt *time.Time `json:"materialized_at,omitempty"`
 	HasConflicts   bool       `json:"has_conflicts"`
-	Additions      int        `json:"additions"`
-	Deletions      int        `json:"deletions"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	// Conflict is a page-level conflict (deleted_upstream: Published deleted
+	// a page the revision edits); empty for conflict blocks in the page.
+	Conflict  string    `json:"conflict,omitempty"`
+	Additions int       `json:"additions"`
+	Deletions int       `json:"deletions"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	BaseMD    string `json:"-"`
 	ContentMD string `json:"-"`
@@ -201,13 +204,13 @@ func IsMember(ctx context.Context, q store.Querier, revisionID, userID string) (
 	return n > 0, err
 }
 
-const fileCols = `id, path, op, from_path, content_hash, materialized_at, has_conflicts, additions, deletions, updated_at, base_md, content_md, COALESCE(ydoc_id, '')`
+const fileCols = `id, path, op, from_path, content_hash, materialized_at, has_conflicts, conflict, additions, deletions, updated_at, base_md, content_md, COALESCE(ydoc_id, '')`
 
 func scanFile(row interface{ Scan(...any) error }) (File, error) {
 	var f File
 	var mat sql.NullInt64
 	var updated int64
-	err := row.Scan(&f.ID, &f.Path, &f.Op, &f.FromPath, &f.ContentHash, &mat, &f.HasConflicts, &f.Additions, &f.Deletions, &updated, &f.BaseMD, &f.ContentMD, &f.YDocID)
+	err := row.Scan(&f.ID, &f.Path, &f.Op, &f.FromPath, &f.ContentHash, &mat, &f.HasConflicts, &f.Conflict, &f.Additions, &f.Deletions, &updated, &f.BaseMD, &f.ContentMD, &f.YDocID)
 	if err != nil {
 		return f, store.NotFound(err)
 	}

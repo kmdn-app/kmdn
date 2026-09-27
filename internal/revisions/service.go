@@ -795,3 +795,51 @@ func (s *Service) DropFile(ctx context.Context, rev Revision, p string) error {
 func (s *Service) Notify(ctx context.Context, revID, kind string) {
 	s.changed(ctx, revID, kind)
 }
+
+// SetConflicts records whether a page still holds conflict blocks (checked
+// when it materializes). The revision's flag follows its pages: when the last
+// conflict is resolved it clears, and an editor can resubmit.
+func (s *Service) SetConflicts(ctx context.Context, revID, p string, pending bool) error {
+	if pending {
+		res, err := store.Exec(ctx, s.DB, `UPDATE revision_files SET has_conflicts = TRUE WHERE revision_id = ? AND path = ? AND has_conflicts = FALSE`, revID, p)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			if _, err := store.Exec(ctx, s.DB, `UPDATE revisions SET has_conflicts = TRUE WHERE id = ?`, revID); err != nil {
+				return err
+			}
+			s.changed(ctx, revID, "conflicts")
+		}
+		return nil
+	}
+	res, err := store.Exec(ctx, s.DB, `UPDATE revision_files SET has_conflicts = FALSE WHERE revision_id = ? AND path = ? AND has_conflicts = TRUE AND conflict = ''`, revID, p)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil
+	}
+	return s.SettleConflicts(ctx, revID, p)
+}
+
+// SettleConflicts clears the revision's conflict flag once none of its pages
+// has one, recording who resolved the last.
+func (s *Service) SettleConflicts(ctx context.Context, revID, p string) error {
+	var left int
+	if err := store.QueryRow(ctx, s.DB, `SELECT COUNT(*) FROM revision_files WHERE revision_id = ? AND has_conflicts = TRUE`, revID).Scan(&left); err != nil {
+		return err
+	}
+	if left > 0 {
+		return nil
+	}
+	res, err := store.Exec(ctx, s.DB, `UPDATE revisions SET has_conflicts = FALSE WHERE id = ? AND has_conflicts = TRUE`, revID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		_ = Record(ctx, s.DB, revID, ActorSystem, "", "conflicts_resolved", map[string]any{"path": p})
+		s.changed(ctx, revID, "conflicts_resolved")
+	}
+	return nil
+}

@@ -141,4 +141,33 @@ func TestUpdatesFromPublished(t *testing.T) {
 	if r, _ := revisions.Get(ctx, a.DB, revID); !r.HasConflicts {
 		t.Fatal("revision not flagged")
 	}
+
+	// Resolving: the deleted page is kept (it becomes an addition)...
+	if code, _ := samC.do("POST", "/revisions/"+revID+"/conflicts/resolve", map[string]any{"path": "docs/gone.md", "choice": "maybe"}); code != 422 {
+		t.Fatalf("bad choice: %d", code)
+	}
+	if code, _ := samC.do("POST", "/revisions/"+revID+"/conflicts/resolve", map[string]any{"path": "docs/gone.md", "choice": "keep"}); code != 204 {
+		t.Fatalf("keep page: %d", code)
+	}
+	if f, _ := revisions.FileAt(ctx, a.DB, revID, "docs/gone.md"); f.Op != revisions.OpAdd || f.HasConflicts {
+		t.Fatalf("kept page: %+v", f)
+	}
+	// ...and the conflict block is replaced in the editor (here: a document without it).
+	rv, _ = revisions.Get(ctx, a.DB, revID)
+	resolved := strings.Replace(strings.Replace(index, "Run it.", "Run it daily.", 1), "Install.", "Install with brew or apt.", 1)
+	if err := a.Collab.Apply(ctx, repo, rv, caller, "docs/index.md", resolved, "human"); err != nil {
+		t.Fatal(err)
+	}
+	a.Collab.FlushRevision(ctx, revID)
+	if r, _ := revisions.Get(ctx, a.DB, revID); r.HasConflicts {
+		t.Fatal("conflicts not cleared")
+	}
+	var events int
+	_ = store.QueryRow(ctx, a.DB, `SELECT COUNT(*) FROM revision_events WHERE revision_id = ? AND kind = 'conflicts_resolved'`, revID).Scan(&events)
+	if events != 1 {
+		t.Fatalf("conflicts_resolved events: %d", events)
+	}
+	if got := content("docs/index.md"); got != resolved {
+		t.Fatalf("resolved content: %q", got)
+	}
 }

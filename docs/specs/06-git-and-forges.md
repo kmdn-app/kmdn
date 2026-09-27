@@ -108,7 +108,9 @@ On every target-branch update (webhook → fetch → new head `H`):
 
 ### Conflict resolution
 
-Conflict nodes render inline in the normal editor as a card: **Published** (theirs) vs **This revision** (ours) side by side, with Keep published / Keep this revision / Edit merged (both editable, prefilled with a naive merge). Each conflict has a small thread so the original editors can agree ("Tom picked Keep this revision · Priya 👍"). Any editor can resolve; the resolution is recorded as a tracked change visible to the others. When no conflict nodes remain, `has_conflicts` clears and an editor resubmits to the same reviewers. The assistant can explain a conflict or propose a merged version as a suggestion.
+Conflict nodes render inline in the normal editor as a card: **Published** (theirs) above **This revision** (ours), both editable, with **Keep Published** / **Keep this revision** / **Keep both** (both versions one after the other, to merge by hand). Resolving is a direct edit even while Suggesting is on. To agree on a choice, editors comment on the conflict like on any passage ("Tom picked Keep this revision · Priya 👍"). Any editor can resolve. When a page materializes without conflict blocks, its `has_conflicts` clears; when no page has one left, the revision's clears (activity: "All conflicts are resolved") and an editor resubmits to the same reviewers. Undoing a resolution brings the conflict and the flag back. The assistant can explain a conflict or propose a merged version as a suggestion.
+
+A page Published deleted while the revision edits it shows a banner instead: **Keep this revision's page** (publishing adds it back) or **Delete it too** (it leaves the revision).
 
 ## Publishing
 

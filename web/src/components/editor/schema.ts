@@ -6,6 +6,7 @@
  * document. schema.test.ts checks this against the fidelity fixtures.
  */
 import { Extension, Mark, Node, mergeAttributes, textblockTypeInputRule, type AnyExtension } from "@tiptap/core";
+import { Fragment } from "@tiptap/pm/model";
 import { userColor } from "@/components/avatar";
 import Document from "@tiptap/extension-document";
 import Text from "@tiptap/extension-text";
@@ -337,29 +338,97 @@ export const TableCell = cell("tableCell", "td");
 
 // --- Conflicts from updates from Published (docs/specs/06-git-and-forges.md) --
 
-/** An unresolved merge: the Published side, then the revision's. */
-export const Conflict = Node.create({
+/** Transaction meta: apply as a direct edit even while Suggesting (resolving a conflict). */
+export const DIRECT_EDIT = "kmdnDirect";
+
+export type ConflictLabels = { published: string; revision: string; title: string; keepPublished: string; keepRevision: string; keepBoth: string };
+
+const CONFLICT_LABELS: ConflictLabels = {
+  published: "Published",
+  revision: "This revision",
+  title: "Conflict with Published",
+  keepPublished: "Keep Published",
+  keepRevision: "Keep this revision",
+  keepBoth: "Keep both",
+};
+
+/**
+ * An unresolved merge: the Published side, then the revision's. Both sides
+ * can be edited; the header's actions replace the conflict with a side (or
+ * both, to merge by hand).
+ */
+export const Conflict = Node.create<{ labels: ConflictLabels }>({
   name: "conflict",
   group: "block",
   content: "conflictSide conflictSide",
   isolating: true,
   defining: true,
+  addOptions: () => ({ labels: CONFLICT_LABELS }),
   addAttributes: () => ({ id: { default: "" } }),
   parseHTML: () => [{ tag: 'div[data-kmdn="conflict"]' }],
   renderHTML: () => ["div", { "data-kmdn": "conflict", class: "conflict" }, 0],
+  addNodeView() {
+    const labels = this.options.labels;
+    return ({ getPos, editor }) => {
+      const dom = document.createElement("div");
+      dom.className = "conflict";
+      dom.dataset.kmdn = "conflict";
+      const head = document.createElement("div");
+      head.className = "conflict-head";
+      head.contentEditable = "false";
+      const title = document.createElement("span");
+      title.textContent = labels.title;
+      head.append(title);
+      const resolve = (choice: "published" | "revision" | "both") => {
+        const pos = typeof getPos === "function" ? getPos() : undefined;
+        if (pos === undefined || !editor.isEditable) return;
+        const node = editor.state.doc.nodeAt(pos);
+        if (!node || node.type.name !== "conflict") return;
+        const side = (name: string) => {
+          let out = Fragment.empty;
+          node.forEach((c) => {
+            if (c.attrs.side === name) out = c.content;
+          });
+          return out;
+        };
+        const content = choice === "both" ? side("published").append(side("revision")) : side(choice);
+        editor.view.dispatch(editor.state.tr.replaceWith(pos, pos + node.nodeSize, content).setMeta(DIRECT_EDIT, true));
+      };
+      for (const [choice, label] of [
+        ["published", labels.keepPublished],
+        ["revision", labels.keepRevision],
+        ["both", labels.keepBoth],
+      ] as const) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        b.addEventListener("mousedown", (e) => e.preventDefault());
+        b.addEventListener("click", () => resolve(choice));
+        head.append(b);
+      }
+      const sides = document.createElement("div");
+      sides.className = "conflict-sides";
+      dom.append(head, sides);
+      return {
+        dom,
+        contentDOM: sides,
+        update: (n) => n.type.name === "conflict",
+        stopEvent: (e) => head.contains(e.target as globalThis.Node),
+        ignoreMutation: (m) => head.contains(m.target),
+      };
+    };
+  },
 });
-
-export type ConflictLabels = { published: string; revision: string };
 
 export const ConflictSide = Node.create<{ labels: ConflictLabels }>({
   name: "conflictSide",
   content: "block*",
   isolating: true,
-  addOptions: () => ({ labels: { published: "Published", revision: "This revision" } }),
+  addOptions: () => ({ labels: CONFLICT_LABELS }),
   addAttributes: () => ({ side: { default: "revision" } }),
   parseHTML: () => [{ tag: "div[data-side]" }],
   renderHTML({ node }) {
-    const side = node.attrs.side as keyof ConflictLabels;
+    const side = node.attrs.side as "published" | "revision";
     return ["div", { class: "conflict-side", "data-side": side, "data-label": this.options.labels[side] ?? side }, 0];
   },
 });
@@ -386,7 +455,7 @@ export function schemaExtensions(opts: { resolveImage?: (src: string) => string;
     FootnoteDefinition,
     Frontmatter,
     RawBlock,
-    Conflict,
+    opts.conflictLabels ? Conflict.configure({ labels: opts.conflictLabels }) : Conflict,
     opts.conflictLabels ? ConflictSide.configure({ labels: opts.conflictLabels }) : ConflictSide,
     HardBreak,
     Image.configure({ resolve: opts.resolveImage ?? ((s: string) => s) }),

@@ -1401,6 +1401,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/conflicts/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Settle a page Published deleted while the revision edits it (keep or accept the deletion) */
+        post: operations["resolvePageConflict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/revisions/{revision}/suggestions": {
         parameters: {
             query?: never;
@@ -2063,6 +2082,11 @@ export interface components {
             /** Format: date-time */
             materialized_at?: string;
             has_conflicts: boolean;
+            /**
+             * @description A page-level conflict; absent for conflict blocks in the page
+             * @enum {string}
+             */
+            conflict?: "deleted_upstream";
             additions: number;
             deletions: number;
             /** Format: date-time */
@@ -4780,6 +4804,36 @@ export interface operations {
                         reopened: boolean;
                     };
                 };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    resolvePageConflict: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    path: string;
+                    /** @enum {string} */
+                    choice: "keep" | "delete";
+                };
+            };
+        };
+        responses: {
+            /** @description Resolved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];

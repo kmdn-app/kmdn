@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
-import { Check, ChevronRight, CloudOff, FilePen, Loader2, Lock, MessageSquarePlus, PenLine } from "lucide-react";
+import { Check, ChevronRight, CloudOff, FilePen, Loader2, Lock, MessageSquarePlus, PenLine, TriangleAlert } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { DocView } from "@/components/doc/doc-view";
@@ -11,7 +13,7 @@ import { PresenceStack } from "@/components/revision/presence";
 import { ReviewActions } from "@/components/revision/review-actions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApiError, errorMessage, useMe } from "@/lib/api";
+import { ApiError, api, errorMessage, unwrap, useMe } from "@/lib/api";
 import { RoomProvider } from "@/lib/realtime";
 import { fileHref, type RepoView } from "@/lib/repos";
 import { revisionRawUrl, uploadAsset, useRevision, useRevisionContent, useRevisionDiff, useRevisionEvents, useRevisionFiles, type RevisionView } from "@/lib/revisions";
@@ -358,6 +360,7 @@ function Body({
   return (
     <>
       <UpdatesBanner rev={rev} className="mx-auto mt-5 max-w-[720px] max-md:mx-4" />
+      <PageConflict rev={rev} path={path} />
       <ReadOnlyBanner rev={rev} reason={status?.mode === "ro" ? status.reason : undefined} />
       {noDoc ? (
         content.data ? (
@@ -390,6 +393,39 @@ function Body({
         ))
       )}
     </>
+  );
+}
+
+/** Published deleted this page while the revision changes it: keep it or let it go. */
+function PageConflict({ rev, path }: { rev: RevisionView; path: string }) {
+  const { t } = useTranslation();
+  const files = useRevisionFiles(rev);
+  const qc = useQueryClient();
+  const resolve = useMutation({
+    mutationFn: (choice: "keep" | "delete") => unwrap(api.POST("/revisions/{revision}/conflicts/resolve", { params: { path: { revision: rev.id } }, body: { path, choice } })),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["revision-files", rev.id] });
+      void qc.invalidateQueries({ queryKey: ["revision"] });
+    },
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  const f = files.data?.find((x) => x.path === path);
+  if (f?.conflict !== "deleted_upstream") return null;
+  return (
+    <div className="mx-auto mt-5 flex max-w-[720px] flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-[13.5px] max-md:mx-4">
+      <TriangleAlert className="size-4 shrink-0 text-destructive" />
+      <span className="min-w-0 flex-1">{t("updates.conflict.pageDeleted")}</span>
+      {rev.access.can_edit && (
+        <span className="flex gap-2">
+          <Button size="sm" variant="outline" disabled={resolve.isPending} onClick={() => resolve.mutate("keep")}>
+            {t("updates.conflict.keepPage")}
+          </Button>
+          <Button size="sm" variant="ghost" disabled={resolve.isPending} onClick={() => resolve.mutate("delete")}>
+            {t("updates.conflict.deletePage")}
+          </Button>
+        </span>
+      )}
+    </div>
   );
 }
 

@@ -397,3 +397,46 @@ func (s *Service) Apply(ctx context.Context, rev revisions.Revision, c revisions
 	s.Revisions.Notify(ctx, rev.ID, "updates_applied")
 	return res, nil
 }
+
+// ResolvePage settles a page-level conflict: Published deleted a page the
+// revision edits. "keep" keeps the revision's version (publishing adds the
+// page back); "delete" accepts the deletion and drops the page from the revision.
+func (s *Service) ResolvePage(ctx context.Context, rev revisions.Revision, c revisions.Caller, p, choice string) error {
+	acc, err := s.Revisions.AccessFor(ctx, rev, c)
+	if err != nil {
+		return err
+	}
+	if !acc.CanEdit {
+		return revisions.ErrForbidden
+	}
+	f, err := revisions.FileAt(ctx, s.DB, rev.ID, p)
+	if err != nil {
+		return err
+	}
+	if f.Conflict != KindDeletedUpstream {
+		return &revisions.ErrConflict{Code: "no_conflict", Msg: "This page has no conflict to resolve."}
+	}
+	switch choice {
+	case "keep":
+		op := revisions.OpAdd
+		if f.Op == revisions.OpDelete {
+			// The revision deleted it too, and Published changed it: keep the deletion out.
+			return s.Revisions.DropFile(ctx, rev, p)
+		}
+		if _, err := store.Exec(ctx, s.DB, `UPDATE revision_files SET op = ?, from_path = '', base_md = '', conflict = '', has_conflicts = FALSE WHERE id = ?`, op, f.ID); err != nil {
+			return err
+		}
+	case "delete":
+		if err := s.Revisions.DropFile(ctx, rev, p); err != nil {
+			return err
+		}
+	default:
+		return errors.New("updates: choice is keep or delete")
+	}
+	_ = revisions.Record(ctx, s.DB, rev.ID, revisions.ActorUser, c.User.ID, "conflict_resolved", map[string]any{"path": p, "choice": choice})
+	if err := s.Revisions.SettleConflicts(ctx, rev.ID, p); err != nil {
+		return err
+	}
+	s.Revisions.Notify(ctx, rev.ID, "conflict_resolved")
+	return nil
+}

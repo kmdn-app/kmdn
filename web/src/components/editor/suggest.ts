@@ -26,6 +26,7 @@ import type { Mark, Node as PMNode } from "@tiptap/pm/model";
 import { Selection, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { AttrStep, Mapping, ReplaceAroundStep, ReplaceStep, replaceStep } from "@tiptap/pm/transform";
 import { ySyncPluginKey } from "@tiptap/y-tiptap";
+import { DIRECT_EDIT } from "./schema";
 import { canonical, type NodeSuggestion, type SuggestionInfo, type SuggestionKind } from "@kmdn/doc-engine";
 
 export type SuggestContext = { author: string; now: number; newId: () => string };
@@ -258,7 +259,7 @@ export const Suggesting = Extension.create<SuggestingOptions, { enabled: boolean
   addOptions: () => ({ author: "" }),
   addStorage: () => ({ enabled: false }),
   dispatchTransaction({ transaction, next }) {
-    if (!this.storage.enabled || !transaction.docChanged || transaction.getMeta(ySyncPluginKey)) {
+    if (!this.storage.enabled || !transaction.docChanged || transaction.getMeta(ySyncPluginKey) || transaction.getMeta(DIRECT_EDIT)) {
       next(transaction);
       return;
     }

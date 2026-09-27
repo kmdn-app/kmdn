@@ -94,6 +94,8 @@ const api = {
     d.transact(() => applyDoc(d.getXmlFragment(CONTENT), target, hasSuggestions(target) ? nodeHash : settledHash));
     return buf(out);
   },
+  /** How many unresolved conflict blocks the page holds. */
+  yConflicts: (update: ArrayBuffer): number => readDoc(load(update).getXmlFragment(CONTENT)).content.filter((b) => (b.type as string) === "conflict").length,
   /** base, ours, theirs markdown → JSON {doc, conflicts} (updates from Published). */
   merge3: (base: string, ours: string, theirs: string): string => JSON.stringify(merge3(base, ours, theirs)),
   /** Pending suggestions in the page, as JSON [{id, author, inserted, deleted, kinds}]. */
