@@ -1556,10 +1556,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/diff/{path}": {
+        parameters: {
+            query?: {
+                context?: number;
+            };
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        /** A changed page against the revision's base (source diff hunks) */
+        get: operations["getRevisionDiff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        DiffLine: {
+            /** @enum {string} */
+            op: " " | "+" | "-";
+            text: string;
+            old?: number;
+            new?: number;
+        };
+        DiffHunk: {
+            old_start: number;
+            old_lines: number;
+            new_start: number;
+            new_lines: number;
+            lines: components["schemas"]["DiffLine"][];
+        };
+        FileDiff: {
+            path: string;
+            op: components["schemas"]["FileOpKind"];
+            from_path?: string;
+            base: string;
+            content: string;
+            additions: number;
+            deletions: number;
+            hunks: components["schemas"]["DiffHunk"][];
+        };
         CommitPerson: {
             user_id?: string;
             name: string;
@@ -4713,6 +4760,33 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    getRevisionDiff: {
+        parameters: {
+            query?: {
+                context?: number;
+            };
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Diff */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDiff"];
+                };
+            };
+            404: components["responses"]["Problem"];
         };
     };
 }

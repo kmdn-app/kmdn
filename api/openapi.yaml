@@ -1424,6 +1424,18 @@ paths:
         "202": { description: Queued, content: { application/json: { schema: { type: object, required: [job_id], properties: { job_id: { type: string } } } } } }
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/diff/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { $ref: "#/components/parameters/FilePath" }
+      - { name: context, in: query, schema: { type: integer } }
+    get:
+      tags: [revisions]
+      operationId: getRevisionDiff
+      summary: A changed page against the revision's base (source diff hunks)
+      responses:
+        "200": { description: Diff, content: { application/json: { schema: { $ref: "#/components/schemas/FileDiff" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   parameters:
     RepoID:
@@ -1454,6 +1466,35 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    DiffLine:
+      type: object
+      required: [op, text]
+      properties:
+        op: { type: string, enum: [" ", "+", "-"] }
+        text: { type: string }
+        old: { type: integer }
+        new: { type: integer }
+    DiffHunk:
+      type: object
+      required: [old_start, old_lines, new_start, new_lines, lines]
+      properties:
+        old_start: { type: integer }
+        old_lines: { type: integer }
+        new_start: { type: integer }
+        new_lines: { type: integer }
+        lines: { type: array, items: { $ref: "#/components/schemas/DiffLine" } }
+    FileDiff:
+      type: object
+      required: [path, op, base, content, additions, deletions, hunks]
+      properties:
+        path: { type: string }
+        op: { $ref: "#/components/schemas/FileOpKind" }
+        from_path: { type: string }
+        base: { type: string }
+        content: { type: string }
+        additions: { type: integer }
+        deletions: { type: integer }
+        hunks: { type: array, items: { $ref: "#/components/schemas/DiffHunk" } }
     CommitPerson:
       type: object
       required: [name, email]

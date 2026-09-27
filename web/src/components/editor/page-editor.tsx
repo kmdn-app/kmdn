@@ -25,13 +25,14 @@ import {
   Strikethrough,
   Undo2,
 } from "lucide-react";
-import { CONTENT } from "@kmdn/doc-engine";
+import { CONTENT, type DocNode } from "@kmdn/doc-engine";
 import { userColor } from "@/components/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { RoomProvider, RoomStatus } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { schemaExtensions } from "./schema";
+import { ChangeMarks, setChangeBase } from "./change-marks";
 import { EditorDocContext, nodeViewExtensions } from "./node-views";
 import type { DocContext } from "@/components/doc/doc-view";
 import type { AnyExtension } from "@tiptap/core";
@@ -70,6 +71,7 @@ export function PageEditor({
   upload,
   onEditor,
   docCtx,
+  base,
 }: {
   provider: RoomProvider;
   user: EditorUser;
@@ -78,6 +80,8 @@ export function PageEditor({
   onEditor?: (e: Editor | null) => void;
   /** Links and images in previews inside the editor (raw blocks, alerts). */
   docCtx: DocContext;
+  /** The page at the revision's base: changed passages get marked (Result view). */
+  base?: DocNode | null;
 }) {
   const { t } = useTranslation();
   const status = useRoomStatus(provider);
@@ -93,6 +97,7 @@ export function PageEditor({
       Placeholder.configure({ placeholder: t("editor.placeholder") }),
       Dropcursor.configure({ width: 2, class: "drop-cursor" }),
       Gapcursor,
+      ChangeMarks,
     ],
     // The editor is rebuilt only for a new room.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,6 +144,9 @@ export function PageEditor({
     }
   }
   const editable = status?.mode === "rw" && status.synced;
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) setChangeBase(editor.view, base ?? null);
+  }, [editor, base]);
   useEffect(() => {
     editor?.setEditable(editable);
   }, [editor, editable]);

@@ -51,6 +51,10 @@ func TestReviewLifecycle(t *testing.T) {
 		a.Collab.Flush(ctx)
 	}
 	edit(sam, access.Contributor, "# Handbook\n\nStart here, please.\n")
+	// The source diff against the base.
+	if _, d := samC.do("GET", "/revisions/"+revID+"/diff/docs/index.md", nil); !strings.Contains(toJSON(d["hunks"]), `{"old":3,"op":"-","text":"Start here."}`) || !strings.Contains(toJSON(d["hunks"]), `{"new":3,"op":"+","text":"Start here, please."}`) {
+		t.Fatalf("diff: %v", d)
+	}
 
 	// Suggestions: maintainers, not the editor.
 	_, sug := samC.do("GET", "/revisions/"+revID+"/reviewer-suggestions", nil)

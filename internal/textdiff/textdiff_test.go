@@ -117,3 +117,25 @@ func TestDiffFallsBackBeyondMaxEdits(t *testing.T) {
 		t.Fatalf("rebuilt %v", got)
 	}
 }
+
+func TestHunks(t *testing.T) {
+	a := "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n"
+	b := "1\n2\nthree\n4\n5\n6\n7\n8\n9\n10\neleven\n12\nthirteen\n"
+	hs := Hunks(a, b, 2)
+	if len(hs) != 2 {
+		t.Fatalf("hunks: %+v", hs)
+	}
+	if h := hs[0]; h.OldStart != 1 || h.OldLines != 5 || h.NewStart != 1 || h.NewLines != 5 {
+		t.Fatalf("first hunk: %+v", h)
+	}
+	var ops string
+	for _, l := range hs[1].Lines {
+		ops += l.Op
+	}
+	if ops != "  -+ +" {
+		t.Fatalf("second hunk ops %q: %+v", ops, hs[1])
+	}
+	if len(Hunks(a, a, 3)) != 0 {
+		t.Fatal("no change should have no hunks")
+	}
+}

@@ -649,5 +649,16 @@
       "updates_pending": "Apply the updates from Published first.",
       "other": "This revision can't be published right now."
     }
+  },
+  "diff": {
+    "view": "Review view",
+    "views": {
+      "result": "Result",
+      "changes": "Changes",
+      "source": "Source diff"
+    },
+    "noChanges": "No changes to this page yet.",
+    "changes": "Changes",
+    "removed": "Removed"
   }
 }

@@ -14,7 +14,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, errorMessage, useMe } from "@/lib/api";
 import { RoomProvider } from "@/lib/realtime";
 import { fileHref, type RepoView } from "@/lib/repos";
-import { revisionRawUrl, uploadAsset, useRevision, useRevisionContent, useRevisionEvents, type RevisionView } from "@/lib/revisions";
+import { revisionRawUrl, uploadAsset, useRevision, useRevisionContent, useRevisionDiff, useRevisionEvents, useRevisionFiles, type RevisionView } from "@/lib/revisions";
+import { parse } from "@kmdn/doc-engine";
+import { ChangesView, SourceDiff } from "@/components/revision/diff-views";
 import { cn } from "@/lib/utils";
 import { EditorToolbar, PageEditor, useRoomStatus, type ImageUploader } from "./page-editor";
 import { SourceEditor } from "./source-editor";
@@ -43,6 +45,9 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
   const crumbs = path.split("/");
   const [editor, setEditor] = useState<Editor | null>(null);
   const [mode, setMode] = useEditorMode();
+  const [view, setView] = useState<ReviewView>("result");
+  const files = useRevisionFiles(rev.data);
+  const inRevision = !!files.data?.some((f) => f.path === path && f.op !== "delete");
   const onEditor = useCallback((e: Editor | null) => setEditor(e), []);
   const provider = useRoom(rev.data?.id, path);
   const status = useRoomStatus(provider);
@@ -90,7 +95,8 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
             actions={
               <>
                 {rev.data && <PresenceStack repo={repo} rev={rev.data} path={path} />}
-                {status && !status.error && <ModeToggle mode={mode} onChange={setMode} />}
+                {inRevision && <ViewToggle view={view} onChange={setView} />}
+                {status && !status.error && view === "result" && <ModeToggle mode={mode} onChange={setMode} />}
                 {rev.data && <RevisionPill rev={rev.data} />}
                 {rev.data?.access.can_review && <ReviewActions repo={repo} rev={rev.data} compact />}
                 <SaveState status={status} />
@@ -102,13 +108,13 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
               </>
             }
           />
-          {status?.mode === "rw" && editor && mode === "visual" && (
+          {status?.mode === "rw" && editor && mode === "visual" && view === "result" && (
             <div className="flex shrink-0 overflow-x-auto border-b px-3 py-1">
               <EditorToolbar editor={editor} upload={upload} />
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-auto">
-            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} /> : <Loading />}
+            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} view={inRevision ? view : "result"} /> : <Loading />}
           </div>
         </>
       )}
@@ -117,6 +123,28 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
 }
 
 type EditorMode = "visual" | "source";
+type ReviewView = "result" | "changes" | "source";
+
+/** Result (the editor, with changes marked), Changes (rendered diff), Source diff. */
+function ViewToggle({ view, onChange }: { view: ReviewView; onChange: (v: ReviewView) => void }) {
+  const { t } = useTranslation();
+  return (
+    <div role="radiogroup" aria-label={t("diff.view")} className="inline-flex shrink-0 gap-0.5 rounded-md bg-muted p-0.5 max-sm:hidden">
+      {(["result", "changes", "source"] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          role="radio"
+          aria-checked={view === v}
+          onClick={() => onChange(v)}
+          className={cn("h-6 rounded px-2 text-[12px] font-medium text-muted-foreground", view === v && "bg-background text-foreground shadow-xs")}
+        >
+          {t(`diff.views.${v}`)}
+        </button>
+      ))}
+    </div>
+  );
+}
 const MODE_KEY = "kmdn-editor-mode";
 
 /** Visual or source editing, remembered per browser. */
@@ -177,6 +205,7 @@ function Body({
   onEditor,
   upload,
   mode,
+  view,
 }: {
   repo: RepoView;
   rev: RevisionView;
@@ -185,13 +214,18 @@ function Body({
   onEditor: (e: Editor | null) => void;
   upload?: ImageUploader;
   mode: EditorMode;
+  view: ReviewView;
 }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
   const status = useRoomStatus(provider);
   const noDoc = status?.error?.code === "no_document";
   // Read-only callers get no room until someone edits: show the page as it is in the revision.
-  const content = useRevisionContent(rev, path, noDoc || status?.error?.code === "not_found");
+  const content = useRevisionContent(rev, path);
+  const diff = useRevisionDiff(rev, path, view === "source");
+  const inRev = content.data?.in_revision ?? false;
+  const baseMD = content.data?.base ?? "";
+  const baseDoc = useMemo(() => (inRev && baseMD ? parse(baseMD).doc : null), [inRev, baseMD]);
   const resolveImage = useMemo(() => (src: string) => (/^[a-z]+:|^\/\//i.test(src) ? src : revisionRawUrl(rev.id, resolveFrom(path, src))), [rev.id, path]);
   const ctx = useMemo(() => ({ path, pageHref: (p: string) => fileHref(repo, p), imageSrc: (p: string) => revisionRawUrl(rev.id, p) }), [repo, rev.id, path]);
 
@@ -202,6 +236,12 @@ function Body({
         <p className="text-muted-foreground">{status.error.message}</p>
       </div>
     );
+  }
+  if (view === "changes") {
+    return content.data ? <ChangesView base={content.data.base} content={content.data.content} ctx={ctx} /> : <Loading />;
+  }
+  if (view === "source") {
+    return diff.data ? <SourceDiff hunks={diff.data.hunks} /> : <Loading />;
   }
   return (
     <>
@@ -225,7 +265,7 @@ function Body({
             <Loading />
           )
         ) : (
-          <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} />
+          <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} base={baseDoc} />
         ))
       )}
     </>
