@@ -297,8 +297,32 @@ func (h *Hub) Restore(ctx context.Context, repo repos.Repo, rev revisions.Revisi
 		_, err := h.Revisions.ApplyFileOp(ctx, repo, rev, c, o)
 		return err
 	}
+	// A later add can reuse a renamed page's original path. Remove those
+	// replacement identities before moving the checkpoint's page back.
+	byPath := map[string]revisions.File{}
+	for _, f := range current {
+		byPath[f.Path] = f
+	}
+	discarded := map[string]bool{}
+	for _, f := range current {
+		if f.Op != revisions.OpRename {
+			continue
+		}
+		if _, keep := want[f.Path]; keep {
+			continue
+		}
+		if replacement, ok := byPath[f.FromPath]; ok && replacement.Op == revisions.OpAdd {
+			if err := op(revisions.FileOp{Op: revisions.OpDelete, Path: replacement.Path}); err != nil {
+				return err
+			}
+			discarded[replacement.ID] = true
+		}
+	}
 	// Changes made after the checkpoint: undo them.
 	for _, f := range current {
+		if discarded[f.ID] {
+			continue
+		}
 		if _, ok := want[f.Path]; ok {
 			continue
 		}
@@ -308,11 +332,10 @@ func (h *Hub) Restore(ctx context.Context, repo repos.Repo, rev revisions.Revisi
 		case revisions.OpModify:
 			err = h.Apply(ctx, repo, rev, c, f.Path, f.BaseMD, "restore")
 		case revisions.OpRename:
-			if _, stillWanted := want[f.FromPath]; stillWanted {
-				continue // the checkpoint has the original path; handled below
-			}
 			if err = op(revisions.FileOp{Op: revisions.OpRename, FromPath: f.Path, Path: f.FromPath}); err == nil {
-				err = h.Apply(ctx, repo, rev, c, f.FromPath, f.BaseMD, "restore")
+				if _, stillWanted := want[f.FromPath]; !stillWanted {
+					err = h.Apply(ctx, repo, rev, c, f.FromPath, f.BaseMD, "restore")
+				}
 			}
 		case revisions.OpDelete:
 			err = op(revisions.FileOp{Op: revisions.OpAdd, Path: f.Path, Content: f.BaseMD})
