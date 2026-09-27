@@ -376,6 +376,125 @@ export interface paths {
         patch: operations["updateOrgSettings"];
         trace?: never;
     };
+    "/orgs/{org}/admin/forges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listForgesOrg"];
+        put?: never;
+        /** Add a GitLab host or a plain git host (GitHub uses the manifest flow) */
+        post: operations["createForgeOrg"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/admin/forges/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteForgeOrg"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/admin/forges/github/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the GitHub App manifest flow
+         * @description The browser then POSTs a form with field `manifest` to `action_url`; GitHub redirects back to /admin/forges/github/callback.
+         */
+        post: operations["githubManifestOrg"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/admin/forges/{id}/installations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listGitHubInstallationsOrg"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/admin/forges/{id}/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listInstallationReposOrg"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/admin/forges/{id}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Browser redirect that connects a GitHub installation to the org (installs the App first without ?installation=); GitHub confirms the person can access it */
+        get: operations["connectGitHubInstallation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/forges/github/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GitHub App setup URL, back from installing; continues the org's connect flow */
+        get: operations["githubSetup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/repos": {
         parameters: {
             query?: never;
@@ -3783,6 +3902,8 @@ export interface components {
             app_id?: string;
             app_slug?: string;
             client_id?: string;
+            /** @description The org that added the host; absent for hosts shared by the instance */
+            org_id?: string;
             /** Format: date-time */
             created_at: string;
             repos: number;
@@ -4663,6 +4784,233 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    listForgesOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Forge hosts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ForgeHost"][];
+                        /** @description Redirect URI to register in a GitLab OAuth application (the same for every GitLab host) */
+                        gitlab_callback_url: string;
+                    };
+                };
+            };
+        };
+    };
+    createForgeOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    kind: "gitlab" | "git";
+                    base_url?: string;
+                    display_name?: string;
+                    client_id?: string;
+                    client_secret?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForgeHost"];
+                };
+            };
+        };
+    };
+    deleteForgeOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    githubManifestOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description GitHub web URL; empty for github.com */
+                    base_url?: string;
+                    organization?: string;
+                    name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Form target and manifest */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        action_url: string;
+                        manifest: string;
+                    };
+                };
+            };
+        };
+    };
+    listGitHubInstallationsOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installations of the App */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            external_id?: string;
+                            account_login?: string;
+                            /** @description The org that connected it */
+                            org_id?: string;
+                        }[];
+                        install_url: string;
+                        /** @description Org console in multi mode: where to install or connect an installation */
+                        connect_url?: string;
+                    };
+                };
+            };
+        };
+    };
+    listInstallationReposOrg: {
+        parameters: {
+            query: {
+                installation: string;
+            };
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repositories the installation can access */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ForgeRepoInfo"][];
+                    };
+                };
+            };
+        };
+    };
+    connectGitHubInstallation: {
+        parameters: {
+            query?: {
+                installation?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to GitHub */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    githubSetup: {
+        parameters: {
+            query?: {
+                installation_id?: string;
+                setup_action?: string;
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to GitHub or the forges page */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listRepos: {
         parameters: {
             query?: never;
@@ -5287,8 +5635,12 @@ export interface operations {
                         items: {
                             external_id?: string;
                             account_login?: string;
+                            /** @description The org that connected it */
+                            org_id?: string;
                         }[];
                         install_url: string;
+                        /** @description Org console in multi mode: where to install or connect an installation */
+                        connect_url?: string;
                     };
                 };
             };

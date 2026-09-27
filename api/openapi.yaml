@@ -442,6 +442,132 @@ paths:
         "200": { description: Settings, content: { application/json: { schema: { $ref: "#/components/schemas/OrgSettingsView" } } } }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /orgs/{org}/admin/forges:
+    get:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      tags: [orgs]
+      operationId: listForgesOrg
+      responses:
+        "200":
+          description: Forge hosts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, gitlab_callback_url]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/ForgeHost" } }
+                  gitlab_callback_url: { type: string, description: "Redirect URI to register in a GitLab OAuth application (the same for every GitLab host)" }
+    post:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      tags: [orgs]
+      operationId: createForgeOrg
+      summary: Add a GitLab host or a plain git host (GitHub uses the manifest flow)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [gitlab, git] }
+                base_url: { type: string }
+                display_name: { type: string }
+                client_id: { type: string }
+                client_secret: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/ForgeHost" } } } }
+  /orgs/{org}/admin/forges/{id}:
+    delete:
+      tags: [orgs]
+      operationId: deleteForgeOrg
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "409": { $ref: "#/components/responses/Problem" }
+  /orgs/{org}/admin/forges/github/manifest:
+    post:
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      tags: [orgs]
+      operationId: githubManifestOrg
+      summary: Start the GitHub App manifest flow
+      description: The browser then POSTs a form with field `manifest` to `action_url`; GitHub redirects back to /admin/forges/github/callback.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                base_url: { type: string, description: "GitHub web URL; empty for github.com" }
+                organization: { type: string }
+                name: { type: string }
+      responses:
+        "200":
+          description: Form target and manifest
+          content:
+            application/json:
+              schema: { type: object, required: [action_url, manifest], properties: { action_url: { type: string }, manifest: { type: string } } }
+  /orgs/{org}/admin/forges/{id}/installations:
+    get:
+      tags: [orgs]
+      operationId: listGitHubInstallationsOrg
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Installations of the App
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, install_url]
+                properties:
+                  items: { type: array, items: { type: object, properties: { external_id: { type: string }, account_login: { type: string }, org_id: { type: string, description: "The org that connected it" } } } }
+                  install_url: { type: string }
+                  connect_url: { type: string, description: "Org console in multi mode: where to install or connect an installation" }
+  /orgs/{org}/admin/forges/{id}/repositories:
+    get:
+      tags: [orgs]
+      operationId: listInstallationReposOrg
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: installation, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Repositories the installation can access
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/ForgeRepoInfo" } } } }
+  /orgs/{org}/admin/forges/{id}/connect:
+    get:
+      tags: [orgs]
+      operationId: connectGitHubInstallation
+      summary: Browser redirect that connects a GitHub installation to the org (installs the App first without ?installation=); GitHub confirms the person can access it
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: installation, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Redirect to GitHub }
+  /admin/forges/github/setup:
+    get:
+      tags: [admin]
+      operationId: githubSetup
+      summary: GitHub App setup URL, back from installing; continues the org's connect flow
+      parameters:
+        - { name: installation_id, in: query, schema: { type: string } }
+        - { name: setup_action, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Redirect to GitHub or the forges page }
   /orgs/{org}/repos:
     get:
       parameters:
@@ -775,8 +901,9 @@ paths:
                 type: object
                 required: [items, install_url]
                 properties:
-                  items: { type: array, items: { type: object, properties: { external_id: { type: string }, account_login: { type: string } } } }
+                  items: { type: array, items: { type: object, properties: { external_id: { type: string }, account_login: { type: string }, org_id: { type: string, description: "The org that connected it" } } } }
                   install_url: { type: string }
+                  connect_url: { type: string, description: "Org console in multi mode: where to install or connect an installation" }
   /admin/forges/{id}/repositories:
     get:
       tags: [admin]
@@ -3960,6 +4087,7 @@ components:
         app_id: { type: string }
         app_slug: { type: string }
         client_id: { type: string }
+        org_id: { type: string, description: "The org that added the host; absent for hosts shared by the instance" }
         created_at: { type: string, format: date-time }
         repos: { type: integer }
     ForgeRepoInfo:

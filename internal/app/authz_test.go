@@ -27,7 +27,7 @@ var publicRoutes = map[string]bool{
 // Every signed-in account is a member of the default org in single mode, so
 // the org's own collections (repos, directory, groups) and leaving it are
 // theirs too.
-var anyUserRoutes = regexp.MustCompile(`^(GET|PATCH|POST|DELETE|PUT) /(me\b|inbox|notifications|push|assistant/status|follows|setup/complete|auth/|orgs$|orgs/\{org\}$|orgs/\{org\}/(repos|users|groups|assistant/status|repos/by-slug/\{owner\}/\{name\})$|orgs/\{org\}/members/\{user\}$)`)
+var anyUserRoutes = regexp.MustCompile(`^(GET|PATCH|POST|DELETE|PUT) /(me\b|inbox|notifications|push|assistant/status|follows|setup/complete|auth/|orgs$|orgs/\{org\}$|orgs/\{org\}/(repos|users|groups|assistant/status|repos/by-slug/\{owner\}/\{name\})$|orgs/\{org\}/members/\{user\}$|admin/forges/github/(callback|setup)$)`)
 
 func walkRoutes(t *testing.T, a *App) []string {
 	t.Helper()
