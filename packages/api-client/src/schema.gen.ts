@@ -341,6 +341,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{repo}/search": {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Full-text search over published pages
+         * @description Matched terms in `snippet` are wrapped in U+0002 … U+0003.
+         */
+        get: operations["searchRepo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{repo}/members": {
         parameters: {
             query?: never;
@@ -798,6 +823,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        SearchHit: {
+            path: string;
+            title: string;
+            snippet: string;
+            heading?: string;
+            heading_slug?: string;
+        };
         UserRef: {
             id: string;
             name: string;
@@ -1709,6 +1741,33 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["BlameLine"][];
+                    };
+                };
+            };
+        };
+    };
+    searchRepo: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["SearchHit"][];
                     };
                 };
             };

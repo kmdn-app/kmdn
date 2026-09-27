@@ -97,6 +97,13 @@ func TestConnectPlainGitRepoAndRead(t *testing.T) {
 	if ran, err := a.Jobs.RunOnce(ctx); !ran || err != nil {
 		t.Fatalf("sync job: %v %v", ran, err)
 	}
+	// The head change schedules search indexing.
+	if ran, err := a.Jobs.RunOnce(ctx); !ran || err != nil {
+		t.Fatalf("index job: %v %v", ran, err)
+	}
+	if code, hits := admin.do("GET", "/repos/"+repoID+"/search?q=welc", nil); code != 200 || !strings.Contains(toJSON(hits), "docs/onboarding/first-week.md") || strings.Contains(toJSON(hits), "_archive") {
+		t.Fatalf("search: %d %v", code, hits)
+	}
 	code, repo = admin.do("GET", "/repos/"+repoID, nil)
 	if code != 200 || repo["health"] != "ok" || repo["head_sha"] == "" {
 		t.Fatalf("after sync: %v", repo)
@@ -172,6 +179,12 @@ func TestConnectPlainGitRepoAndRead(t *testing.T) {
 	}
 	if ran, err := a.Jobs.RunOnce(ctx); !ran || err != nil {
 		t.Fatalf("webhook sync: %v %v", ran, err)
+	}
+	if ran, err := a.Jobs.RunOnce(ctx); !ran || err != nil {
+		t.Fatalf("reindex: %v %v", ran, err)
+	}
+	if _, hits := admin.do("GET", "/repos/"+repoID+"/search?q=new", nil); !strings.Contains(toJSON(hits), "docs/new.md") {
+		t.Fatalf("new page not indexed: %v", hits)
 	}
 	if _, tree := admin.do("GET", "/repos/"+repoID+"/tree", nil); !strings.Contains(toJSON(tree), "docs/new.md") {
 		t.Fatalf("new file not synced: %v", tree)

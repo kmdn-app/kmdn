@@ -55,11 +55,33 @@ func Migrations() ([]Migration, error) {
 // dialectSQL adapts portable migration SQL to the engine. Migrations are
 // written for SQLite; for Postgres, BLOB becomes BYTEA. Keep migrations to
 // types both engines accept (TEXT, BIGINT, INTEGER, BOOLEAN, BLOB).
+// Engine-specific statements go between "-- +sqlite" / "-- +postgres" and
+// "-- +end" marker lines.
 func dialectSQL(d Dialect, s string) string {
-	if d == Postgres {
-		s = regexp.MustCompile(`\bBLOB\b`).ReplaceAllString(s, "BYTEA")
+	var b strings.Builder
+	keep := true
+	for _, line := range strings.Split(s, "\n") {
+		switch strings.TrimSpace(line) {
+		case "-- +sqlite":
+			keep = d == SQLite
+			continue
+		case "-- +postgres":
+			keep = d == Postgres
+			continue
+		case "-- +end":
+			keep = true
+			continue
+		}
+		if keep {
+			b.WriteString(line)
+			b.WriteByte('\n')
+		}
 	}
-	return s
+	out := b.String()
+	if d == Postgres {
+		out = regexp.MustCompile(`\bBLOB\b`).ReplaceAllString(out, "BYTEA")
+	}
+	return out
 }
 
 // MigrationStatus describes an applied or pending migration.

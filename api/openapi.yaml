@@ -376,6 +376,22 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/BlameLine" } } } }
+  /repos/{repo}/search:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { name: q, in: query, required: true, schema: { type: string } }
+      - { name: limit, in: query, schema: { type: integer, maximum: 50 } }
+    get:
+      tags: [repos]
+      operationId: searchRepo
+      summary: Full-text search over published pages
+      description: Matched terms in `snippet` are wrapped in U+0002 … U+0003.
+      responses:
+        "200":
+          description: Hits
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/SearchHit" } } } }
   /repos/{repo}/members:
     parameters:
       - { $ref: "#/components/parameters/RepoID" }
@@ -802,6 +818,15 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    SearchHit:
+      type: object
+      required: [path, title, snippet]
+      properties:
+        path: { type: string }
+        title: { type: string }
+        snippet: { type: string }
+        heading: { type: string }
+        heading_slug: { type: string }
     UserRef:
       type: object
       required: [id, name, email]
