@@ -26,7 +26,7 @@ type Forge interface {
 
 ### GitLab (gitlab.com and self-managed)
 
-- Admin registers a **GitLab OAuth application** (per GitLab host) for user linking/sign-in (`read_user`, `openid`, `email` scopes).
+- Optionally, the admin registers a **GitLab OAuth application** (per GitLab host) for sign-in and account linking: confidential, scope `read_user`, redirect URI `<base_url>/api/v1/auth/oauth/callback` (one URL for every GitLab host; the OAuth state names the host). Admin → Forges → Add GitLab shows it. Without one, repositories still connect with access tokens; people just can't sign in with GitLab or link their GitLab identity.
 - Repo access: a **Project or Group Access Token** with `api` + `write_repository`, role Developer (Maintainer if pushing to protected branches is intended). Two ways to provide it:
   1. Repo admin pastes a token created in GitLab.
   2. Repo admin with a linked GitLab account that is Maintainer on the project/group clicks "Create token automatically"; kmdn calls the access-token API with the admin's OAuth token, stores the result, and never keeps the admin's token.

@@ -1077,6 +1077,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GitLab's OAuth callback, one URL for every GitLab host (the state names the host) */
+        get: operations["oauthCallbackGitLab"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/linked-accounts": {
         parameters: {
             query?: never;
@@ -4645,6 +4662,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["ForgeHost"][];
+                        /** @description Redirect URI to register in a GitLab OAuth application (the same for every GitLab host) */
+                        gitlab_callback_url: string;
                     };
                 };
             };
@@ -5545,6 +5564,27 @@ export interface operations {
             path: {
                 host: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Back to kmdn */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oauthCallbackGitLab: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
