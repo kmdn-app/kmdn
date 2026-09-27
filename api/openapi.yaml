@@ -718,12 +718,48 @@ paths:
     get:
       tags: [admin]
       operationId: listAudit
+      summary: Audit log entries, newest first, 100 at a time
+      parameters:
+        - { $ref: "#/components/parameters/AuditActorType" }
+        - { $ref: "#/components/parameters/AuditActorID" }
+        - { $ref: "#/components/parameters/AuditAction" }
+        - { $ref: "#/components/parameters/AuditRepo" }
+        - { $ref: "#/components/parameters/AuditFrom" }
+        - { $ref: "#/components/parameters/AuditTo" }
+        - { name: cursor, in: query, schema: { type: string }, description: "next_cursor from the previous page" }
       responses:
         "200":
-          description: Latest 200 audit entries
+          description: Entries
           content:
             application/json:
-              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } } } }
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+                  next_cursor: { type: string }
+                  actions: { type: array, items: { type: string }, description: "Every action recorded (first page only)" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /admin/audit/export:
+    get:
+      tags: [admin]
+      operationId: exportAudit
+      summary: Every matching entry as a CSV or NDJSON download
+      parameters:
+        - { name: format, in: query, required: true, schema: { type: string, enum: [csv, ndjson] } }
+        - { $ref: "#/components/parameters/AuditActorType" }
+        - { $ref: "#/components/parameters/AuditActorID" }
+        - { $ref: "#/components/parameters/AuditAction" }
+        - { $ref: "#/components/parameters/AuditRepo" }
+        - { $ref: "#/components/parameters/AuditFrom" }
+        - { $ref: "#/components/parameters/AuditTo" }
+      responses:
+        "200":
+          description: The export
+          content:
+            text/csv: { schema: { type: string } }
+            application/x-ndjson: { schema: { type: string } }
+        "422": { $ref: "#/components/responses/Problem" }
   /admin/agent-keys:
     get:
       tags: [admin]
@@ -2445,6 +2481,18 @@ components:
       in: path
       required: true
       schema: { type: string }
+    AuditActorType:
+      { name: actor_type, in: query, schema: { type: string, enum: [user, system, agent_key, assistant] } }
+    AuditActorID:
+      { name: actor_id, in: query, schema: { type: string } }
+    AuditAction:
+      { name: action, in: query, schema: { type: string }, description: "An action, or a family ending in a dot (revision.)" }
+    AuditRepo:
+      { name: repo, in: query, schema: { type: string } }
+    AuditFrom:
+      { name: from, in: query, schema: { type: string, format: date }, description: "From this UTC day (inclusive)" }
+    AuditTo:
+      { name: to, in: query, schema: { type: string, format: date }, description: "Up to this UTC day (inclusive)" }
     RevisionID:
       name: revision
       in: path
@@ -3255,6 +3303,8 @@ components:
         target_id: { type: string }
         repo_id: { type: string }
         data: { type: object, additionalProperties: true }
+        actor_name: { type: string }
+        repo_name: { type: string, description: "owner/name" }
     InviteResult:
       type: object
       required: [status, email]

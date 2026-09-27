@@ -724,7 +724,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Audit log entries, newest first, 100 at a time */
         get: operations["listAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/audit/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every matching entry as a CSV or NDJSON download */
+        get: operations["exportAudit"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3168,6 +3186,9 @@ export interface components {
             data?: {
                 [key: string]: unknown;
             };
+            actor_name?: string;
+            /** @description owner/name */
+            repo_name?: string;
         };
         InviteResult: {
             /** @enum {string} */
@@ -3437,6 +3458,15 @@ export interface components {
     };
     parameters: {
         RepoID: string;
+        AuditActorType: "user" | "system" | "agent_key" | "assistant";
+        AuditActorID: string;
+        /** @description An action, or a family ending in a dot (revision.) */
+        AuditAction: string;
+        AuditRepo: string;
+        /** @description From this UTC day (inclusive) */
+        AuditFrom: string;
+        /** @description Up to this UTC day (inclusive) */
+        AuditTo: string;
         RevisionID: string;
         /** @description Repository-relative path; may contain slashes */
         FilePath: string;
@@ -4708,14 +4738,26 @@ export interface operations {
     };
     listAudit: {
         parameters: {
-            query?: never;
+            query?: {
+                actor_type?: components["parameters"]["AuditActorType"];
+                actor_id?: components["parameters"]["AuditActorID"];
+                /** @description An action, or a family ending in a dot (revision.) */
+                action?: components["parameters"]["AuditAction"];
+                repo?: components["parameters"]["AuditRepo"];
+                /** @description From this UTC day (inclusive) */
+                from?: components["parameters"]["AuditFrom"];
+                /** @description Up to this UTC day (inclusive) */
+                to?: components["parameters"]["AuditTo"];
+                /** @description next_cursor from the previous page */
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Latest 200 audit entries */
+            /** @description Entries */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4723,9 +4765,46 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["AuditEntry"][];
+                        next_cursor?: string;
+                        /** @description Every action recorded (first page only) */
+                        actions?: string[];
                     };
                 };
             };
+            422: components["responses"]["Problem"];
+        };
+    };
+    exportAudit: {
+        parameters: {
+            query: {
+                format: "csv" | "ndjson";
+                actor_type?: components["parameters"]["AuditActorType"];
+                actor_id?: components["parameters"]["AuditActorID"];
+                /** @description An action, or a family ending in a dot (revision.) */
+                action?: components["parameters"]["AuditAction"];
+                repo?: components["parameters"]["AuditRepo"];
+                /** @description From this UTC day (inclusive) */
+                from?: components["parameters"]["AuditFrom"];
+                /** @description Up to this UTC day (inclusive) */
+                to?: components["parameters"]["AuditTo"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The export */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                    "application/x-ndjson": string;
+                };
+            };
+            422: components["responses"]["Problem"];
         };
     };
     listAgentKeys: {

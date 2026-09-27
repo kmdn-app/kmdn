@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kmdn-app/kmdn/internal/api"
+	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/settings"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -167,6 +168,10 @@ func (s *Service) put(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
+	// Secrets changed are recorded, never their values.
+	p, _ := auth.FromContext(r.Context())
+	_ = audit.Write(r.Context(), s.DB, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, Action: "ai.settings_updated", TargetType: "settings", TargetID: settingsKey,
+		Data: map[string]any{"provider": st.Provider, "key_changed": in.APIKey != nil, "embeddings_key_changed": in.Embeddings != nil && in.Embeddings.APIKey != nil, "check_ok": st.Check != nil && st.Check.OK}})
 	api.JSON(w, http.StatusOK, s.view(st))
 }
 

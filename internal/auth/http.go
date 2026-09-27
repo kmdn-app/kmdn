@@ -322,6 +322,7 @@ func (h *HTTP) revokeSession(w http.ResponseWriter, r *http.Request) {
 			if id == p.Session.ID {
 				h.clearCookies(w)
 			}
+			h.Svc.audit(r.Context(), audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, IP: h.ip(r), Action: "auth.session_revoked", TargetType: "user", TargetID: p.User.ID})
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
