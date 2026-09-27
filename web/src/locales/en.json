@@ -1026,6 +1026,7 @@
     "placeholder": "Ask the assistant…",
     "send": "Send",
     "thinking": "Thinking…",
+    "queued": "Queued: the assistant answers after the current reply",
     "context": "Looking at {{path}}",
     "startRevision": "Start a revision: {{title}}",
     "start": "Start revision",
