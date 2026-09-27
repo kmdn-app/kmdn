@@ -1758,6 +1758,99 @@ paths:
                       - { $ref: "#/components/schemas/PageRead" }
                       - { type: "null" }
         "422": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/hooks:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [repos]
+      operationId: listHooks
+      summary: Outgoing webhooks (repository admins)
+      responses:
+        "200":
+          description: Hooks and the events they can subscribe to
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, events]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Hook" } }
+                  events: { type: array, items: { type: string } }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [repos]
+      operationId: createHook
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/HookInput" } } }
+      responses:
+        "201":
+          description: The hook, and for generic hooks the signing secret (shown once)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hook]
+                properties:
+                  hook: { $ref: "#/components/schemas/Hook" }
+                  secret: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/hooks/{hook}:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { name: hook, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [repos]
+      operationId: updateHook
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/HookInput" } } }
+      responses:
+        "200": { description: Hook, content: { application/json: { schema: { $ref: "#/components/schemas/Hook" } } } }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [repos]
+      operationId: deleteHook
+      responses:
+        "204": { description: Deleted }
+  /repos/{repo}/hooks/{hook}/ping:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { name: hook, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [repos]
+      operationId: pingHook
+      responses:
+        "202": { description: A test delivery was queued }
+  /repos/{repo}/hooks/{hook}/deliveries:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { name: hook, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [repos]
+      operationId: listHookDeliveries
+      responses:
+        "200":
+          description: Recent deliveries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/HookDelivery" } }
+  /repos/{repo}/hooks/{hook}/deliveries/{delivery}/redeliver:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { name: hook, in: path, required: true, schema: { type: string } }
+      - { name: delivery, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [repos]
+      operationId: redeliverHook
+      responses:
+        "202": { description: Queued again }
+        "404": { $ref: "#/components/responses/Problem" }
   /repos/{repo}/discussions:
     parameters:
       - { $ref: "#/components/parameters/RepoID" }
@@ -1941,6 +2034,38 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/NotificationPref" } }
         push_available: { type: boolean }
         push_subscriptions: { type: integer, description: "Browsers subscribed to push" }
+    Hook:
+      type: object
+      required: [id, kind, url_host, events, active, created_at]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [generic, slack] }
+        url_host: { type: string, description: "The URL is kept secret; its host is shown" }
+        events: { type: array, items: { type: string } }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        last_delivery: { $ref: "#/components/schemas/HookDelivery" }
+    HookInput:
+      type: object
+      properties:
+        kind: { type: string, enum: [generic, slack] }
+        url: { type: string }
+        events: { type: array, items: { type: string } }
+        active: { type: boolean }
+    HookDelivery:
+      type: object
+      required: [id, event, status, attempts, response_code, created_at]
+      properties:
+        id: { type: string }
+        event: { type: string }
+        status: { type: string, enum: [pending, delivered, failed] }
+        attempts: { type: integer }
+        response_code: { type: integer }
+        response_body: { type: string }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        last_attempt_at: { type: string, format: date-time }
+        delivered_at: { type: string, format: date-time }
     Follow:
       type: object
       required: [repo_id, path, folder]

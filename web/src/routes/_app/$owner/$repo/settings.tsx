@@ -16,10 +16,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api, errorMessage, unwrap } from "@/lib/api";
+import { Time } from "@/components/time";
+import { cn } from "@/lib/utils";
+import type { components } from "@kmdn/api-client";
 import { atLeast, type Member, type RepoView, type Role } from "@/lib/repos";
 import { useRepo } from "@/lib/use-repo";
 
-const SECTIONS = ["general", "members", "danger"] as const;
+const SECTIONS = ["general", "members", "hooks", "danger"] as const;
 type Section = (typeof SECTIONS)[number];
 
 export const Route = createFileRoute("/_app/$owner/$repo/settings")({
@@ -47,12 +50,14 @@ function RepoSettings() {
                 sections={[
                   { key: "general", label: t("settings.general"), icon: Settings },
                   { key: "members", label: t("settings.members"), icon: Users },
+                  { key: "hooks", label: t("hooks.title"), icon: Webhook },
                   { key: "danger", label: t("settings.danger"), icon: AlertTriangle, danger: true },
                 ]}
                 linkProps={(key) => ({ to: "/$owner/$repo/settings", params, search: { section: key as Section } })}
               >
                 {section === "general" && <General key={repo.id + repo.head_sha} repo={repo} />}
                 {section === "members" && <Members repo={repo} />}
+                {section === "hooks" && <Hooks repo={repo} />}
                 {section === "danger" && <Danger repo={repo} />}
               </SettingsLayout>
             )}
@@ -426,5 +431,217 @@ function Danger({ repo }: { repo: RepoView }) {
         </DialogContent>
       </Dialog>
     </Panel>
+  );
+}
+
+type Hook = components["schemas"]["Hook"];
+
+/** Outgoing webhooks and Slack messages (docs/specs/11-api.md#outgoing-webhooks). */
+function Hooks({ repo }: { repo: RepoView }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["hooks", repo.id], queryFn: () => unwrap(api.GET("/repos/{repo}/hooks", { params: { path: { repo: repo.id } } })) });
+  const [adding, setAdding] = useState(false);
+  const [secret, setSecret] = useState<string | null>(null);
+  const [log, setLog] = useState<Hook | null>(null);
+  const refresh = () => void qc.invalidateQueries({ queryKey: ["hooks", repo.id] });
+  const onError = (e: unknown) => toast.error(errorMessage(e, t("errors.generic")));
+  const patch = useMutation({
+    mutationFn: ({ h, active }: { h: Hook; active: boolean }) => unwrap(api.PATCH("/repos/{repo}/hooks/{hook}", { params: { path: { repo: repo.id, hook: h.id } }, body: { active } })),
+    onSuccess: refresh,
+    onError,
+  });
+  const remove = useMutation({
+    mutationFn: (h: Hook) => unwrap(api.DELETE("/repos/{repo}/hooks/{hook}", { params: { path: { repo: repo.id, hook: h.id } } })),
+    onSuccess: refresh,
+    onError,
+  });
+  const ping = useMutation({
+    mutationFn: (h: Hook) => unwrap(api.POST("/repos/{repo}/hooks/{hook}/ping", { params: { path: { repo: repo.id, hook: h.id } } })),
+    onSuccess: () => {
+      toast.success(t("hooks.pinged"));
+      setTimeout(refresh, 1500);
+    },
+    onError,
+  });
+  const hooks = q.data?.items ?? [];
+  return (
+    <Panel
+      title={t("hooks.title")}
+      desc={t("hooks.desc")}
+      actions={
+        <Button size="sm" onClick={() => setAdding(true)}>
+          <Webhook />
+          {t("hooks.add")}
+        </Button>
+      }
+    >
+      {secret && (
+        <Card>
+          <p className="text-[13.5px] font-medium">{t("hooks.secretOnce")}</p>
+          <CopyField label="secret" value={secret} secret />
+          <p className="text-[12.5px] text-muted-foreground">{t("hooks.secretHint")}</p>
+          <Button size="sm" variant="outline" className="justify-self-start" onClick={() => setSecret(null)}>
+            {t("hooks.secretSaved")}
+          </Button>
+        </Card>
+      )}
+      {q.data && hooks.length === 0 && <p className="text-[13.5px] text-muted-foreground">{t("hooks.empty")}</p>}
+      {hooks.map((h) => (
+        <Card key={h.id}>
+          <div className="flex flex-wrap items-center gap-3">
+            <Webhook className="size-4 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium">
+                {t(`hooks.kinds.${h.kind}`)} · <span className="font-mono text-[12.5px]">{h.url_host}</span>
+              </div>
+              <div className="mt-0.5 flex flex-wrap gap-1">
+                {h.events.map((e) => (
+                  <span key={e} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                    {e}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <Switch checked={h.active} onCheckedChange={(v) => patch.mutate({ h, active: v })} aria-label={t("hooks.active")} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
+            {h.last_delivery ? (
+              <span className={cn(h.last_delivery.status === "failed" && "text-destructive", h.last_delivery.status === "delivered" && "text-success")}>
+                {t(`hooks.status.${h.last_delivery.status}`)} · {h.last_delivery.event}
+                {h.last_delivery.response_code ? ` · ${h.last_delivery.response_code}` : ""}
+              </span>
+            ) : (
+              <span>{t("hooks.noDeliveries")}</span>
+            )}
+            <span className="ml-auto flex gap-1">
+              <Button size="sm" variant="ghost" onClick={() => ping.mutate(h)} disabled={ping.isPending}>
+                {t("hooks.ping")}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setLog(h)}>
+                {t("hooks.deliveries")}
+              </Button>
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={() => remove.mutate(h)} aria-label={t("hooks.delete")}>
+                <Trash2 />
+              </Button>
+            </span>
+          </div>
+        </Card>
+      ))}
+      <AddHook repo={repo} events={q.data?.events ?? []} open={adding} onOpenChange={setAdding} onCreated={(s) => (setSecret(s), refresh())} />
+      {log && <DeliveryLog repo={repo} hook={log} onClose={() => setLog(null)} />}
+    </Panel>
+  );
+}
+
+function AddHook({ repo, events, open, onOpenChange, onCreated }: { repo: RepoView; events: string[]; open: boolean; onOpenChange: (v: boolean) => void; onCreated: (secret: string | null) => void }) {
+  const { t } = useTranslation();
+  const [kind, setKind] = useState<"generic" | "slack">("slack");
+  const [url, setUrl] = useState("");
+  const [picked, setPicked] = useState<string[]>(["revision.submitted", "revision.approved", "revision.published"]);
+  const create = useMutation({
+    mutationFn: () => unwrap(api.POST("/repos/{repo}/hooks", { params: { path: { repo: repo.id } }, body: { kind, url, events: picked } })),
+    onSuccess: (r) => {
+      onOpenChange(false);
+      setUrl("");
+      onCreated(r.secret ?? null);
+    },
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("hooks.add")}</DialogTitle>
+          <DialogDescription>{t(`hooks.kindHelp.${kind}`)}</DialogDescription>
+        </DialogHeader>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            create.mutate();
+          }}
+        >
+          <div className="grid gap-1.5">
+            <Label>{t("hooks.kind")}</Label>
+            <Select value={kind} onValueChange={(v) => setKind(v as "generic" | "slack")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="slack">{t("hooks.kinds.slack")}</SelectItem>
+                <SelectItem value="generic">{t("hooks.kinds.generic")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="hook-url">{t("hooks.url")}</Label>
+            <Input id="hook-url" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder={kind === "slack" ? "https://hooks.slack.com/services/…" : "https://example.com/kmdn"} />
+          </div>
+          <fieldset className="grid gap-2">
+            <legend className="mb-1 text-sm font-medium">{t("hooks.events")}</legend>
+            {events.map((e) => (
+              <label key={e} className="flex items-center gap-2 text-[13.5px]">
+                <input type="checkbox" className="accent-primary" checked={picked.includes(e)} onChange={(x) => setPicked((p) => (x.target.checked ? [...p, e] : p.filter((y) => y !== e)))} />
+                <span>{t(`hooks.eventNames.${e.replace(".", "_")}`, { defaultValue: e })}</span>
+                <span className="font-mono text-[11px] text-muted-foreground">{e}</span>
+              </label>
+            ))}
+          </fieldset>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={!url.trim() || !picked.length || create.isPending}>
+              {create.isPending && <Loader2 className="animate-spin" />}
+              {t("hooks.create")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeliveryLog({ repo, hook, onClose }: { repo: RepoView; hook: Hook; onClose: () => void }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["hook-deliveries", hook.id],
+    queryFn: async () => (await unwrap(api.GET("/repos/{repo}/hooks/{hook}/deliveries", { params: { path: { repo: repo.id, hook: hook.id } } }))).items,
+    refetchInterval: 5000,
+  });
+  const redeliver = useMutation({
+    mutationFn: (id: string) => unwrap(api.POST("/repos/{repo}/hooks/{hook}/deliveries/{delivery}/redeliver", { params: { path: { repo: repo.id, hook: hook.id, delivery: id } } })),
+    onSuccess: () => setTimeout(() => void qc.invalidateQueries({ queryKey: ["hook-deliveries", hook.id] }), 1000),
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[720px]">
+        <DialogHeader>
+          <DialogTitle>{t("hooks.deliveries")}</DialogTitle>
+          <DialogDescription className="font-mono text-[12.5px]">{hook.url_host}</DialogDescription>
+        </DialogHeader>
+        {q.data && q.data.length === 0 && <p className="text-[13.5px] text-muted-foreground">{t("hooks.noDeliveries")}</p>}
+        <ul className="divide-y rounded-lg border text-[13px]">
+          {(q.data ?? []).map((d) => (
+            <li key={d.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
+              <span className={cn("size-2 shrink-0 rounded-full", d.status === "delivered" ? "bg-success" : d.status === "failed" ? "bg-destructive" : "bg-warning")} />
+              <span className="font-mono text-[12px]">{d.event}</span>
+              <span className="text-muted-foreground">
+                {t(`hooks.status.${d.status}`)}
+                {d.response_code ? ` · ${d.response_code}` : ""} · {t("hooks.attempts", { count: d.attempts })}
+              </span>
+              {d.error && <span className="w-full truncate text-[12px] text-destructive">{d.error}</span>}
+              <Time iso={d.created_at} className="ml-auto text-[12px] text-muted-foreground" />
+              <Button size="sm" variant="ghost" className="h-7" onClick={() => redeliver.mutate(d.id)} disabled={redeliver.isPending}>
+                {t("hooks.redeliver")}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </DialogContent>
+    </Dialog>
   );
 }

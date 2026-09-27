@@ -61,7 +61,9 @@ type Service struct {
 	// Push sends browser pushes; nil disables them.
 	Push *Pusher
 	// Repos reads history for "updated since your last visit".
-	Repos   *repos.Service
+	Repos *repos.Service
+	// OnEvent also sees each revision event once (outgoing webhooks).
+	OnEvent func(ctx context.Context, rev revisions.Revision, actorID, kind string, data json.RawMessage) error
 	BaseURL string
 	Log     *slog.Logger
 
@@ -243,6 +245,11 @@ func (s *Service) revisionEvent(ctx context.Context, revID, actor, kind string, 
 			return nil
 		}
 		return err
+	}
+	if s.OnEvent != nil {
+		if err := s.OnEvent(ctx, rev, actor, kind, raw); err != nil {
+			s.Log.Error("revision event hook", "err", err, "kind", kind)
+		}
 	}
 	repo, err := repos.Get(ctx, s.DB, rev.RepoID)
 	if err != nil {
