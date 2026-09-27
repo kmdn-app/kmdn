@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, FileText, Loader2, MessageSquare, RefreshCw, Settings } from "lucide-react";
+import { AlertTriangle, FileText, Loader2, MessageSquare, RefreshCw, Settings, Sparkles } from "lucide-react";
+import { useFollowUpdates } from "@/lib/follows";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
@@ -94,6 +95,7 @@ function RepoHome() {
                 </div>
               )}
 
+              <FollowedUpdates />
               <OpenFeedback />
 
               <section className="mt-8">
@@ -164,6 +166,36 @@ function OpenFeedback() {
             </li>
           );
         })}
+      </ul>
+    </section>
+  );
+}
+
+/** Followed pages that changed since the person last read them. */
+function FollowedUpdates() {
+  const { t } = useTranslation();
+  const repo = useRepo();
+  const q = useFollowUpdates(repo.id);
+  const list = q.data ?? [];
+  if (!list.length) return null;
+  return (
+    <section className="mt-8">
+      <h2 className="mb-2 text-[15px] font-semibold">{t("follow.updatesTitle")}</h2>
+      <ul className="divide-y rounded-xl border">
+        {list.map((u) => (
+          <li key={u.path}>
+            <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: u.path }} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50">
+              <Sparkles className="mt-0.5 size-4 shrink-0 text-success" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13.5px] font-medium">{u.path.split("/").pop()}</div>
+                <div className="mt-0.5 truncate text-[12.5px] text-muted-foreground">
+                  {u.author_name} · {u.title}
+                </div>
+              </div>
+              <Time iso={u.date} className="shrink-0 text-xs whitespace-nowrap text-muted-foreground" />
+            </Link>
+          </li>
+        ))}
       </ul>
     </section>
   );

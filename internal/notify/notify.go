@@ -59,7 +59,9 @@ type Service struct {
 	// Present reports whether the user has the revision open (no push then).
 	Present func(revisionID, userID string) bool
 	// Push sends browser pushes; nil disables them.
-	Push    *Pusher
+	Push *Pusher
+	// Repos reads history for "updated since your last visit".
+	Repos   *repos.Service
 	BaseURL string
 	Log     *slog.Logger
 
@@ -313,6 +315,8 @@ func (s *Service) revisionEvent(ctx context.Context, revID, actor, kind string, 
 		send(KindPublishing, editors, revs)
 	case "published":
 		send(KindPublished, editors, revs)
+		d.Excerpt = rev.Title // the change summary (the assistant writes one when configured)
+		return s.published(ctx, rev, n, d, append(editors, revs...))
 	case "change_request_closed":
 		send(KindPublishClosed, editors, revs)
 	case "member_added":

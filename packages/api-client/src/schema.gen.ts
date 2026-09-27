@@ -1793,6 +1793,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/follows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMyFollows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/follows": {
+        parameters: {
+            query: {
+                path: string;
+                folder?: "true" | "false";
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** Whether the caller follows a page, itself or through a folder */
+        get: operations["getFollowState"];
+        put: operations["follow"];
+        post?: never;
+        delete: operations["unfollow"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/follows/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** Followed pages updated since the caller last read them */
+        get: operations["listFollowUpdates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/reads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Note a read of a page at its latest commit; returns the previous read */
+        post: operations["recordPageRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{repo}/discussions": {
         parameters: {
             query?: never;
@@ -1945,6 +2021,41 @@ export interface components {
             push_available: boolean;
             /** @description Browsers subscribed to push */
             push_subscriptions: number;
+        };
+        Follow: {
+            repo_id: string;
+            path: string;
+            folder: boolean;
+            /**
+             * Format: date-time
+             * @description Automatic follow (editors of a published page) and when it ends
+             */
+            auto_until?: string;
+        };
+        FollowState: {
+            following: boolean;
+            /** @description The page itself is followed */
+            page?: boolean;
+            /** @description Followed through this folder */
+            folder?: string;
+            /** Format: date-time */
+            auto_until?: string;
+        };
+        FollowUpdate: {
+            path: string;
+            sha: string;
+            title: string;
+            author_name: string;
+            /** Format: date-time */
+            date: string;
+            /** Format: date-time */
+            read_at: string;
+            read_sha: string;
+        };
+        PageRead: {
+            sha: string;
+            /** Format: date-time */
+            at: string;
         };
         PushSubscription: {
             endpoint: string;
@@ -5636,6 +5747,161 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    listMyFollows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Followed pages and folders */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Follow"][];
+                    };
+                };
+            };
+        };
+    };
+    getFollowState: {
+        parameters: {
+            query: {
+                path: string;
+                folder?: "true" | "false";
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description State */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowState"];
+                };
+            };
+        };
+    };
+    follow: {
+        parameters: {
+            query: {
+                path: string;
+                folder?: "true" | "false";
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description State */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowState"];
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    unfollow: {
+        parameters: {
+            query: {
+                path: string;
+                folder?: "true" | "false";
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description State */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowState"];
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    listFollowUpdates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["FollowUpdate"][];
+                    };
+                };
+            };
+        };
+    };
+    recordPageRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    path: string;
+                    sha: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The previous read (null the first time) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        previous: components["schemas"]["PageRead"] | null;
+                    };
+                };
+            };
+            422: components["responses"]["Problem"];
         };
     };
     listDiscussions: {

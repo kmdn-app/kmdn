@@ -3,7 +3,9 @@ import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { ChevronRight, History as HistoryIcon, Loader2, MessageSquarePlus, Pencil, ScanText, X } from "lucide-react";
+import { Bell, BellRing, ChevronRight, History as HistoryIcon, Loader2, MessageSquarePlus, Pencil, ScanText, Sparkles, X } from "lucide-react";
+import { nodeHash, parse } from "@kmdn/doc-engine";
+import { usePageRead, useFollowState, useToggleFollow } from "@/lib/follows";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { Avatar } from "@/components/avatar";
@@ -14,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ApiError, api, errorMessage, unwrap } from "@/lib/api";
 import { CommentsPanel, type PendingComment } from "@/components/revision/comments-panel";
-import { selectionQuote, useQuoteHighlights, type QuoteAnchor } from "@/components/doc/quote-anchors";
+import { selectionQuote, useBlockHighlights, useQuoteHighlights, type QuoteAnchor } from "@/components/doc/quote-anchors";
 import { useDiscussions, type Thread } from "@/lib/threads";
 import { pageTitle, useCreateRevision } from "@/lib/revisions";
 import { RevisionPage } from "@/components/editor/revision-page";
@@ -73,6 +75,25 @@ function PublishedPage() {
   );
   const onAnchorClick = useCallback((id: string) => setActive(id), []);
   useQuoteHighlights(root, anchors, active, onAnchorClick, file.data?.content);
+  // "Updated since your last visit": the previous read of this page.
+  const lastRead = usePageRead(repo.id, path, discussable ? latest?.sha : undefined);
+  const since = lastRead && latest && lastRead.sha !== latest.sha ? lastRead : null;
+  const [showChanges, setShowChanges] = useState(false);
+  const before = useFile(repo, path, showChanges && since ? since.sha : undefined);
+  const changedBlocks = useMemo(() => {
+    if (!showChanges || !before.data?.content || !file.data?.content) return null;
+    const old = new Map<string, number>();
+    for (const b of parse(before.data.content).doc.content) old.set(nodeHash(b), (old.get(nodeHash(b)) ?? 0) + 1);
+    const out: number[] = [];
+    parse(file.data.content).doc.content.forEach((b, i) => {
+      const h = nodeHash(b);
+      const n = old.get(h) ?? 0;
+      if (n > 0) old.set(h, n - 1);
+      else out.push(i);
+    });
+    return out;
+  }, [showChanges, before.data, file.data]);
+  useBlockHighlights(root, changedBlocks);
   const fix = useMutation({
     mutationFn: (th: Thread) => unwrap(api.POST("/threads/{thread}/fix-this", { params: { path: { thread: th.id } } })),
     onSuccess: ({ revision }) => {
@@ -109,7 +130,7 @@ function PublishedPage() {
             title={
               <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
                 {crumbs.slice(0, -1).map((c, i) => (
-                  <span key={i} className="flex min-w-0 shrink-[2] items-center gap-1.5 max-md:hidden">
+                  <span key={i} className="flex min-w-0 shrink-[2] items-center gap-1.5 @max-3xl:hidden">
                     <span className="truncate">{c}</span>
                     <ChevronRight className="size-3 shrink-0 opacity-60" />
                   </span>
@@ -119,10 +140,11 @@ function PublishedPage() {
             }
             actions={
               <>
-                <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium whitespace-nowrap max-sm:hidden">
+                <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium whitespace-nowrap @max-3xl:hidden">
                   <span className={cn("size-1.5 rounded-full", sha ? "bg-warning" : "bg-success")} />
                   {sha ? t("file.oldVersion") : t("shell.published")}
                 </span>
+                {discussable && <FollowButton repoID={repo.id} path={path} />}
                 {discussable && (
                   <Button
                     size="sm"
@@ -135,7 +157,7 @@ function PublishedPage() {
                     }}
                   >
                     <MessageSquarePlus />
-                    <span className="max-md:hidden">{t("comments.comment")}</span>
+                    <span className="@max-4xl:hidden">{t("comments.comment")}</span>
                   </Button>
                 )}
                 {!sha && file.data?.markdown && (
@@ -146,7 +168,7 @@ function PublishedPage() {
                     onClick={() => void navigate({ search: view === "blame" ? {} : { view: "blame" }, replace: true })}
                   >
                     <ScanText />
-                    <span className="max-md:hidden">{t("file.blame")}</span>
+                    <span className="@max-4xl:hidden">{t("file.blame")}</span>
                   </Button>
                 )}
                 {canEdit && file.data?.markdown ? (
@@ -228,6 +250,16 @@ function PublishedPage() {
             )}
             {file.data?.markdown && (
               <>
+                {since && latest && view !== "blame" && (
+                  <UpdatedBanner
+                    since={since}
+                    commits={history.data ?? []}
+                    showing={showChanges}
+                    loading={showChanges && before.isLoading}
+                    changed={changedBlocks?.length}
+                    onToggle={() => setShowChanges((v) => !v)}
+                  />
+                )}
                 {!sha && latest && view !== "blame" && <Byline commit={latest} onHistory={controls.togglePanel} />}
                 <div ref={setRoot}>
                   <DocView markdown={file.data.content} ctx={ctx} aside={view === "blame" ? aside : undefined} className={cn(!sha && latest && view !== "blame" && "pt-0")} />
@@ -328,6 +360,57 @@ function HistoryPanel({ repo, path, commits, current }: { repo: RepoView; path: 
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+/** Follow the page (bell); following a folder above it shows too. */
+function FollowButton({ repoID, path }: { repoID: string; path: string }) {
+  const { t } = useTranslation();
+  const st = useFollowState(repoID, path);
+  const toggle = useToggleFollow(repoID, path);
+  const viaFolder = st.data?.following && !st.data.page ? st.data.folder : undefined;
+  const on = !!st.data?.page;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="sm"
+          variant={on ? "secondary" : "ghost"}
+          aria-pressed={on}
+          disabled={!st.data || toggle.isPending || !!viaFolder}
+          onClick={() => toggle.mutate(!on, { onError: (e) => toast.error(errorMessage(e, t("errors.generic"))) })}
+        >
+          {st.data?.following ? <BellRing /> : <Bell />}
+          <span className="@max-4xl:hidden">{on || viaFolder ? t("follow.following") : t("follow.follow")}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{viaFolder !== undefined ? t("follow.viaFolder", { folder: viaFolder || "/" }) : st.data?.auto_until ? t("follow.auto") : t("follow.hint")}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** "Updated since your last visit": who changed the page, what, and a way to see it. */
+function UpdatedBanner({ since, commits, showing, loading, changed, onToggle }: { since: { sha: string; at: string }; commits: Commit[]; showing: boolean; loading: boolean; changed?: number; onToggle: () => void }) {
+  const { t } = useTranslation();
+  const at = commits.findIndex((c) => c.sha === since.sha);
+  const news = (at >= 0 ? commits.slice(0, at) : commits.filter((c) => c.date > since.at)).slice(0, 5);
+  if (!news.length) return null;
+  const people = [...new Set(news.flatMap((c) => [c.author_name, ...c.co_authors.map((p) => p.name)]).filter((n) => !/\[bot\]|^kmdn$/i.test(n)))];
+  return (
+    <div className="mx-auto mt-6 flex max-w-[720px] items-start gap-3 rounded-xl border border-success/30 bg-success/5 px-4 py-3 text-[13.5px] max-md:mx-4">
+      <Sparkles className="mt-0.5 size-4 shrink-0 text-success" />
+      <div className="min-w-0 flex-1">
+        <div className="font-medium">
+          {t("follow.updated", { date: new Date(news[0]!.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), people: people.slice(0, 3).join(", ") })}
+        </div>
+        <div className="mt-0.5 text-muted-foreground">{news.map((c) => c.title).join(" · ")}</div>
+        {showing && changed === 0 && <div className="mt-1 text-[12.5px] text-muted-foreground">{t("follow.noVisibleChange")}</div>}
+      </div>
+      <Button size="sm" variant="outline" onClick={onToggle} disabled={loading}>
+        {loading && <Loader2 className="animate-spin" />}
+        {showing ? t("follow.hideChanges") : t("follow.showChanges")}
+      </Button>
     </div>
   );
 }

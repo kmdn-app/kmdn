@@ -1673,6 +1673,91 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/PushSubscription" } } }
       responses:
         "204": { description: Removed }
+  /me/follows:
+    get:
+      tags: [notifications]
+      operationId: listMyFollows
+      responses:
+        "200":
+          description: Followed pages and folders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Follow" } }
+  /repos/{repo}/follows:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { name: path, in: query, required: true, schema: { type: string } }
+      - { name: folder, in: query, schema: { type: string, enum: ["true", "false"] } }
+    get:
+      tags: [notifications]
+      operationId: getFollowState
+      summary: Whether the caller follows a page, itself or through a folder
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/FollowState" } } } }
+    put:
+      tags: [notifications]
+      operationId: follow
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/FollowState" } } } }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [notifications]
+      operationId: unfollow
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/FollowState" } } } }
+        "422": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/follows/updates:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [notifications]
+      operationId: listFollowUpdates
+      summary: Followed pages updated since the caller last read them
+      responses:
+        "200":
+          description: Updates
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/FollowUpdate" } }
+  /repos/{repo}/reads:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    post:
+      tags: [notifications]
+      operationId: recordPageRead
+      summary: Note a read of a page at its latest commit; returns the previous read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, sha]
+              properties:
+                path: { type: string }
+                sha: { type: string }
+      responses:
+        "200":
+          description: The previous read (null the first time)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [previous]
+                properties:
+                  previous:
+                    oneOf:
+                      - { $ref: "#/components/schemas/PageRead" }
+                      - { type: "null" }
+        "422": { $ref: "#/components/responses/Problem" }
   /repos/{repo}/discussions:
     parameters:
       - { $ref: "#/components/parameters/RepoID" }
@@ -1856,6 +1941,39 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/NotificationPref" } }
         push_available: { type: boolean }
         push_subscriptions: { type: integer, description: "Browsers subscribed to push" }
+    Follow:
+      type: object
+      required: [repo_id, path, folder]
+      properties:
+        repo_id: { type: string }
+        path: { type: string }
+        folder: { type: boolean }
+        auto_until: { type: string, format: date-time, description: "Automatic follow (editors of a published page) and when it ends" }
+    FollowState:
+      type: object
+      required: [following]
+      properties:
+        following: { type: boolean }
+        page: { type: boolean, description: "The page itself is followed" }
+        folder: { type: string, description: "Followed through this folder" }
+        auto_until: { type: string, format: date-time }
+    FollowUpdate:
+      type: object
+      required: [path, sha, title, author_name, date, read_at, read_sha]
+      properties:
+        path: { type: string }
+        sha: { type: string }
+        title: { type: string }
+        author_name: { type: string }
+        date: { type: string, format: date-time }
+        read_at: { type: string, format: date-time }
+        read_sha: { type: string }
+    PageRead:
+      type: object
+      required: [sha, at]
+      properties:
+        sha: { type: string }
+        at: { type: string, format: date-time }
     PushSubscription:
       type: object
       required: [endpoint]

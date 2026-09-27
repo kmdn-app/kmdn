@@ -263,3 +263,4 @@
 /* Discussions on published pages (CSS Custom Highlights) */
 ::highlight(kmdn-comment) { background-color: color-mix(in oklab, var(--warning) 22%, transparent); }
 ::highlight(kmdn-comment-active) { background-color: color-mix(in oklab, var(--warning) 42%, transparent); }
+::highlight(kmdn-changed) { background-color: color-mix(in oklab, var(--success) 20%, transparent); }

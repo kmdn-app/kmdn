@@ -128,3 +128,25 @@ export function useQuoteHighlights(root: HTMLElement | null, items: { id: string
     };
   }, [root, items, active, onClick, version]);
 }
+
+/** Highlights whole top-level blocks of the article in root (what changed since a visit). */
+export function useBlockHighlights(root: HTMLElement | null, blocks: number[] | null) {
+  useEffect(() => {
+    if (!root || !blocks?.length || !supported()) return;
+    const article = root.querySelector("article");
+    if (!article) return;
+    const ranges: Range[] = [];
+    for (const i of blocks) {
+      const el = article.children[i];
+      if (!el) continue;
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      ranges.push(r);
+    }
+    CSS.highlights.set("kmdn-changed", new Highlight(...ranges));
+    article.children[blocks[0]!]?.scrollIntoView({ block: "center", behavior: "smooth" });
+    return () => {
+      CSS.highlights.delete("kmdn-changed");
+    };
+  }, [root, blocks]);
+}

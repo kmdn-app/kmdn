@@ -160,8 +160,10 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		},
 		Push: &notify.Pusher{DB: db, Secrets: sec, Subject: pushSubject(cfg.Server.BaseURL), Log: log},
 	}
+	a.Notify.Repos = a.Repos
 	a.Notify.Register()
 	a.Notify.Routes(r)
+	a.Notify.FollowRoutes(r)
 	a.Threads.OnComment = a.Notify.Comment
 	a.Threads.Routes(r)
 	a.Repos.OnHeadChanged = append(a.Repos.OnHeadChanged, a.Threads.Reanchor)

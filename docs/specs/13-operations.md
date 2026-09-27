@@ -94,12 +94,12 @@ People involved in a revision (editors, assigned reviewers, commenters, @mention
 | Repo disconnected, token expiring, scan failed | repo and instance admins |
 
 - **Grouping**: per revision, collapsed ("3 updates in Update onboarding for 2026"). Push notifications are coalesced: at most one push per revision per 5 minutes, and none for events the person caused.
-- **Quiet**: no push while the person has the revision open in a focused tab (they see it live).
+- **Quiet**: no push while the person has the revision open (they see it live; v1 uses presence in the revision's rooms rather than tab focus).
 - Preferences per event kind: inbox on/off, push on/off.
 
 ### Readers of published pages
 
-- **Updated since your last visit**: kmdn records when each user last read each page (`page_reads`, debounced). Opening a page whose published version changed since then shows a banner: "Updated Sep 26 by Tom Okafor with Priya · <1–2 sentence summary> · Show what changed". The summary is written by the assistant at publish time (stored per commit and file; falls back to the commit title when no AI provider). "Show what changed" highlights the changed passages in place.
+- **Updated since your last visit**: kmdn records when each user last read each page (`page_reads`, debounced). Opening a page whose published version changed since then shows a banner: "Updated Sep 26 by Tom Okafor with Priya · <1–2 sentence summary> · Show what changed". The summary is written by the assistant at publish time (stored per commit and file; falls back to the commit titles when no AI provider, which is all v1 does until M4). "Show what changed" highlights the changed blocks in place.
 - **Follow** pages or folders (bell in the top bar, or on a folder in the tree). Followers get an inbox item (and push if enabled) when a revision touching them is published, with the same summary. Editors of a page are auto-followers for 30 days after it publishes; everyone can unfollow.
 - Home shows "Updated since your last visit" for followed pages.
 

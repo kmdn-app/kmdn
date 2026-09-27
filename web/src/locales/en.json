@@ -834,5 +834,17 @@
       "invited": "You're added to a revision",
       "page_published": "A page you follow is updated"
     }
+  },
+  "follow": {
+    "follow": "Follow",
+    "following": "Following",
+    "hint": "Get an inbox item when a revision changing this page is published",
+    "auto": "You edited this page recently, so you follow it for a while",
+    "viaFolder": "You follow {{folder}}",
+    "updated": "Updated {{date}} by {{people}} since your last visit",
+    "showChanges": "Show what changed",
+    "hideChanges": "Hide changes",
+    "noVisibleChange": "Nothing visible changed on the page.",
+    "updatesTitle": "Updated since your last visit"
   }
 }
