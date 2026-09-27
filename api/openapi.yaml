@@ -1074,6 +1074,78 @@ paths:
                 required: [items]
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/RevisionEvent" } }
+  /revisions/{revision}/checkpoints:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: listCheckpoints
+      summary: Checkpoints, newest first
+      responses:
+        "200":
+          description: Checkpoints
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Checkpoint" } }
+    post:
+      tags: [revisions]
+      operationId: nameCheckpoint
+      summary: Name the current state
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string } } }
+      responses:
+        "201": { description: Checkpoint, content: { application/json: { schema: { $ref: "#/components/schemas/Checkpoint" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/checkpoints/{checkpoint}/files:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { name: checkpoint, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [revisions]
+      operationId: listCheckpointFiles
+      responses:
+        "200":
+          description: Files at the checkpoint (without content)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/CheckpointFile" } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/checkpoints/{checkpoint}/files/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { name: checkpoint, in: path, required: true, schema: { type: string } }
+      - { $ref: "#/components/parameters/FilePath" }
+    get:
+      tags: [revisions]
+      operationId: getCheckpointFile
+      responses:
+        "200": { description: File, content: { application/json: { schema: { $ref: "#/components/schemas/CheckpointFile" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/checkpoints/{checkpoint}/restore:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { name: checkpoint, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [revisions]
+      operationId: restoreCheckpoint
+      summary: Bring the revision back to a checkpoint, as a new change
+      responses:
+        "204": { description: Restored }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 components:
   parameters:
     RepoID:
@@ -1104,6 +1176,25 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    Checkpoint:
+      type: object
+      required: [id, kind, created_at, file_count]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [auto, named, submit, pre_update, pre_restore] }
+        created_by: { type: string }
+        created_by_name: { type: string }
+        created_at: { type: string, format: date-time }
+        file_count: { type: integer }
+    CheckpointFile:
+      type: object
+      required: [path, op]
+      properties:
+        path: { type: string }
+        op: { $ref: "#/components/schemas/FileOpKind" }
+        from_path: { type: string }
+        content: { type: string }
     RevisionState:
       type: string
       enum: [editing, in_review, approved, publishing, published, closed]

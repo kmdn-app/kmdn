@@ -125,6 +125,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Realtime = &realtime.Hub{Origin: originOf(cfg.Server.BaseURL), Log: log, Authorize: a.authorizeScope}
 	a.Collab = &collab.Hub{DB: db, Engine: eng, Revisions: a.Revisions, Log: log, Publish: a.Realtime.Publish}
 	a.Realtime.Rooms = a.Collab
+	a.Collab.Routes(r)
 	a.Revisions.Changed = func(ctx context.Context, rev revisions.Revision, kind string) {
 		a.Collab.RevisionChanged(ctx, rev)
 		ev := map[string]any{"type": "revision", "kind": kind, "revision": rev.ID, "number": rev.Number, "state": rev.State}

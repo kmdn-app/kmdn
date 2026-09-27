@@ -492,7 +492,9 @@
       "file_deleted": "deleted {{path}}",
       "file_renamed": "moved {{from}} to {{path}}",
       "member_added": "added an editor",
-      "member_removed": "removed an editor"
+      "member_removed": "removed an editor",
+      "version_named": "saved a checkpoint",
+      "restored": "restored a checkpoint"
     }
   },
   "common": {
@@ -502,5 +504,25 @@
     "rename": "Rename",
     "delete": "Delete",
     "add": "Add"
+  },
+  "checkpoints": {
+    "title": "Checkpoints",
+    "name": "Checkpoint name",
+    "namePlaceholder": "Name this checkpoint, e.g. Ready for legal",
+    "save": "Save checkpoint",
+    "named": "Checkpoint saved",
+    "restored": "Restored. The state before the restore is saved as a checkpoint too.",
+    "none": "No checkpoints yet. kmdn saves one automatically every 10 minutes of editing.",
+    "view": "View",
+    "restore": "Restore",
+    "viewTitle": "Checkpoint",
+    "viewDesc": "The revision's pages as they were at this checkpoint.",
+    "kinds": {
+      "auto": "Automatic checkpoint",
+      "named": "Checkpoint",
+      "submit": "Submitted for review",
+      "pre_update": "Before updates from Published",
+      "pre_restore": "Before a restore"
+    }
   }
 }

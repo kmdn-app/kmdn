@@ -6,6 +6,10 @@ import { toast } from "sonner";
 import {
   Archive,
   ArchiveRestore,
+  Bookmark,
+  Eye,
+  History as HistoryIcon,
+  RotateCcw,
   FilePen,
   FilePlus,
   FileText,
@@ -35,6 +39,8 @@ import { api, errorMessage, unwrap } from "@/lib/api";
 import type { RepoView } from "@/lib/repos";
 import { useRevision, useRevisionEvents, useRevisionFiles, type RevisionFile, type RevisionView } from "@/lib/revisions";
 import { useRepo } from "@/lib/use-repo";
+import { fileHref, rawUrl } from "@/lib/repos";
+import { DocView } from "@/components/doc/doc-view";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/$owner/$repo/revisions/$number")({
@@ -74,6 +80,7 @@ function Overview() {
                   <Header repo={repo} rev={r} />
                   <Pages repo={repo} rev={r} />
                   <People repo={repo} rev={r} />
+                  <Checkpoints repo={repo} rev={r} />
                   <Activity rev={r} />
                 </>
               )}
@@ -512,5 +519,127 @@ function Activity({ rev }: { rev: RevisionView }) {
           ))}
       </ol>
     </section>
+  );
+}
+
+function Checkpoints({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [viewing, setViewing] = useState<string | null>(null);
+  const list = useQuery({
+    queryKey: ["checkpoints", rev.id, rev.updated_at],
+    queryFn: async () => (await unwrap(api.GET("/revisions/{revision}/checkpoints", { params: { path: { revision: rev.id } } }))).items,
+  });
+  const invalidate = useInvalidate(repo, rev);
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["checkpoints", rev.id] });
+    invalidate();
+  };
+  const create = useMutation({
+    mutationFn: () => unwrap(api.POST("/revisions/{revision}/checkpoints", { params: { path: { revision: rev.id } }, body: { name } })),
+    onSuccess: () => {
+      setName("");
+      refresh();
+      toast.success(t("checkpoints.named"));
+    },
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  const restore = useMutation({
+    mutationFn: (id: string) => unwrap(api.POST("/revisions/{revision}/checkpoints/{checkpoint}/restore", { params: { path: { revision: rev.id, checkpoint: id } } })),
+    onSuccess: () => {
+      refresh();
+      toast.success(t("checkpoints.restored"));
+    },
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  const canEdit = rev.access.can_edit;
+  return (
+    <section>
+      <SectionTitle title={t("checkpoints.title")} />
+      <div className="overflow-hidden rounded-xl border">
+        {canEdit && (
+          <form
+            className="flex items-center gap-2 border-b px-4 py-2.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              create.mutate();
+            }}
+          >
+            <Bookmark className="size-4 text-muted-foreground" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("checkpoints.namePlaceholder")} className="h-8 border-0 px-1 shadow-none focus-visible:ring-0" maxLength={200} aria-label={t("checkpoints.name")} />
+            <Button type="submit" size="sm" variant="outline" disabled={!name.trim() || create.isPending}>
+              {t("checkpoints.save")}
+            </Button>
+          </form>
+        )}
+        {list.data?.length === 0 && <p className="p-6 text-center text-[13.5px] text-muted-foreground">{t("checkpoints.none")}</p>}
+        {list.data?.map((c) => (
+          <div key={c.id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
+            {c.kind === "named" ? <Bookmark className="size-4 text-foreground" /> : <HistoryIcon className="size-4 text-muted-foreground" />}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13.5px] font-medium">{c.name || t(`checkpoints.kinds.${c.kind}`)}</div>
+              <div className="text-[12px] text-muted-foreground">
+                {c.created_by_name && `${c.created_by_name} · `}
+                <Time iso={c.created_at} /> · {t("revision.pages", { count: c.file_count })}
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setViewing(c.id)}>
+              <Eye />
+              <span className="max-md:hidden">{t("checkpoints.view")}</span>
+            </Button>
+            {canEdit && (
+              <Button variant="ghost" size="sm" onClick={() => restore.mutate(c.id)} disabled={restore.isPending}>
+                <RotateCcw />
+                <span className="max-md:hidden">{t("checkpoints.restore")}</span>
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+      {viewing && <CheckpointDialog repo={repo} rev={rev} id={viewing} onClose={() => setViewing(null)} />}
+    </section>
+  );
+}
+
+function CheckpointDialog({ repo, rev, id, onClose }: { repo: RepoView; rev: RevisionView; id: string; onClose: () => void }) {
+  const { t } = useTranslation();
+  const files = useQuery({
+    queryKey: ["checkpoint-files", id],
+    queryFn: async () => (await unwrap(api.GET("/revisions/{revision}/checkpoints/{checkpoint}/files", { params: { path: { revision: rev.id, checkpoint: id } } }))).items,
+  });
+  const [path, setPath] = useState<string | null>(null);
+  const shown = path ?? files.data?.find((f) => f.op !== "delete")?.path ?? null;
+  const file = useQuery({
+    queryKey: ["checkpoint-file", id, shown],
+    queryFn: () => unwrap(api.GET("/revisions/{revision}/checkpoints/{checkpoint}/files/{path}", { params: { path: { revision: rev.id, checkpoint: id, path: shown! } } })),
+    enabled: !!shown,
+  });
+  const ctx = { path: shown ?? "", pageHref: (p: string) => fileHref(repo, p), imageSrc: (p: string) => rawUrl(repo, p) };
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{t("checkpoints.viewTitle")}</DialogTitle>
+          <DialogDescription>{t("checkpoints.viewDesc")}</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-wrap gap-1">
+          {files.data?.map((f) => (
+            <button
+              key={f.path}
+              type="button"
+              disabled={f.op === "delete"}
+              onClick={() => setPath(f.path)}
+              className={cn("rounded-md border px-2 py-1 font-mono text-[12px]", f.path === shown && "bg-accent", f.op === "delete" && "line-through opacity-60")}
+            >
+              {OP_MARK[f.op]?.letter} {f.path}
+            </button>
+          ))}
+        </div>
+        <div className="min-h-0 overflow-auto rounded-lg border" style={{ maxHeight: "55vh" }}>
+          {file.data ? <DocView markdown={file.data.content ?? ""} ctx={ctx} className="!py-6" /> : <Skeleton className="m-6 h-24" />}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

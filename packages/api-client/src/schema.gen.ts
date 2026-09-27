@@ -1124,10 +1124,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/checkpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** Checkpoints, newest first */
+        get: operations["listCheckpoints"];
+        put?: never;
+        /** Name the current state */
+        post: operations["nameCheckpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/checkpoints/{checkpoint}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                checkpoint: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listCheckpointFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/checkpoints/{checkpoint}/files/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                checkpoint: string;
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        get: operations["getCheckpointFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/checkpoints/{checkpoint}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                checkpoint: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bring the revision back to a checkpoint, as a new change */
+        post: operations["restoreCheckpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Checkpoint: {
+            id: string;
+            name?: string;
+            /** @enum {string} */
+            kind: "auto" | "named" | "submit" | "pre_update" | "pre_restore";
+            created_by?: string;
+            created_by_name?: string;
+            /** Format: date-time */
+            created_at: string;
+            file_count: number;
+        };
+        CheckpointFile: {
+            path: string;
+            op: components["schemas"]["FileOpKind"];
+            from_path?: string;
+            content?: string;
+        };
         /** @enum {string} */
         RevisionState: "editing" | "in_review" | "approved" | "publishing" | "published" | "closed";
         Revision: {
@@ -3495,6 +3592,136 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    listCheckpoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checkpoints */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Checkpoint"][];
+                    };
+                };
+            };
+        };
+    };
+    nameCheckpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Checkpoint */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Checkpoint"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listCheckpointFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                checkpoint: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Files at the checkpoint (without content) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["CheckpointFile"][];
+                    };
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCheckpointFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                checkpoint: string;
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description File */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointFile"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    restoreCheckpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                checkpoint: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
 }
