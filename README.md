@@ -59,7 +59,7 @@ e2e/                 end-to-end tests, and the documentation screenshots (e2e/do
 
 ## Development
 
-Requirements: Go ≥ 1.26, Node ≥ 22 with pnpm, git ≥ 2.40.
+Requirements: Go ≥ 1.26.6, Node ≥ 22 with pnpm, git ≥ 2.40.
 
 ```bash
 pnpm install
