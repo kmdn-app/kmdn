@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/kmdn-app/kmdn/internal/access"
+	"github.com/kmdn-app/kmdn/internal/blobs"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/repos"
@@ -36,7 +37,9 @@ type Service struct {
 	DB    *store.DB
 	Repos *repos.Service
 	Log   *slog.Logger
-	// DataDir holds uploads (<data>/uploads/<sha[:2]>/<sha>).
+	// Blobs holds uploads, keyed per org (blobs.Key).
+	Blobs blobs.Store
+	// DataDir is the data directory.
 	DataDir string
 	// UploadMaxMB caps uploads; repo settings and .kmdn.yml can only lower it.
 	UploadMaxMB int

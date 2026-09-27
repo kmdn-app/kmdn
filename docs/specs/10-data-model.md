@@ -147,7 +147,8 @@ uploads          id, sha256, size, mime, path_on_disk, created_by, created_at
 <data>/
 ├─ kmdn.db (+ -wal, -shm)          when SQLite
 ├─ mirrors/<forge>/<host>/<owner>/<repo>.git
-├─ uploads/<sha256[0:2]>/<sha256>   content-addressed
+├─ uploads/<sha256[0:2]>/<sha256>   content-addressed, default org
+├─ uploads/<org_id>/<sha256[0:2]>/<sha256>   other orgs (never shared across orgs)
 ├─ ydocs/                            only with storage.ydocs: fs
 └─ backups/
 ```

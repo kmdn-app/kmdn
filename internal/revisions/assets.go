@@ -10,13 +10,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/kmdn-app/kmdn/internal/blobs"
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -39,6 +38,9 @@ type Asset struct {
 	Mime      string    `json:"mime"`
 	SHA256    string    `json:"sha256"`
 	CreatedAt time.Time `json:"created_at"`
+	// OrgID is the org whose upload holds the bytes (blobs.Key); empty in
+	// saves journaled before orgs, which means the default org.
+	OrgID string `json:"org_id,omitempty"`
 }
 
 // UploadResult is what the editor inserts.
@@ -48,11 +50,6 @@ type UploadResult struct {
 	Markdown string `json:"markdown"`
 	// Src is the path relative to the page (what the image node stores).
 	Src string `json:"src"`
-}
-
-// uploadPath is where content lives on disk.
-func (s *Service) uploadPath(sha string) string {
-	return filepath.Join(s.DataDir, "uploads", sha[:2], sha)
 }
 
 var (
@@ -235,7 +232,7 @@ func (s *Service) Upload(ctx context.Context, repo repos.Repo, rev Revision, c C
 	}
 	sum := sha256.Sum256(b)
 	sha := hex.EncodeToString(sum[:])
-	if err := s.store(sha, b); err != nil {
+	if err := s.Blobs.Put(ctx, blobs.Key(repo.OrgID, sha), b); err != nil {
 		return UploadResult{}, err
 	}
 
@@ -243,11 +240,11 @@ func (s *Service) Upload(ctx context.Context, repo repos.Repo, rev Revision, c C
 	err = s.DB.InTx(ctx, func(tx *store.Tx) error {
 		now := store.Millis(time.Now())
 		var uploadID string
-		err := store.QueryRow(ctx, tx, `SELECT id FROM uploads WHERE sha256 = ?`, sha).Scan(&uploadID)
+		err := store.QueryRow(ctx, tx, `SELECT id FROM uploads WHERE org_id = ? AND sha256 = ?`, repo.OrgID, sha).Scan(&uploadID)
 		if err != nil {
 			uploadID = ids.New(ids.Upload)
-			if _, err := store.Exec(ctx, tx, `INSERT INTO uploads (id, sha256, size, mime, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-				uploadID, sha, len(b), mime, c.User.ID, now); err != nil {
+			if _, err := store.Exec(ctx, tx, `INSERT INTO uploads (id, org_id, sha256, size, mime, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				uploadID, repo.OrgID, sha, len(b), mime, c.User.ID, now); err != nil {
 				return err
 			}
 		}
@@ -272,7 +269,7 @@ func (s *Service) Upload(ctx context.Context, repo repos.Repo, rev Revision, c C
 				return err
 			}
 		}
-		out.Size, out.Mime, out.SHA256, out.CreatedAt = int64(len(b)), mime, sha, store.FromMillis(now)
+		out.Size, out.Mime, out.SHA256, out.CreatedAt, out.OrgID = int64(len(b)), mime, sha, store.FromMillis(now), repo.OrgID
 		return nil
 	})
 	if err != nil {
@@ -314,32 +311,10 @@ func (s *Service) freePath(ctx context.Context, tx *store.Tx, repo repos.Repo, r
 	return "", conflict("no_free_name", "Couldn't find a free name for the image.")
 }
 
-func (s *Service) store(sha string, b []byte) error {
-	dst := s.uploadPath(sha)
-	if _, err := os.Stat(dst); err == nil {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(dst), ".upload-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }() // no-op after the rename
-	if _, err := tmp.Write(b); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), dst)
-}
-
 // Assets lists the images a revision adds.
 func Assets(ctx context.Context, q store.Querier, revisionID string) ([]Asset, error) {
-	rows, err := store.Query(ctx, q, `SELECT id, path, size, mime, sha256, created_at FROM revision_assets WHERE revision_id = ? ORDER BY path`, revisionID)
+	rows, err := store.Query(ctx, q, `SELECT a.id, a.path, a.size, a.mime, a.sha256, a.created_at, COALESCE(u.org_id, '')
+		FROM revision_assets a LEFT JOIN uploads u ON u.id = a.upload_id WHERE a.revision_id = ? ORDER BY a.path`, revisionID)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +323,7 @@ func Assets(ctx context.Context, q store.Querier, revisionID string) ([]Asset, e
 	for rows.Next() {
 		var a Asset
 		var at int64
-		if err := rows.Scan(&a.ID, &a.Path, &a.Size, &a.Mime, &a.SHA256, &at); err != nil {
+		if err := rows.Scan(&a.ID, &a.Path, &a.Size, &a.Mime, &a.SHA256, &at, &a.OrgID); err != nil {
 			return nil, err
 		}
 		a.CreatedAt = store.FromMillis(at)
@@ -360,11 +335,12 @@ func Assets(ctx context.Context, q store.Querier, revisionID string) ([]Asset, e
 // ReadAsset returns the bytes of a revision's image, or nil when the revision
 // didn't add one at p.
 func (s *Service) ReadAsset(ctx context.Context, rev Revision, p string) ([]byte, string, error) {
-	var sha, mime string
-	err := store.QueryRow(ctx, s.DB, `SELECT sha256, mime FROM revision_assets WHERE revision_id = ? AND path = ?`, rev.ID, cleanPath(p)).Scan(&sha, &mime)
+	var sha, mime, orgID string
+	err := store.QueryRow(ctx, s.DB, `SELECT a.sha256, a.mime, COALESCE(u.org_id, '') FROM revision_assets a LEFT JOIN uploads u ON u.id = a.upload_id
+		WHERE a.revision_id = ? AND a.path = ?`, rev.ID, cleanPath(p)).Scan(&sha, &mime, &orgID)
 	if err != nil {
 		return nil, "", store.NotFound(err)
 	}
-	b, err := os.ReadFile(s.uploadPath(sha))
+	b, err := s.Blobs.Get(ctx, blobs.Key(orgID, sha))
 	return b, mime, err
 }

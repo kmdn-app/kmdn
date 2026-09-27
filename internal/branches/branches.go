@@ -10,11 +10,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/kmdn-app/kmdn/internal/blobs"
 	"github.com/kmdn-app/kmdn/internal/forge"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/jobs"
@@ -34,7 +33,8 @@ type Service struct {
 	Revisions *revisions.Service
 	Jobs      *jobs.Queue
 	BaseURL   string // for Kmdn-Revision links
-	DataDir   string // uploads
+	DataDir   string
+	Blobs     blobs.Store // uploads
 	Log       *slog.Logger
 
 	locks sync.Map // revision id → *sync.Mutex
@@ -395,11 +395,11 @@ func (s *Service) Changes(ctx context.Context, rev revisions.Revision) ([]gitmir
 	if err != nil {
 		return nil, nil, err
 	}
-	return s.SnapshotChanges(files, assets)
+	return s.SnapshotChanges(ctx, files, assets)
 }
 
 // SnapshotChanges builds a patch from captured data without reading live state.
-func (s *Service) SnapshotChanges(files []revisions.File, assets []revisions.Asset) ([]gitmirror.Change, map[string]bool, error) {
+func (s *Service) SnapshotChanges(ctx context.Context, files []revisions.File, assets []revisions.Asset) ([]gitmirror.Change, map[string]bool, error) {
 	touched := map[string]bool{}
 	var out []gitmirror.Change
 	// A renamed source can be reused by an added page or another rename.
@@ -419,7 +419,7 @@ func (s *Service) SnapshotChanges(files []revisions.File, assets []revisions.Ass
 		}
 	}
 	for _, a := range assets {
-		b, err := os.ReadFile(filepath.Join(s.DataDir, "uploads", a.SHA256[:2], a.SHA256))
+		b, err := s.Blobs.Get(ctx, blobs.Key(a.OrgID, a.SHA256))
 		if err != nil {
 			return nil, nil, fmt.Errorf("asset %s: %w", a.Path, err)
 		}
