@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, History as HistoryIcon, Pencil, ScanText, X } from "lucide-react";
+import { toast } from "sonner";
+import { ChevronRight, History as HistoryIcon, Loader2, Pencil, ScanText, X } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { Avatar } from "@/components/avatar";
@@ -10,26 +11,39 @@ import { DocView, type BlockLines } from "@/components/doc/doc-view";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ApiError } from "@/lib/api";
-import { fileHref, rawUrl, useBlame, useFile, useHistory, type BlameLine, type Commit, type RepoView } from "@/lib/repos";
+import { ApiError, errorMessage } from "@/lib/api";
+import { pageTitle, useCreateRevision } from "@/lib/revisions";
+import { RevisionPage } from "@/components/editor/revision-page";
+import { atLeast, fileHref, rawUrl, useBlame, useFile, useHistory, type BlameLine, type Commit, type RepoView } from "@/lib/repos";
 import { useRepo } from "@/lib/use-repo";
 import { cn } from "@/lib/utils";
 
-type Search = { sha?: string; view?: "blame" };
+type Search = { sha?: string; view?: "blame"; revision?: number };
 
 export const Route = createFileRoute("/_app/$owner/$repo/$")({
   validateSearch: (s: Record<string, unknown>): Search => ({
     ...(typeof s.sha === "string" && /^[0-9a-f]{7,40}$/.test(s.sha) ? { sha: s.sha } : {}),
     ...(s.view === "blame" ? { view: "blame" as const } : {}),
+    ...(Number.isInteger(Number(s.revision)) && Number(s.revision) > 0 ? { revision: Number(s.revision) } : {}),
   }),
   component: FilePage,
 });
 
 function FilePage() {
+  const repo = useRepo();
+  const { _splat: path = "" } = Route.useParams();
+  const { revision } = Route.useSearch();
+  if (revision) return <RevisionPage key={revision} repo={repo} path={path} number={revision} />;
+  return <PublishedPage />;
+}
+
+function PublishedPage() {
   const { t } = useTranslation();
   const repo = useRepo();
   const { _splat: path = "" } = Route.useParams();
   const { sha, view } = Route.useSearch();
+  const create = useCreateRevision(repo);
+  const canEdit = atLeast(repo.role, "contributor");
   const navigate = useNavigate({ from: Route.fullPath });
   const file = useFile(repo, path, sha);
   const history = useHistory(repo, path);
@@ -82,17 +96,41 @@ function FilePage() {
                     <span className="max-md:hidden">{t("file.blame")}</span>
                   </Button>
                 )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Button size="sm" disabled>
-                        <Pencil />
-                        {t("file.edit")}
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>{t("shell.revisionsSoon")}</TooltipContent>
-                </Tooltip>
+                {canEdit && file.data?.markdown ? (
+                  <Button
+                    size="sm"
+                    disabled={create.isPending}
+                    onClick={() =>
+                      create.mutate(
+                        { title: t("revision.editsTo", { title: pageTitle(file.data.content, path) }), path },
+                        {
+                          onSuccess: (rev) => {
+                            toast.success(t("revision.started", { title: rev.title }));
+                            void navigate({ search: { revision: rev.number } });
+                          },
+                          onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+                        },
+                      )
+                    }
+                  >
+                    {create.isPending ? <Loader2 className="animate-spin" /> : <Pencil />}
+                    {t("file.edit")}
+                  </Button>
+                ) : (
+                  !canEdit && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button size="sm" disabled>
+                            <Pencil />
+                            {t("file.edit")}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("file.viewerHint")}</TooltipContent>
+                    </Tooltip>
+                  )
+                )}
               </>
             }
           />

@@ -171,7 +171,8 @@
     "viewing": "Viewing",
     "reviewedBy": "Reviewed by {{name}}",
     "renamedFrom": "was {{path}}",
-    "view": "View"
+    "view": "View",
+    "viewerHint": "You can view and comment. Ask a maintainer for edit access."
   },
   "settings": {
     "title": "Settings",
@@ -364,5 +365,55 @@
     "time": "Time",
     "action": "Action",
     "target": "Target"
+  },
+  "editor": {
+    "label": "Page content",
+    "placeholder": "Start writing…",
+    "toolbar": "Formatting",
+    "undo": "Undo",
+    "redo": "Redo",
+    "paragraph": "Text",
+    "heading": "Heading {{level}}",
+    "bold": "Bold",
+    "italic": "Italic",
+    "strike": "Strikethrough",
+    "code": "Code",
+    "link": "Link",
+    "linkPrompt": "Link to (leave empty to remove)",
+    "bulletList": "Bulleted list",
+    "orderedList": "Numbered list",
+    "taskList": "Checklist",
+    "quote": "Quote",
+    "codeBlock": "Code block",
+    "rule": "Divider"
+  },
+  "revision": {
+    "editsTo": "Edits to {{title}}",
+    "started": "Started revision “{{title}}”",
+    "done": "Done",
+    "notFound": "Revision not found",
+    "unavailable": "This page isn't available in the revision",
+    "saved": "Saved",
+    "offline": "Offline, reconnecting…",
+    "connecting": "Connecting…",
+    "viewOnly": "View only",
+    "state": {
+      "editing": "Editing",
+      "in_review": "In review",
+      "approved": "Approved",
+      "publishing": "Publishing",
+      "published": "Published",
+      "closed": "Closed"
+    },
+    "readOnly": {
+      "viewer": "You can view and comment. Ask a maintainer for edit access.",
+      "not_member": "Only the revision's editors ({{editors}}) can change it. Ask one of them to add you.",
+      "in_review": "This revision is in review, so it's read-only for its editors.",
+      "approved": "This revision is approved and waiting to be published.",
+      "publishing": "This revision is being published.",
+      "published": "This revision was published.",
+      "closed": "This revision is closed. Reopen it to keep editing.",
+      "generic": "You can't edit this revision right now."
+    }
   }
 }
