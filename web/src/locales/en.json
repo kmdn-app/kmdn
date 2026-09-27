@@ -385,7 +385,8 @@
     "taskList": "Checklist",
     "quote": "Quote",
     "codeBlock": "Code block",
-    "rule": "Divider"
+    "rule": "Divider",
+    "image": "Image"
   },
   "revision": {
     "editsTo": "Edits to {{title}}",
@@ -494,7 +495,8 @@
       "member_added": "added an editor",
       "member_removed": "removed an editor",
       "version_named": "saved a checkpoint",
-      "restored": "restored a checkpoint"
+      "restored": "restored a checkpoint",
+      "asset_added": "added the image {{path}}"
     }
   },
   "common": {

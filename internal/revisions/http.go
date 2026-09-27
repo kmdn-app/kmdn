@@ -48,6 +48,9 @@ func (s *Service) Routes(r chi.Router) {
 			r.Put("/members/{user}", s.putMember)
 			r.Delete("/members/{user}", s.deleteMember)
 			r.Get("/events", s.events)
+			r.Get("/assets", s.listAssets)
+			r.Post("/assets", s.upload)
+			r.Get("/raw/*", s.raw)
 		})
 	})
 }
@@ -400,4 +403,78 @@ func (s *Service) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.JSON(w, http.StatusOK, map[string]any{"items": list})
+}
+
+func (s *Service) listAssets(w http.ResponseWriter, r *http.Request) {
+	rev, _, _, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	list, err := Assets(r.Context(), s.DB, rev.ID)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"items": list})
+}
+
+// upload takes multipart form fields "file" and "page" (the page the image is
+// inserted into, which decides where it's stored).
+func (s *Service) upload(w http.ResponseWriter, r *http.Request) {
+	rev, repo, c, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	limit := maxAssetBytes(repo, s.UploadMaxMB)
+	r.Body = http.MaxBytesReader(w, r.Body, limit+1<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		api.Error(w, r, api.Invalid("file", "Send the image as multipart form data (up to the size limit)."))
+		return
+	}
+	defer func() { _ = r.MultipartForm.RemoveAll() }()
+	f, hdr, err := r.FormFile("file")
+	if err != nil {
+		api.Error(w, r, api.Invalid("file", "Attach an image in the \"file\" field."))
+		return
+	}
+	defer f.Close()
+	res, err := s.Upload(r.Context(), repo, rev, c, r.FormValue("page"), hdr.Filename, f)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusCreated, res)
+}
+
+// raw serves images as the revision sees them: uploads first, then the base.
+// Like the published raw endpoint, types are fixed and SVGs are sandboxed.
+func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
+	rev, repo, _, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	p := wildcard(r)
+	ext := strings.TrimPrefix(strings.ToLower(path.Ext(p)), ".")
+	ct, known := assetTypes[ext]
+	if !known {
+		api.Error(w, r, api.Err(http.StatusUnsupportedMediaType, "unsupported_type", "Only images can be served here."))
+		return
+	}
+	b, _, err := s.ReadAsset(r.Context(), rev, p)
+	if errors.Is(err, store.ErrNotFound) {
+		var f repos.File
+		if f, err = s.Repos.ReadFile(r.Context(), repo, p, rev.BaseSHA); err == nil {
+			b = []byte(f.Content)
+		}
+	}
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", ct)
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	h.Set("Cache-Control", "private, no-cache")
+	_, _ = w.Write(b)
 }

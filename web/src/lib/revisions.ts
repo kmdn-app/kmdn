@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { components } from "@kmdn/api-client";
+import { ApiError, CSRF_COOKIE, CSRF_HEADER, readCookie, type components } from "@kmdn/api-client";
 import { api, unwrap } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
 import type { RepoView } from "@/lib/repos";
@@ -95,4 +95,27 @@ export function pageTitle(markdown: string, path: string): string {
   if (h) return h;
   const base = path.split("/").pop() ?? path;
   return base.replace(/\.(md|markdown|mdx)$/i, "");
+}
+
+export type UploadResult = components["schemas"]["UploadResult"];
+
+/** Uploads an image into the revision next to page (multipart, so outside openapi-fetch). */
+export async function uploadAsset(revisionID: string, page: string, file: File): Promise<UploadResult> {
+  const form = new FormData();
+  form.append("page", page);
+  form.append("file", file, file.name || "image.png");
+  const res = await fetch(`/api/v1/revisions/${encodeURIComponent(revisionID)}/assets`, {
+    method: "POST",
+    body: form,
+    credentials: "same-origin",
+    headers: { [CSRF_HEADER]: readCookie(document.cookie, CSRF_COOKIE) ?? "" },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError({ status: res.status, title: res.statusText, code: "upload_failed", ...body });
+  return body as UploadResult;
+}
+
+/** URL of an image as the revision sees it (its uploads, then the base). */
+export function revisionRawUrl(revisionID: string, path: string) {
+  return `/api/v1/revisions/${encodeURIComponent(revisionID)}/raw/${path.split("/").map(encodeURIComponent).join("/")}`;
 }

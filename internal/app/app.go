@@ -114,7 +114,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	idx.Routes(r)
 	a.Repos.Routes(r)
 	a.Repos.ForgeRoutes(r)
-	a.Revisions = &revisions.Service{DB: db, Repos: a.Repos, Log: log}
+	a.Revisions = &revisions.Service{DB: db, Repos: a.Repos, Log: log, DataDir: cfg.DataDir, UploadMaxMB: cfg.Limits.UploadMaxMB}
 	a.Revisions.Routes(r)
 	eng, err := docengine.New(docengine.Options{})
 	if err != nil {
