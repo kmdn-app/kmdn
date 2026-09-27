@@ -49,23 +49,49 @@ func facts() []Fact {
 		return Fact{Topic: topic, Key: key, Value: value, Other: other, Say: say, Scoped: scoped}
 	}
 	return []Fact{
-		f("travel", "notice", "14 days", "7 days", func(v string) string { return "Book flights at least " + v + " before you travel so the travel desk can find a fair fare." }, func(v string) string { return "Contractors book their own travel and aren't bound by the " + v + " rule." }),
+		f("travel", "notice", "14 days", "7 days", func(v string) string {
+			return "Book flights at least " + v + " before you travel so the travel desk can find a fair fare."
+		}, func(v string) string {
+			return "Contractors book their own travel and aren't bound by the " + v + " rule."
+		}),
 		f("travel", "meals", "45 euros", "60 euros", func(v string) string { return "The daily meal allowance on business trips abroad is " + v + "." }, nil),
-		f("travel", "class", "six hours", "four hours", func(v string) string { return "Economy class is the default; business class is allowed for flights longer than " + v + "." }, nil),
-		f("remote", "abroad", "30 working days", "20 working days", func(v string) string { return "Employees can work from another country for up to " + v + " per calendar year." }, func(v string) string { return "Interns can work abroad for up to 10 working days a year, unlike the " + v + " for employees." }),
-		f("remote", "stipend", "300 euros", "500 euros", func(v string) string { return "Everyone gets a one-time home office stipend of " + v + " in their first month." }, nil),
-		f("expenses", "deadline", "30 days", "60 days", func(v string) string { return "Submit expense reports within " + v + " of the purchase, with the receipt attached." }, nil),
+		f("travel", "class", "six hours", "four hours", func(v string) string {
+			return "Economy class is the default; business class is allowed for flights longer than " + v + "."
+		}, nil),
+		f("remote", "abroad", "30 working days", "20 working days", func(v string) string {
+			return "Employees can work from another country for up to " + v + " per calendar year."
+		}, func(v string) string {
+			return "Interns can work abroad for up to 10 working days a year, unlike the " + v + " for employees."
+		}),
+		f("remote", "stipend", "300 euros", "500 euros", func(v string) string {
+			return "Everyone gets a one-time home office stipend of " + v + " in their first month."
+		}, nil),
+		f("expenses", "deadline", "30 days", "60 days", func(v string) string {
+			return "Submit expense reports within " + v + " of the purchase, with the receipt attached."
+		}, nil),
 		f("expenses", "approval", "500 euros", "1,000 euros", func(v string) string { return "Purchases above " + v + " need your manager's approval before you buy." }, nil),
-		f("laptops", "refresh", "three years", "four years", func(v string) string { return "Laptops are replaced every " + v + ", or sooner if they break." }, func(v string) string { return "Test devices in the QA lab are replaced every two years, not every " + v + " like laptops." }),
+		f("laptops", "refresh", "three years", "four years", func(v string) string { return "Laptops are replaced every " + v + ", or sooner if they break." }, func(v string) string {
+			return "Test devices in the QA lab are replaced every two years, not every " + v + " like laptops."
+		}),
 		f("laptops", "choice", "a MacBook Pro or a ThinkPad X1", "a MacBook Air or a Dell XPS", func(v string) string { return "New hires choose between " + v + " on their first day." }, nil),
-		f("holidays", "days", "25 days", "28 days", func(v string) string { return "Full-time employees get " + v + " of paid holiday per year, plus public holidays." }, func(v string) string { return "Part-time employees get holiday pro rata, based on the " + v + " for full-time staff." }),
-		f("holidays", "carryover", "five days", "ten days", func(v string) string { return "You can carry over up to " + v + " of unused holiday into the next year." }, nil),
+		f("holidays", "days", "25 days", "28 days", func(v string) string {
+			return "Full-time employees get " + v + " of paid holiday per year, plus public holidays."
+		}, func(v string) string {
+			return "Part-time employees get holiday pro rata, based on the " + v + " for full-time staff."
+		}),
+		f("holidays", "carryover", "five days", "ten days", func(v string) string {
+			return "You can carry over up to " + v + " of unused holiday into the next year."
+		}, nil),
 		f("parental", "weeks", "16 weeks", "12 weeks", func(v string) string { return "Every new parent can take " + v + " of fully paid parental leave." }, nil),
 		f("onboarding", "buddy", "the first two weeks", "the first month", func(v string) string { return "Each new hire gets a buddy who checks in daily during " + v + "." }, nil),
-		f("security", "rotation", "90 days", "180 days", func(v string) string { return "Service account passwords are rotated every " + v + "." }, func(v string) string { return "Personal passwords don't expire; only service accounts rotate every " + v + "." }),
+		f("security", "rotation", "90 days", "180 days", func(v string) string { return "Service account passwords are rotated every " + v + "." }, func(v string) string {
+			return "Personal passwords don't expire; only service accounts rotate every " + v + "."
+		}),
 		f("security", "mfa", "a hardware key", "an authenticator app", func(v string) string { return "Production access requires " + v + " as the second factor." }, nil),
 		f("office", "hours", "8:00 to 19:00", "7:00 to 20:00", func(v string) string { return "The office is open from " + v + " on weekdays." }, nil),
-		f("training", "budget", "1,500 euros", "2,000 euros", func(v string) string { return "Each employee has a yearly learning budget of " + v + " for courses, books and conferences." }, nil),
+		f("training", "budget", "1,500 euros", "2,000 euros", func(v string) string {
+			return "Each employee has a yearly learning budget of " + v + " for courses, books and conferences."
+		}, nil),
 		f("sick", "note", "three days", "five days", func(v string) string { return "A doctor's note is needed for sick leave longer than " + v + "." }, nil),
 		f("equipment", "return", "10 working days", "30 days", func(v string) string { return "Return company equipment within " + v + " of your last day." }, nil),
 		f("equipment", "monitor", "two monitors", "one monitor", func(v string) string { return "Desks in the office come with " + v + " and a docking station." }, nil),
