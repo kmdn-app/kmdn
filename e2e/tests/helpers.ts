@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { expect, type Page } from "@playwright/test";
-import { FORGE_URL, LOG_FILE, STATE_FILE, type State } from "../env";
+import { FORGE_URL, LOG_FILE, STATE_FILE, type State } from "../env.ts";
 
 export function state(): State {
   return JSON.parse(readFileSync(STATE_FILE, "utf8")) as State;

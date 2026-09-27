@@ -52,6 +52,7 @@ limits:
   wysiwyg_max_file_mb: 1
 telemetry:
   metrics: true
+  metrics_token: ""               # optional: require Authorization: Bearer <token> on /metrics
   otlp_endpoint: ""
   log_format: json
 ```
@@ -136,3 +137,16 @@ Append-only table ([10](10-data-model.md)). Recorded actions include: sign-in (m
 
 - AGPL-3.0 for the whole repo. `CONTRIBUTING.md` with DCO sign-off. Security policy with private disclosure.
 - CI (GitHub Actions): Go lint/test (race), TS typecheck/lint/test, fidelity corpus in both hosts, Playwright E2E against the built binary with a fake forge server, GoReleaser on tags.
+
+## Capacity
+
+`pnpm --filter @kmdn/e2e load` (`e2e/load/load.ts`) starts the same stack as the e2e suite (the built binary and the fake forge, SQLite) and drives real WebSocket editors with Yjs, then open revisions. Measured on a laptop (Apple Silicon, one process):
+
+| Scenario | Result |
+|----------|--------|
+| 50 editors on one page, a burst each every ~1 s for 20 s (864 edits) | Edit → peer p50 3 ms, p95 8 ms, p99 10 ms; all copies converged; every edit materialized to markdown; 0 errors; ~0.1 CPU core |
+| 50 editors, a burst each every ~150 ms (4,111 edits, ~200/s) | p50 2 ms, p99 5 ms; converged; ~0.3 CPU core; 31 MB Go heap |
+| 500 open revisions (created at ~126/s through the API) | Revisions list and picker p50 11 ms; a revision 2 ms; repo tree 7 ms; inbox 2 ms; search 2 ms |
+
+The limits that bound a file (50 concurrent editors, 1 MiB updates) are enforced by the room; beyond one node, see [03](03-architecture.md).
+

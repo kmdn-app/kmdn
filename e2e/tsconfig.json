@@ -6,7 +6,14 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true
   },
-  "include": ["*.ts", "tests/**/*.ts"]
+  "include": [
+    "*.ts",
+    "tests/**/*.ts",
+    "load/**/*.ts"
+  ]
 }

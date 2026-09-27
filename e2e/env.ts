@@ -15,4 +15,11 @@ export const STATE_FILE = join(RUN_DIR, "state.json");
 export const ADMIN = { email: "ana@acme.test", name: "Ana Admin" };
 export const REVIEWER = { email: "rui@acme.test", name: "Rui Reviewer" };
 
-export type State = { repoID: string; owner: string; name: string; pids: number[] };
+export type State = {
+  repoID: string;
+  owner: string;
+  name: string;
+  pids: number[];
+  /** The admin's session from setup (load scripts use it). */
+  admin: { cookie: string; csrf: string };
+};

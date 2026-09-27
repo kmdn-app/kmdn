@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ADMIN, FORGE_PORT, FORGE_TOKEN, FORGE_URL, KMDN_PORT, KMDN_URL, LOG_FILE, RUN_DIR, STATE_FILE, type State } from "./env";
+import { ADMIN, FORGE_PORT, FORGE_TOKEN, FORGE_URL, KMDN_PORT, KMDN_URL, LOG_FILE, RUN_DIR, STATE_FILE, type State } from "./env.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -105,6 +105,8 @@ export default async function setup() {
     if (i === 99) throw new Error("the repository never synced: " + JSON.stringify(r));
     await new Promise((r) => setTimeout(r, 200));
   }
-  const state: State = { repoID, owner: connected.repo.owner, name: connected.repo.name, pids };
+  const csrf = admin.cookies.get("kmdn_csrf") ?? "";
+  const cookie = [...admin.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
+  const state: State = { repoID, owner: connected.repo.owner, name: connected.repo.name, pids, admin: { cookie, csrf } };
   writeFileSync(STATE_FILE, JSON.stringify(state));
 }

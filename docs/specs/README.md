@@ -22,6 +22,7 @@ Status: **draft specs, pre-implementation** (2026-09-26). Nothing here is built 
 | 12 | [MCP server](12-mcp.md) | Read-only MCP endpoint for external agents, agent keys |
 | 13 | [Operations](13-operations.md) | Config, distribution, admin console, audit, observability, backups, notifications |
 | 14 | [Roadmap and risks](14-roadmap.md) | Spikes, milestones, risks, open questions |
+| 15 | [Security](15-security.md) | Threat model, mitigations and how they're tested, review findings |
 | — | [Decision log](decisions.md) | Every decision taken in the design interview, with rationale |
 
 UI mockups: [`docs/mockups/index.html`](../mockups/index.html).

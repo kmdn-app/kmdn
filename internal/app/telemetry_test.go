@@ -58,6 +58,17 @@ func TestMetricsAndTraces(t *testing.T) {
 		}
 	}
 
+	// A token can guard them.
+	_, guarded := newApp(t, func(c *config.Config) { c.Telemetry.MetricsToken = "scrape-me" })
+	if res, _ := http.Get(guarded.base + "/metrics"); res.StatusCode != 401 {
+		t.Fatalf("metrics without the token: %d", res.StatusCode)
+	}
+	req, _ := http.NewRequest("GET", guarded.base+"/metrics", nil)
+	req.Header.Set("Authorization", "Bearer scrape-me")
+	if res, _ := http.DefaultClient.Do(req); res.StatusCode != 200 {
+		t.Fatalf("metrics with the token: %d", res.StatusCode)
+	}
+
 	// Metrics can be turned off.
 	_, off := newApp(t, func(c *config.Config) { c.Telemetry.Metrics = false })
 	res, err = http.Get(off.base + "/metrics")

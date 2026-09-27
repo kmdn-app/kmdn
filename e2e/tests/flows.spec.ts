@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import { ADMIN, FORGE_URL, REVIEWER } from "../env";
-import { emailLink, forgeFile, forgeState, logOffset, signIn, state } from "./helpers";
+import { ADMIN, FORGE_URL, REVIEWER } from "../env.ts";
+import { emailLink, forgeFile, forgeState, logOffset, signIn, state } from "./helpers.ts";
 
 // The core loop against a real binary and a fake GitLab: sign in, invite a
 // reviewer, edit in a revision, submit, approve, publish, and find the
