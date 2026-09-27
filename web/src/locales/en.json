@@ -565,7 +565,8 @@
     "linksOk": "All links in this revision work.",
     "brokenLink": "links to {{url}}",
     "breaksInbound": "links to {{target}}, which this revision removes",
-    "hasConflicts": "has conflicts with Published to resolve"
+    "hasConflicts": "has conflicts with Published to resolve",
+    "phoneReadOnly": "Editing works on tablets and computers."
   },
   "common": {
     "cancel": "Cancel",

@@ -18,7 +18,12 @@ export type PanelTabs = Partial<Record<(typeof TABS)[number]["key"], ReactNode>>
 export function RightPanel({ onClose, children }: { onClose: () => void; children?: ReactNode | PanelTabs }) {
   const { t } = useTranslation();
   return (
-    <aside aria-label="Side panel" className="flex w-[360px] shrink-0 flex-col border-l bg-background max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[min(360px,100%)] max-lg:shadow-xl">
+    // Docked on desktops, an overlay on tablets, a bottom sheet on phones.
+    <aside
+      aria-label="Side panel"
+      className="flex w-[360px] shrink-0 flex-col border-l bg-background max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[min(360px,100%)] max-lg:shadow-xl max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:h-[min(80dvh,680px)] max-md:w-full max-md:rounded-t-2xl max-md:border-t max-md:border-l-0 max-md:pb-[env(safe-area-inset-bottom)]"
+    >
+      <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30 md:hidden" aria-hidden />
       {/* Keyed on the initial tab so pages can switch it (e.g. to Comments). */}
       <Tabs key={panelInitial(children)} defaultValue={panelInitial(children)} className="flex min-h-0 flex-1 flex-col gap-0">
         <div className="flex min-h-[52px] items-center gap-1.5 border-b px-3 py-2">

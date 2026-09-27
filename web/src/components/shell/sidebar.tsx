@@ -262,7 +262,7 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
         <RepoSwitcher repo={repo} />
         {repo && <RevisionPicker repo={repo} revision={revision} currentPath={currentPath} onNew={() => setNewOpen(true)} />}
         {repo && atLeast(repo.role, "contributor") && (
-          <Button variant="outline" size="sm" className="w-full justify-start bg-background" onClick={() => setNewOpen(true)}>
+          <Button variant="outline" size="sm" className="w-full justify-start bg-background max-md:hidden" onClick={() => setNewOpen(true)}>
             <FilePen />
             {t("shell.newRevision")}
           </Button>
