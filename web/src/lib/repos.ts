@@ -1,6 +1,7 @@
 import { keepPreviousData, queryOptions, useQuery } from "@tanstack/react-query";
 import type { components } from "@kmdn/api-client";
 import { api, unwrap } from "@/lib/api";
+import { currentOrg } from "@/lib/orgs";
 
 export type RepoView = components["schemas"]["RepoView"];
 export type TreeNode = components["schemas"]["TreeNode"];
@@ -11,22 +12,28 @@ export type SearchHit = components["schemas"]["SearchHit"];
 export type Member = components["schemas"]["Member"];
 export type Role = components["schemas"]["Role"];
 
-export const reposQuery = queryOptions({
-  queryKey: ["repos"],
-  queryFn: async () => (await unwrap(api.GET("/repos"))).items,
-});
+/** The current org's repositories (invalidate with the ["repos"] prefix). */
+export const reposQuery = () => {
+  const org = currentOrg();
+  return queryOptions({
+    queryKey: ["repos", org],
+    queryFn: async () => (await unwrap(api.GET("/orgs/{org}/repos", { params: { path: { org } } }))).items,
+  });
+};
 
 export function useRepos() {
-  return useQuery(reposQuery);
+  return useQuery(reposQuery());
 }
 
-export const repoBySlugQuery = (owner: string, name: string) =>
-  queryOptions({
-    queryKey: ["repo", owner, name],
-    queryFn: () => unwrap(api.GET("/repos/by-slug/{owner}/{name}", { params: { path: { owner, name } } })),
+export const repoBySlugQuery = (owner: string, name: string) => {
+  const org = currentOrg();
+  return queryOptions({
+    queryKey: ["repo", org, owner, name],
+    queryFn: () => unwrap(api.GET("/orgs/{org}/repos/by-slug/{owner}/{name}", { params: { path: { org, owner, name } } })),
     // Poll while the first sync runs.
     refetchInterval: (q) => (q.state.data?.health === "pending" ? 1500 : false),
   });
+};
 
 export function useTree(repo: RepoView | undefined) {
   return useQuery({

@@ -121,18 +121,18 @@ func TestAdminUserGuardsAndGroups(t *testing.T) {
 		t.Fatalf("search: %v", list)
 	}
 
-	code, g := admin.do("POST", "/admin/groups", map[string]string{"name": "People team", "description": "HR"})
+	code, g := admin.do("POST", "/orgs/default/admin/groups", map[string]string{"name": "People team", "description": "HR"})
 	if code != 201 {
 		t.Fatalf("create group: %d %v", code, g)
 	}
 	gid := g["id"].(string)
-	if code, _ := admin.do("POST", "/admin/groups", map[string]string{"name": "People team"}); code != 422 {
+	if code, _ := admin.do("POST", "/orgs/default/admin/groups", map[string]string{"name": "People team"}); code != 422 {
 		t.Fatalf("duplicate group: %d", code)
 	}
-	if code, m := admin.do("PUT", "/admin/groups/"+gid+"/members/"+tom.ID, nil); code != 200 || len(m["items"].([]any)) != 1 {
+	if code, m := admin.do("PUT", "/orgs/default/admin/groups/"+gid+"/members/"+tom.ID, nil); code != 200 || len(m["items"].([]any)) != 1 {
 		t.Fatalf("add member: %d %v", code, m)
 	}
-	if code, gl := admin.do("GET", "/admin/groups", nil); code != 200 || gl["items"].([]any)[0].(map[string]any)["members"] != float64(1) {
+	if code, gl := admin.do("GET", "/orgs/default/admin/groups", nil); code != 200 || gl["items"].([]any)[0].(map[string]any)["members"] != float64(1) {
 		t.Fatalf("groups: %v", gl)
 	}
 	if code, al := admin.do("GET", "/admin/audit", nil); code != 200 || !strings.Contains(toJSON(al), "group.created") {

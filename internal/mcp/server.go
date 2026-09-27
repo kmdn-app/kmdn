@@ -96,7 +96,7 @@ func (t tools) repos(ctx context.Context) ([]repos.Repo, error) {
 	}
 	var out []repos.Repo
 	for _, r := range all {
-		if t.c.key.Sees(r.ID) && r.HeadSHA != "" {
+		if t.c.key.Sees(r) && r.HeadSHA != "" {
 			out = append(out, r)
 		}
 	}
@@ -111,11 +111,11 @@ func (t tools) repo(ctx context.Context, ref string) (repos.Repo, error) {
 	var r repos.Repo
 	var err error
 	if owner, name, ok := strings.Cut(ref, "/"); ok {
-		r, err = repos.BySlug(ctx, t.s.DB, owner, name)
+		r, err = repos.BySlug(ctx, t.s.DB, t.c.key.OrgID, owner, name)
 	} else {
 		r, err = repos.Get(ctx, t.s.DB, ref)
 	}
-	if err != nil || !t.c.key.Sees(r.ID) || r.HeadSHA == "" {
+	if err != nil || !t.c.key.Sees(r) || r.HeadSHA == "" {
 		return repos.Repo{}, errNoRepo
 	}
 	return r, nil

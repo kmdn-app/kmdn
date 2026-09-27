@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api, errorMessage, unwrap } from "@/lib/api";
+import { currentOrg } from "@/lib/orgs";
 import { Time } from "@/components/time";
 import { cn } from "@/lib/utils";
 import type { components } from "@kmdn/api-client";
@@ -321,8 +322,8 @@ function AddMember({ repo, onAdded }: { repo: RepoView; onAdded: () => void }) {
   const { t } = useTranslation();
   const [q, setQ] = useState("");
   const [role, setRole] = useState<Exclude<Role, "">>("contributor");
-  const users = useQuery({ queryKey: ["users", q], queryFn: async () => (await unwrap(api.GET("/users", { params: { query: { q } } }))).items, enabled: q.trim().length > 1 });
-  const groups = useQuery({ queryKey: ["groups"], queryFn: async () => (await unwrap(api.GET("/groups"))).items });
+  const users = useQuery({ queryKey: ["users", q], queryFn: async () => (await unwrap(api.GET("/orgs/{org}/users", { params: { path: { org: currentOrg() }, query: { q } } }))).items, enabled: q.trim().length > 1 });
+  const groups = useQuery({ queryKey: ["groups"], queryFn: async () => (await unwrap(api.GET("/orgs/{org}/groups", { params: { path: { org: currentOrg() } } }))).items });
   const matchedGroups = (groups.data ?? []).filter((g) => q.trim().length > 1 && g.name.toLowerCase().includes(q.trim().toLowerCase()));
   const grant = useMutation({
     mutationFn: (v: { type: "user" | "group"; id: string }) => unwrap(api.PUT("/repos/{repo}/members/{type}/{id}", { params: { path: { repo: repo.id, type: v.type, id: v.id } }, body: { role } })),

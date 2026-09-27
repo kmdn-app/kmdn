@@ -24,7 +24,10 @@ var publicRoutes = map[string]bool{
 }
 
 // Routes any signed-in person may call, whatever their repository access.
-var anyUserRoutes = regexp.MustCompile(`^(GET|PATCH|POST|DELETE|PUT) /(me\b|inbox|notifications|push|repos$|users$|groups$|assistant/status|follows|setup/complete|auth/)`)
+// Every signed-in account is a member of the default org in single mode, so
+// the org's own collections (repos, directory, groups) and leaving it are
+// theirs too.
+var anyUserRoutes = regexp.MustCompile(`^(GET|PATCH|POST|DELETE|PUT) /(me\b|inbox|notifications|push|assistant/status|follows|setup/complete|auth/|orgs$|orgs/\{org\}$|orgs/\{org\}/(repos|users|groups|repos/by-slug/\{owner\}/\{name\})$|orgs/\{org\}/members/\{user\}$)`)
 
 func walkRoutes(t *testing.T, a *App) []string {
 	t.Helper()
@@ -70,7 +73,7 @@ func TestAuthzMatrix(t *testing.T) {
 	_, rev := admin.do("POST", "/repos/"+repoID+"/revisions", map[string]any{"title": "A change", "path": "docs/index.md"})
 	revID := rev["id"].(string)
 	_, th := admin.do("GET", "/revisions/"+revID+"/assistant", nil)
-	ids := map[string]string{"repo": repoID, "revision": revID, "id": maya.ID, "user": maya.ID}
+	ids := map[string]string{"repo": repoID, "revision": revID, "id": maya.ID, "user": maya.ID, "org": "default"}
 	if th != nil {
 		if m, ok := th["thread"].(map[string]any); ok {
 			ids["thread"] = m["id"].(string)

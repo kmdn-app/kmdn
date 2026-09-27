@@ -44,6 +44,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage, unwrap } from "@/lib/api";
+import { currentOrg } from "@/lib/orgs";
 import type { RepoView } from "@/lib/repos";
 import { useRevision, useRevisionEvents, useRevisionFiles, useSaveRevision, type RevisionFile, type RevisionView } from "@/lib/revisions";
 import { useRepo } from "@/lib/use-repo";
@@ -498,7 +499,7 @@ function People({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
   const invalidate = useInvalidate(repo, rev);
   const found = useQuery({
     queryKey: ["user-search", q],
-    queryFn: async () => (await unwrap(api.GET("/users", { params: { query: { q } } }))).items,
+    queryFn: async () => (await unwrap(api.GET("/orgs/{org}/users", { params: { path: { org: currentOrg() }, query: { q } } }))).items,
     enabled: q.trim().length >= 2,
   });
   const add = useMutation({

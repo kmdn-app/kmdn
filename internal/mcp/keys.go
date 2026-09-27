@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
 )
 
@@ -24,6 +25,7 @@ const KeyPrefix = "kmdn_ak_"
 // Key is an agent key (never with its secret, which is shown once).
 type Key struct {
 	ID          string     `json:"id"`
+	OrgID       string     `json:"org_id"`
 	Name        string     `json:"name"`
 	Description string     `json:"description"`
 	AllRepos    bool       `json:"all_repos"`
@@ -42,12 +44,16 @@ type Key struct {
 }
 
 // Sees reports whether the key covers a repo.
-func (k Key) Sees(repoID string) bool {
+// Keys only see repos of their own org.
+func (k Key) Sees(r repos.Repo) bool {
+	if r.OrgID != k.OrgID {
+		return false
+	}
 	if k.AllRepos {
 		return true
 	}
 	for _, id := range k.RepoIDs {
-		if id == repoID {
+		if id == r.ID {
 			return true
 		}
 	}
@@ -120,13 +126,13 @@ func CreateKey(ctx context.Context, db *store.DB, in NewKey) (Key, string, error
 	return k, KeyPrefix + id + "_" + secret, err
 }
 
-const keyCols = `k.id, k.name, k.description, k.all_repos, COALESCE(k.created_by, ''), COALESCE(u.name, ''), k.created_at, k.expires_at, k.revoked_at, k.last_used_at, k.last_used_ip`
+const keyCols = `k.id, k.name, k.description, k.all_repos, COALESCE(k.created_by, ''), COALESCE(u.name, ''), k.created_at, k.expires_at, k.revoked_at, k.last_used_at, k.last_used_ip, k.org_id`
 
 func scanKey(sc interface{ Scan(...any) error }) (Key, error) {
 	var k Key
 	var created int64
 	var exp, rev, used sql.NullInt64
-	if err := sc.Scan(&k.ID, &k.Name, &k.Description, &k.AllRepos, &k.CreatedBy, &k.CreatorName, &created, &exp, &rev, &used, &k.LastUsedIP); err != nil {
+	if err := sc.Scan(&k.ID, &k.Name, &k.Description, &k.AllRepos, &k.CreatedBy, &k.CreatorName, &created, &exp, &rev, &used, &k.LastUsedIP, &k.OrgID); err != nil {
 		return k, err
 	}
 	k.CreatedAt = time.UnixMilli(created).UTC()

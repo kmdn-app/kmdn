@@ -9,6 +9,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/groups"
 	"github.com/kmdn-app/kmdn/internal/notify"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
@@ -30,7 +31,7 @@ func TestNotificationsRespectCurrentAccess(t *testing.T) {
 			}
 			var groupID string
 			if change == "group" {
-				group, err := groups.Create(ctx, a.DB, "Readers", "")
+				group, err := groups.Create(ctx, a.DB, orgs.DefaultID, "Readers", "")
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -20,7 +20,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, errorMessage, unwrap, useMe } from "@/lib/api";
-import { reposQuery, useRepos } from "@/lib/repos";
+import { currentOrg } from "@/lib/orgs";
+import { useRepos } from "@/lib/repos";
 import { cn } from "@/lib/utils";
 import { SmtpForm } from "@/components/smtp-form";
 import { AgentKeysPanel } from "@/components/admin/agent-keys";
@@ -254,9 +255,9 @@ function GroupsPanel() {
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [openGroup, setOpenGroup] = useState<string | null>(null);
-  const groups = useQuery({ queryKey: ["admin-groups"], queryFn: async () => (await unwrap(api.GET("/admin/groups"))).items });
+  const groups = useQuery({ queryKey: ["admin-groups"], queryFn: async () => (await unwrap(api.GET("/orgs/{org}/admin/groups", { params: { path: { org: currentOrg() } } }))).items });
   const create = useMutation({
-    mutationFn: () => unwrap(api.POST("/admin/groups", { body: { name } })),
+    mutationFn: () => unwrap(api.POST("/orgs/{org}/admin/groups", { params: { path: { org: currentOrg() } }, body: { name } })),
     onSuccess: () => {
       setName("");
       void qc.invalidateQueries({ queryKey: ["admin-groups"] });
@@ -264,7 +265,7 @@ function GroupsPanel() {
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
   });
   const del = useMutation({
-    mutationFn: (id: string) => unwrap(api.DELETE("/admin/groups/{id}", { params: { path: { id } } })),
+    mutationFn: (id: string) => unwrap(api.DELETE("/orgs/{org}/admin/groups/{id}", { params: { path: { org: currentOrg(), id } } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-groups"] }),
   });
   return (
@@ -311,10 +312,10 @@ function GroupMembers({ groupID }: { groupID: string }) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const key = ["group-members", groupID];
-  const members = useQuery({ queryKey: key, queryFn: async () => (await unwrap(api.GET("/admin/groups/{id}/members", { params: { path: { id: groupID } } }))).items });
-  const found = useQuery({ queryKey: ["users", q], queryFn: async () => (await unwrap(api.GET("/users", { params: { query: { q } } }))).items, enabled: q.trim().length > 1 });
+  const members = useQuery({ queryKey: key, queryFn: async () => (await unwrap(api.GET("/orgs/{org}/admin/groups/{id}/members", { params: { path: { org: currentOrg(), id: groupID } } }))).items });
+  const found = useQuery({ queryKey: ["users", q], queryFn: async () => (await unwrap(api.GET("/orgs/{org}/users", { params: { path: { org: currentOrg() }, query: { q } } }))).items, enabled: q.trim().length > 1 });
   const add = useMutation({
-    mutationFn: (user: string) => unwrap(api.PUT("/admin/groups/{id}/members/{user}", { params: { path: { id: groupID, user } } })),
+    mutationFn: (user: string) => unwrap(api.PUT("/orgs/{org}/admin/groups/{id}/members/{user}", { params: { path: { org: currentOrg(), id: groupID, user } } })),
     onSuccess: (d) => {
       qc.setQueryData(key, d.items);
       setQ("");
@@ -322,7 +323,7 @@ function GroupMembers({ groupID }: { groupID: string }) {
     },
   });
   const remove = useMutation({
-    mutationFn: (user: string) => unwrap(api.DELETE("/admin/groups/{id}/members/{user}", { params: { path: { id: groupID, user } } })),
+    mutationFn: (user: string) => unwrap(api.DELETE("/orgs/{org}/admin/groups/{id}/members/{user}", { params: { path: { org: currentOrg(), id: groupID, user } } })),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: key });
       void qc.invalidateQueries({ queryKey: ["admin-groups"] });
@@ -559,7 +560,8 @@ function ConnectDialog({ host, onClose }: { host: ForgeHost; onClose: () => void
   const connect = useMutation({
     mutationFn: () =>
       unwrap(
-        api.POST("/repos", {
+        api.POST("/orgs/{org}/repos", {
+          params: { path: { org: currentOrg() } },
           body: {
             forge_host_id: host.id,
             ...(host.kind === "git" ? { clone_url: form.clone_url } : { owner: form.owner, name: form.name }),
@@ -570,7 +572,7 @@ function ConnectDialog({ host, onClose }: { host: ForgeHost; onClose: () => void
         }),
       ),
     onSuccess: async (r) => {
-      await qc.invalidateQueries({ queryKey: reposQuery.queryKey });
+      await qc.invalidateQueries({ queryKey: ["repos"] });
       toast.success(t("admin.connected", { name: r.repo.display_name }));
       onClose();
       await navigate({ to: "/$owner/$repo", params: { owner: r.repo.owner, repo: r.repo.name } });

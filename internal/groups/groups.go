@@ -1,5 +1,5 @@
-// Package groups manages instance-level groups of users. Groups can be
-// granted roles on repositories (see package access).
+// Package groups manages an organization's groups of users. Groups can be
+// granted roles on the org's repositories (see package access).
 package groups
 
 import (
@@ -13,22 +13,23 @@ import (
 // Group is a named set of users.
 type Group struct {
 	ID          string    `json:"id"`
+	OrgID       string    `json:"org_id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Members     int       `json:"members"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// Create adds a group.
-func Create(ctx context.Context, q store.Querier, name, desc string) (Group, error) {
-	g := Group{ID: ids.New(ids.Group), Name: name, Description: desc, CreatedAt: time.Now().UTC().Truncate(time.Millisecond)}
-	_, err := store.Exec(ctx, q, `INSERT INTO groups (id, name, description, created_at) VALUES (?, ?, ?, ?)`, g.ID, name, desc, store.Millis(g.CreatedAt))
+// Create adds a group to an org.
+func Create(ctx context.Context, q store.Querier, orgID, name, desc string) (Group, error) {
+	g := Group{ID: ids.New(ids.Group), OrgID: orgID, Name: name, Description: desc, CreatedAt: time.Now().UTC().Truncate(time.Millisecond)}
+	_, err := store.Exec(ctx, q, `INSERT INTO groups (id, org_id, name, description, created_at) VALUES (?, ?, ?, ?, ?)`, g.ID, orgID, name, desc, store.Millis(g.CreatedAt))
 	return g, err
 }
 
-// List returns all groups with member counts.
-func List(ctx context.Context, q store.Querier) ([]Group, error) {
-	rows, err := store.Query(ctx, q, `SELECT g.id, g.name, g.description, g.created_at, (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) FROM groups g ORDER BY g.name`)
+// List returns an org's groups with member counts.
+func List(ctx context.Context, q store.Querier, orgID string) ([]Group, error) {
+	rows, err := store.Query(ctx, q, `SELECT g.id, g.org_id, g.name, g.description, g.created_at, (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) FROM groups g WHERE g.org_id = ? ORDER BY g.name`, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +38,7 @@ func List(ctx context.Context, q store.Querier) ([]Group, error) {
 	for rows.Next() {
 		var g Group
 		var at int64
-		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &at, &g.Members); err != nil {
+		if err := rows.Scan(&g.ID, &g.OrgID, &g.Name, &g.Description, &at, &g.Members); err != nil {
 			return nil, err
 		}
 		g.CreatedAt = store.FromMillis(at)
@@ -50,8 +51,8 @@ func List(ctx context.Context, q store.Querier) ([]Group, error) {
 func Get(ctx context.Context, q store.Querier, id string) (Group, error) {
 	var g Group
 	var at int64
-	err := store.QueryRow(ctx, q, `SELECT g.id, g.name, g.description, g.created_at, (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) FROM groups g WHERE g.id = ?`, id).
-		Scan(&g.ID, &g.Name, &g.Description, &at, &g.Members)
+	err := store.QueryRow(ctx, q, `SELECT g.id, g.org_id, g.name, g.description, g.created_at, (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) FROM groups g WHERE g.id = ?`, id).
+		Scan(&g.ID, &g.OrgID, &g.Name, &g.Description, &at, &g.Members)
 	g.CreatedAt = store.FromMillis(at)
 	return g, store.NotFound(err)
 }

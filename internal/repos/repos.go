@@ -30,6 +30,7 @@ type Settings struct {
 // Repo is a connected repository.
 type Repo struct {
 	ID            string           `json:"id"`
+	OrgID         string           `json:"org_id"`
 	ForgeHostID   string           `json:"forge_host_id"`
 	ForgeKind     string           `json:"forge_kind"`
 	InstallID     string           `json:"-"`
@@ -70,7 +71,7 @@ func (r Repo) ForgeRepo() forge.Repo {
 const repoCols = `r.id, r.forge_host_id, h.kind, COALESCE(r.install_id, ''), COALESCE(i.external_id, ''), r.external_id, r.owner, r.name, r.display_name,
 	r.clone_url, r.web_url, r.default_branch, r.target_branch, r.content_root, r.include_globs, r.exclude_globs, r.settings,
 	r.protection, r.head_sha, r.health, r.health_detail, r.kmdn_yml, r.last_fetch_at, r.created_at,
-	COALESCE(r.token_ref, ''), COALESCE(r.webhook_secret_ref, '')`
+	COALESCE(r.token_ref, ''), COALESCE(r.webhook_secret_ref, ''), r.org_id`
 
 const repoFrom = ` FROM repos r JOIN forge_hosts h ON h.id = r.forge_host_id LEFT JOIN forge_installs i ON i.id = r.install_id`
 
@@ -81,7 +82,7 @@ func scanRepo(row interface{ Scan(...any) error }) (Repo, error) {
 	var created int64
 	err := row.Scan(&r.ID, &r.ForgeHostID, &r.ForgeKind, &r.InstallID, &r.InstallExtID, &r.ExternalID, &r.Owner, &r.Name, &r.DisplayName,
 		&r.CloneURL, &r.WebURL, &r.DefaultBranch, &r.TargetBranch, &r.ContentRoot, &inc, &exc, &settings,
-		&prot, &r.HeadSHA, &r.Health, &r.HealthDetail, &kyml, &last, &created, &r.TokenRef, &r.WebhookSecretRef)
+		&prot, &r.HeadSHA, &r.Health, &r.HealthDetail, &kyml, &last, &created, &r.TokenRef, &r.WebhookSecretRef, &r.OrgID)
 	if err != nil {
 		return r, err
 	}
@@ -108,9 +109,9 @@ func Get(ctx context.Context, q store.Querier, id string) (Repo, error) {
 	return r, store.NotFound(err)
 }
 
-// BySlug loads a repo by owner/name (first match across hosts).
-func BySlug(ctx context.Context, q store.Querier, owner, name string) (Repo, error) {
-	r, err := scanRepo(store.QueryRow(ctx, q, `SELECT `+repoCols+repoFrom+` WHERE r.owner = ? AND r.name = ? ORDER BY r.created_at LIMIT 1`, owner, name))
+// BySlug loads an org's repo by owner/name (first match across hosts).
+func BySlug(ctx context.Context, q store.Querier, orgID, owner, name string) (Repo, error) {
+	r, err := scanRepo(store.QueryRow(ctx, q, `SELECT `+repoCols+repoFrom+` WHERE r.org_id = ? AND r.owner = ? AND r.name = ? ORDER BY r.created_at LIMIT 1`, orgID, owner, name))
 	return r, store.NotFound(err)
 }
 
