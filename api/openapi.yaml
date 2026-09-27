@@ -1683,6 +1683,56 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/review-summary:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [assistant]
+      operationId: getReviewSummary
+      summary: Checks on the revision's pages (always fresh) and the review assistant's summary card
+      responses:
+        "200":
+          description: Checks and summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checks, review, pending, available]
+                properties:
+                  checks: { type: array, items: { $ref: "#/components/schemas/ReviewFinding" } }
+                  review:
+                    oneOf:
+                      - { $ref: "#/components/schemas/ReviewSummary" }
+                      - { type: "null" }
+                  pending: { type: boolean, description: "A summary is being written" }
+                  available: { type: boolean, description: "The assistant is set up" }
+    post:
+      tags: [assistant]
+      operationId: requestReviewSummary
+      summary: Ask for a fresh summary (editors and reviewers)
+      responses:
+        "202": { description: Queued }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/change-summaries:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [assistant]
+      operationId: getChangeSummaries
+      summary: One-line summaries of a page's published changes, by commit
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [by_commit]
+                properties:
+                  by_commit: { type: object, additionalProperties: { type: string } }
   /revisions/{revision}/assistant:
     parameters:
       - { $ref: "#/components/parameters/RevisionID" }
@@ -2214,6 +2264,27 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    ReviewFinding:
+      type: object
+      required: [kind, path, message]
+      properties:
+        kind: { type: string, enum: [broken_link, breaks_inbound, missing_alt, heading_jump, frontmatter, style] }
+        path: { type: string }
+        line: { type: integer }
+        message: { type: string }
+        quote: { type: string }
+    ReviewSummary:
+      type: object
+      required: [summary, commit_title, commit_body, findings, created_at, stale]
+      properties:
+        summary: { type: string }
+        commit_title: { type: string }
+        commit_body: { type: string }
+        findings: { type: array, items: { $ref: "#/components/schemas/ReviewFinding" } }
+        model: { type: string }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        stale: { type: boolean, description: "The revision changed since it was written" }
     AssistantThread:
       type: object
       required: [id, repo_id, title, created_at, updated_at]

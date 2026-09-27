@@ -634,7 +634,18 @@
       "pending": "Waiting",
       "approved": "Approved",
       "changes_requested": "Asked for changes"
-    }
+    },
+    "title": "Review summary",
+    "refresh": "Refresh",
+    "write": "Write summary",
+    "writing": "The assistant is reading the changes…",
+    "commit": "Suggested commit",
+    "by": "By the assistant",
+    "stale": "The revision changed since",
+    "none": "No summary yet. One is written when the revision is sent for review.",
+    "fix": "Fix",
+    "fixPrompt": "Fix this in {{where}}: {{message}}{{quote}}",
+    "fixAsked": "Asked the assistant: its suggestions will appear in the page"
   },
   "publish": {
     "action": "Publish",

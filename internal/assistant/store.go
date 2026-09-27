@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/ids"
@@ -164,4 +165,36 @@ func Messages(ctx context.Context, q store.Querier, threadID string) ([]Message,
 func DeleteThread(ctx context.Context, q store.Querier, id string) error {
 	_, err := store.Exec(ctx, q, `DELETE FROM assistant_threads WHERE id = ?`, id)
 	return err
+}
+
+// PeopleSaid returns what people wrote in a revision's assistant thread (the
+// intent behind its changes), most recent last, bounded.
+func PeopleSaid(ctx context.Context, db *store.DB, revisionID string) string {
+	t, err := scanThread(store.QueryRow(ctx, db, `SELECT `+threadCols+` FROM assistant_threads WHERE revision_id = ?`, revisionID))
+	if err != nil {
+		return ""
+	}
+	msgs, err := Messages(ctx, db, t.ID)
+	if err != nil {
+		return ""
+	}
+	var lines []string
+	for _, m := range msgs {
+		if !m.human() {
+			continue
+		}
+		for _, b := range m.Content {
+			if b.Type == llm.BlockText && b.Text != "" {
+				lines = append(lines, nameOr(m.AuthorName)+": "+b.Text)
+			}
+		}
+	}
+	if len(lines) > 12 {
+		lines = lines[len(lines)-12:]
+	}
+	out := strings.Join(lines, "\n")
+	if len(out) > 6000 {
+		out = out[len(out)-6000:]
+	}
+	return out
 }
