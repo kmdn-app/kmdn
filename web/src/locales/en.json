@@ -913,5 +913,36 @@
     "open": "Open page",
     "local": "Nearby pages",
     "openGraph": "Open the graph"
+  },
+  "ai": {
+    "title": "AI provider",
+    "desc": "The assistant, review summaries and consistency checks use this model provider. Keys are stored encrypted.",
+    "disabledByConfig": "The assistant is turned off in the server configuration (assistant.enabled: false).",
+    "provider": "Provider",
+    "off": "Off",
+    "openai": "OpenAI-compatible (OpenAI, OpenRouter, Ollama, vLLM…)",
+    "baseURL": "Base URL",
+    "baseURLOptional": "Base URL (optional)",
+    "key": "API key",
+    "keySet": "A key is set: type to replace it",
+    "keyOptional": "Optional for local servers",
+    "models": "Models",
+    "tasks": {
+      "chat": "Assistant",
+      "review_summary": "Review summaries",
+      "short_text": "Titles and short text"
+    },
+    "modelRequired": "Required",
+    "sameAsChat": "Same as the assistant",
+    "userDaily": "Tokens per person per day",
+    "instanceMonthly": "Tokens per month (instance)",
+    "budgetHint": "0 means no limit. Budgets count input, output and cached tokens.",
+    "saveCheck": "Save and check",
+    "today": "Today",
+    "month": "This month",
+    "byUser": "This month by person",
+    "runs": "Runs",
+    "tokens": "Tokens",
+    "system": "System"
   }
 }

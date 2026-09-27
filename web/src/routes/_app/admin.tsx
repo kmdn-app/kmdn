@@ -3,8 +3,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { GitBranch, Grid2x2, Loader2, Mail, Plus, ScrollText, Server, Shield, Trash2, UserPlus, Users } from "lucide-react";
-import type { components } from "@kmdn/api-client";
+import { CheckCircle2, GitBranch, Grid2x2, Loader2, Mail, Plus, ScrollText, Server, Shield, Sparkles, Trash2, TriangleAlert, UserPlus, Users } from "lucide-react";
+import type { components, paths } from "@kmdn/api-client";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { Card, Panel, SettingsLayout } from "@/components/settings-layout";
@@ -25,7 +25,7 @@ import { SmtpForm } from "@/components/smtp-form";
 type AdminUser = components["schemas"]["AdminUser"];
 type ForgeHost = components["schemas"]["ForgeHost"];
 
-const SECTIONS = ["users", "groups", "repositories", "email", "audit"] as const;
+const SECTIONS = ["users", "groups", "repositories", "email", "ai", "audit"] as const;
 type Section = (typeof SECTIONS)[number];
 
 export const Route = createFileRoute("/_app/admin")({
@@ -57,6 +57,7 @@ function Admin() {
                   { key: "groups", label: t("admin.groups"), icon: Grid2x2 },
                   { key: "repositories", label: t("admin.repositories"), icon: Server },
                   { key: "email", label: t("admin.email"), icon: Mail },
+                  { key: "ai", label: t("ai.title"), icon: Sparkles },
                   { key: "audit", label: t("admin.audit"), icon: ScrollText },
                 ]}
                 linkProps={(key) => ({ to: "/admin", search: { section: key as Section } })}
@@ -70,6 +71,7 @@ function Admin() {
                 {section === "groups" && <GroupsPanel />}
                 {section === "repositories" && <ReposPanel />}
                 {section === "email" && <EmailPanel />}
+                {section === "ai" && <AIPanel />}
                 {section === "audit" && <AuditPanel />}
               </SettingsLayout>
             )}
@@ -697,6 +699,154 @@ function AuditPanel() {
           </tbody>
         </table>
       </div>
+    </Panel>
+  );
+}
+
+type AISettings = components["schemas"]["AISettings"];
+
+/** AI provider: Anthropic or OpenAI-compatible, a model per task, budgets and usage. */
+function AIPanel() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["admin-ai"], queryFn: () => unwrap(api.GET("/admin/ai")) });
+  const usage = useQuery({ queryKey: ["admin-ai-usage"], queryFn: () => unwrap(api.GET("/admin/ai/usage")) });
+  if (!q.data) return <Panel title={t("ai.title")}>{null}</Panel>;
+  return <AIForm key={JSON.stringify(q.data)} st={q.data} usage={usage.data} onSaved={(d) => (qc.setQueryData(["admin-ai"], d), void qc.invalidateQueries({ queryKey: ["admin-ai-usage"] }))} />;
+}
+
+type AIUsage = paths["/admin/ai/usage"]["get"]["responses"]["200"]["content"]["application/json"];
+
+function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSaved: (d: AISettings) => void }) {
+  const { t } = useTranslation();
+  const [provider, setProvider] = useState(st.provider || "off");
+  const [baseURL, setBaseURL] = useState(st.base_url ?? "");
+  const [key, setKey] = useState("");
+  const [models, setModels] = useState<Record<string, string>>(st.models ?? {});
+  const [daily, setDaily] = useState(String(st.user_daily_tokens));
+  const [monthly, setMonthly] = useState(String(st.instance_monthly_tokens));
+  const save = useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.PUT("/admin/ai", {
+          body: {
+            provider: provider === "off" ? "" : (provider as "anthropic" | "openai"),
+            base_url: baseURL,
+            ...(key ? { api_key: key } : {}),
+            models,
+            user_daily_tokens: Number(daily) || 0,
+            instance_monthly_tokens: Number(monthly) || 0,
+          },
+        }),
+      ),
+    onSuccess: (d) => {
+      onSaved(d);
+      if (d.check && !d.check.ok) toast.error(d.check.message);
+      else toast.success(t("settings.saved"));
+    },
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  const defaults = (st.defaults as Record<string, Record<string, string>>)[provider] ?? {};
+  const fmt = (n: number) => n.toLocaleString();
+  return (
+    <Panel title={t("ai.title")} desc={t("ai.desc")}>
+      {st.disabled && <p className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-[13.5px]">{t("ai.disabledByConfig")}</p>}
+      <Card
+        footer={
+          <Button onClick={() => save.mutate()} disabled={save.isPending}>
+            {save.isPending && <Loader2 className="animate-spin" />}
+            {t("ai.saveCheck")}
+          </Button>
+        }
+      >
+        <div className="grid gap-1.5">
+          <Label>{t("ai.provider")}</Label>
+          <Select value={provider} onValueChange={setProvider}>
+            <SelectTrigger className="w-72">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="off">{t("ai.off")}</SelectItem>
+              <SelectItem value="anthropic">Anthropic</SelectItem>
+              <SelectItem value="openai">{t("ai.openai")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {provider !== "off" && (
+          <>
+            <div className="grid gap-1.5">
+              <Label htmlFor="ai-url">{provider === "openai" ? t("ai.baseURL") : t("ai.baseURLOptional")}</Label>
+              <Input id="ai-url" value={baseURL} onChange={(e) => setBaseURL(e.target.value)} placeholder={provider === "openai" ? "https://api.openai.com/v1 · http://localhost:11434/v1" : "https://api.anthropic.com"} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="ai-key">{t("ai.key")}</Label>
+              <Input id="ai-key" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder={st.key_set ? t("ai.keySet") : provider === "openai" ? t("ai.keyOptional") : "sk-ant-…"} />
+            </div>
+            <div className="grid gap-2">
+              <Label>{t("ai.models")}</Label>
+              {st.tasks.map((task) => (
+                <div key={task} className="grid grid-cols-[160px_1fr] items-center gap-3 max-sm:grid-cols-1">
+                  <span className="text-[13px] text-muted-foreground">{t(`ai.tasks.${task}`)}</span>
+                  <Input value={models[task] ?? ""} onChange={(e) => setModels((m) => ({ ...m, [task]: e.target.value }))} placeholder={defaults[task] ?? (task === "chat" ? t("ai.modelRequired") : t("ai.sameAsChat"))} className="font-mono text-[12.5px]" />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+              <div className="grid gap-1.5">
+                <Label htmlFor="ai-daily">{t("ai.userDaily")}</Label>
+                <Input id="ai-daily" inputMode="numeric" value={daily} onChange={(e) => setDaily(e.target.value.replace(/\D/g, ""))} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="ai-monthly">{t("ai.instanceMonthly")}</Label>
+                <Input id="ai-monthly" inputMode="numeric" value={monthly} onChange={(e) => setMonthly(e.target.value.replace(/\D/g, ""))} />
+              </div>
+            </div>
+            <p className="text-[12.5px] text-muted-foreground">{t("ai.budgetHint")}</p>
+          </>
+        )}
+        {st.check && (
+          <p className={cn("flex items-start gap-2 text-[13px]", st.check.ok ? "text-success" : "text-destructive")}>
+            {st.check.ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : <TriangleAlert className="mt-0.5 size-4 shrink-0" />}
+            <span>
+              {st.check.message} <span className="text-muted-foreground">· <Time iso={st.check.at} /></span>
+            </span>
+          </p>
+        )}
+      </Card>
+      {usage && (
+        <Card>
+          <div className="flex flex-wrap gap-6 text-[13.5px]">
+            <div>
+              <div className="text-[12px] text-muted-foreground">{t("ai.today")}</div>
+              <div className="text-lg font-semibold tabular-nums">{fmt(usage.today_tokens)}</div>
+            </div>
+            <div>
+              <div className="text-[12px] text-muted-foreground">{t("ai.month")}</div>
+              <div className="text-lg font-semibold tabular-nums">{fmt(usage.month_tokens)}</div>
+            </div>
+          </div>
+          {usage.by_user.length > 0 && (
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-[12px] text-muted-foreground">
+                  <th className="py-1 font-medium">{t("ai.byUser")}</th>
+                  <th className="py-1 text-right font-medium">{t("ai.runs")}</th>
+                  <th className="py-1 text-right font-medium">{t("ai.tokens")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usage.by_user.map((u) => (
+                  <tr key={u.key || "system"} className="border-t">
+                    <td className="py-1.5">{u.name || t("ai.system")}</td>
+                    <td className="py-1.5 text-right tabular-nums">{u.runs}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fmt(u.tokens)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      )}
     </Panel>
   );
 }

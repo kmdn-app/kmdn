@@ -1694,6 +1694,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistant/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the assistant is available on this instance */
+        get: operations["getAssistantStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAISettings"];
+        /** Configure the AI provider (runs a capability check) */
+        put: operations["putAISettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/ai/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["checkAIProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/ai/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAIUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications": {
         parameters: {
             query?: never;
@@ -2100,6 +2166,41 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AISettings: {
+            provider: string;
+            base_url?: string;
+            key_set: boolean;
+            models: {
+                [key: string]: string;
+            };
+            defaults: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
+            tasks: string[];
+            embeddings: {
+                base_url?: string;
+                model?: string;
+                key_set: boolean;
+            };
+            user_daily_tokens: number;
+            instance_monthly_tokens: number;
+            /** @description assistant.enabled is false in the server config */
+            disabled: boolean;
+            check?: {
+                ok: boolean;
+                message: string;
+                /** Format: date-time */
+                at: string;
+            };
+        };
+        AIUsageRow: {
+            key: string;
+            name?: string;
+            tokens: number;
+            runs: number;
+        };
         Notification: {
             id: string;
             kind: string;
@@ -5748,6 +5849,136 @@ export interface operations {
             };
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getAssistantStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        enabled: boolean;
+                    };
+                };
+            };
+        };
+    };
+    getAISettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AISettings"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    putAISettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    provider?: "" | "anthropic" | "openai";
+                    base_url?: string;
+                    /** @description Omit to keep the current key; empty to remove it */
+                    api_key?: string;
+                    models?: {
+                        [key: string]: string;
+                    };
+                    embeddings?: {
+                        base_url?: string;
+                        model?: string;
+                        api_key?: string;
+                    };
+                    user_daily_tokens?: number;
+                    instance_monthly_tokens?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AISettings"];
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    checkAIProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings with a fresh check */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AISettings"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    getAIUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tokens today and this month, by user and by task */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        today_tokens: number;
+                        month_tokens: number;
+                        by_user: components["schemas"]["AIUsageRow"][];
+                        by_task: components["schemas"]["AIUsageRow"][];
+                    };
+                };
+            };
         };
     };
     listNotifications: {

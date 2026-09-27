@@ -24,6 +24,7 @@ tags:
   - name: links
   - name: threads
   - name: notifications
+  - name: assistant
 paths:
   /auth/magic-link:
     post:
@@ -1582,6 +1583,78 @@ paths:
         "201": { description: Thread, content: { application/json: { schema: { $ref: "#/components/schemas/Thread" } } } }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /assistant/status:
+    get:
+      tags: [assistant]
+      operationId: getAssistantStatus
+      summary: Whether the assistant is available on this instance
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled]
+                properties:
+                  enabled: { type: boolean }
+  /admin/ai:
+    get:
+      tags: [admin]
+      operationId: getAISettings
+      responses:
+        "200": { description: Settings, content: { application/json: { schema: { $ref: "#/components/schemas/AISettings" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      tags: [admin]
+      operationId: putAISettings
+      summary: Configure the AI provider (runs a capability check)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider: { type: string, enum: ["", anthropic, openai] }
+                base_url: { type: string }
+                api_key: { type: string, description: "Omit to keep the current key; empty to remove it" }
+                models: { type: object, additionalProperties: { type: string } }
+                embeddings:
+                  type: object
+                  properties:
+                    base_url: { type: string }
+                    model: { type: string }
+                    api_key: { type: string }
+                user_daily_tokens: { type: integer }
+                instance_monthly_tokens: { type: integer }
+      responses:
+        "200": { description: Settings, content: { application/json: { schema: { $ref: "#/components/schemas/AISettings" } } } }
+        "422": { $ref: "#/components/responses/Problem" }
+  /admin/ai/check:
+    post:
+      tags: [admin]
+      operationId: checkAIProvider
+      responses:
+        "200": { description: Settings with a fresh check, content: { application/json: { schema: { $ref: "#/components/schemas/AISettings" } } } }
+        "409": { $ref: "#/components/responses/Problem" }
+  /admin/ai/usage:
+    get:
+      tags: [admin]
+      operationId: getAIUsage
+      responses:
+        "200":
+          description: Tokens today and this month, by user and by task
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [today_tokens, month_tokens, by_user, by_task]
+                properties:
+                  today_tokens: { type: integer }
+                  month_tokens: { type: integer }
+                  by_user: { type: array, items: { $ref: "#/components/schemas/AIUsageRow" } }
+                  by_task: { type: array, items: { $ref: "#/components/schemas/AIUsageRow" } }
   /notifications:
     get:
       tags: [notifications]
@@ -2005,6 +2078,41 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    AISettings:
+      type: object
+      required: [provider, key_set, models, defaults, tasks, embeddings, user_daily_tokens, instance_monthly_tokens, disabled]
+      properties:
+        provider: { type: string }
+        base_url: { type: string }
+        key_set: { type: boolean }
+        models: { type: object, additionalProperties: { type: string } }
+        defaults: { type: object, additionalProperties: { type: object, additionalProperties: { type: string } } }
+        tasks: { type: array, items: { type: string } }
+        embeddings:
+          type: object
+          required: [key_set]
+          properties:
+            base_url: { type: string }
+            model: { type: string }
+            key_set: { type: boolean }
+        user_daily_tokens: { type: integer }
+        instance_monthly_tokens: { type: integer }
+        disabled: { type: boolean, description: "assistant.enabled is false in the server config" }
+        check:
+          type: object
+          required: [ok, message, at]
+          properties:
+            ok: { type: boolean }
+            message: { type: string }
+            at: { type: string, format: date-time }
+    AIUsageRow:
+      type: object
+      required: [key, tokens, runs]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        tokens: { type: integer }
+        runs: { type: integer }
     Notification:
       type: object
       required: [id, kind, data, created_at]
