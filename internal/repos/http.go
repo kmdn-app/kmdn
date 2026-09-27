@@ -187,7 +187,7 @@ func (s *Service) refresh(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id, err := s.EnqueueSync(r.Context(), repo.ID)
+	id, err := s.EnqueueFullSync(r.Context(), repo.ID)
 	if err != nil {
 		api.Error(w, r, err)
 		return

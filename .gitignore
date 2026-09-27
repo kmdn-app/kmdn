@@ -6,6 +6,8 @@ packages/*/dist/
 internal/web/dist/*
 !internal/web/dist/.gitkeep
 coverage/
+e2e/test-results/
+e2e/playwright-report/
 *.test
 *.out
 

@@ -63,7 +63,9 @@ func (m *Mirror) BuildCommit(ctx context.Context, parent string, changes []Chang
 	if _, err := m.Git.runEnv(ctx, m.Path, nil, strings.NewReader(info.String()), env, "update-index", "--index-info"); err != nil {
 		return "", err
 	}
-	tree, err := m.Git.runEnv(ctx, m.Path, nil, nil, env, "write-tree")
+	// --missing-ok: unchanged entries point at blobs the partial clone
+	// never fetched (they're on the remote); only the new ones are local.
+	tree, err := m.Git.runEnv(ctx, m.Path, nil, nil, env, "write-tree", "--missing-ok")
 	if err != nil {
 		return "", err
 	}

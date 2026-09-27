@@ -6,7 +6,7 @@ LDFLAGS := -s -w -X github.com/kmdn-app/kmdn/internal/version.Version=$(VERSION)
 	-X github.com/kmdn-app/kmdn/internal/version.Commit=$(COMMIT) \
 	-X github.com/kmdn-app/kmdn/internal/version.Date=$(DATE)
 
-.PHONY: help install web build docker test test-go test-ts lint lint-go lint-ts generate dev dev-server dev-web clean
+.PHONY: help install web build docker e2e test test-go test-ts lint lint-go lint-ts generate dev dev-server dev-web clean
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*## "}{printf "  %-12s %s\n",$$1,$$2}'
@@ -24,6 +24,9 @@ build: web ## Build bin/kmdn with the SPA embedded
 
 docker: ## Build the kmdn:dev image from source
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) -t kmdn:dev .
+
+e2e: build ## End-to-end tests (Playwright) against bin/kmdn and a fake GitLab
+	pnpm --filter @kmdn/e2e e2e
 
 test: test-go test-ts ## Run all tests
 
