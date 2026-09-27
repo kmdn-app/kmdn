@@ -20,6 +20,7 @@ tags:
   - name: me
   - name: setup
   - name: admin
+  - name: revisions
 paths:
   /auth/magic-link:
     post:
@@ -854,10 +855,234 @@ paths:
                 custom: { type: string, format: email }
       responses:
         "204": { description: Saved }
+  /repos/{repo}/revisions:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [revisions]
+      operationId: listRevisions
+      summary: Revisions, most recently updated first
+      parameters:
+        - { name: state, in: query, schema: { type: string }, description: "open (default), all, or comma-separated states" }
+        - { name: mine, in: query, schema: { type: boolean }, description: Only revisions the caller edits }
+      responses:
+        "200":
+          description: Revisions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RevisionView" } }
+    post:
+      tags: [revisions]
+      operationId: createRevision
+      summary: Start a revision on the published head
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RevisionCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionView" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/revisions/by-number/{number}:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { name: number, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [revisions]
+      operationId: getRevisionByNumber
+      responses:
+        "200": { description: Revision, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionView" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/templates:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+    get:
+      tags: [revisions]
+      operationId: listTemplates
+      summary: Page templates in .kmdn/templates
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/TreeNode" } }
+  /revisions/{revision}:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: getRevision
+      responses:
+        "200": { description: Revision, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionView" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [revisions]
+      operationId: updateRevision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+      responses:
+        "200": { description: Revision, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionView" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/close:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [revisions]
+      operationId: closeRevision
+      responses:
+        "200": { description: Revision, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionView" } } } }
+        "409": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/reopen:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [revisions]
+      operationId: reopenRevision
+      responses:
+        "200": { description: Revision, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionView" } } } }
+        "409": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/tree:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: getRevisionTree
+      summary: The base tree with the revision's file changes applied
+      responses:
+        "200":
+          description: Tree
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [base_sha, root, items]
+                properties:
+                  base_sha: { type: string }
+                  root: { type: string }
+                  items: { type: array, items: { $ref: "#/components/schemas/RevisionTreeNode" } }
+  /revisions/{revision}/files:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: listRevisionFiles
+      summary: The manifest
+      responses:
+        "200":
+          description: Files
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RevisionFile" } }
+    post:
+      tags: [revisions]
+      operationId: revisionFileOp
+      summary: Add, modify, rename or delete a page
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RevisionFileOp" } } }
+      responses:
+        "200": { description: Manifest entry, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionFile" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/files/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { $ref: "#/components/parameters/FilePath" }
+    get:
+      tags: [revisions]
+      operationId: getRevisionFile
+      summary: A page as seen in the revision
+      responses:
+        "200": { description: Content, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionContent" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/members:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: listRevisionMembers
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RevisionMember" } }
+  /revisions/{revision}/members/{user}:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { name: user, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [revisions]
+      operationId: addRevisionMember
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RevisionMember" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [revisions]
+      operationId: removeRevisionMember
+      responses:
+        "204": { description: Removed }
+        "409": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/events:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: listRevisionEvents
+      responses:
+        "200":
+          description: Events, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RevisionEvent" } }
 components:
   parameters:
     RepoID:
       name: repo
+      in: path
+      required: true
+      schema: { type: string }
+    RevisionID:
+      name: revision
       in: path
       required: true
       schema: { type: string }
@@ -879,6 +1104,120 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    RevisionState:
+      type: string
+      enum: [editing, in_review, approved, publishing, published, closed]
+    Revision:
+      type: object
+      required: [id, repo_id, number, title, description, state, changes_requested, has_conflicts, review_round, base_sha, created_by, created_at, updated_at]
+      properties:
+        id: { type: string }
+        repo_id: { type: string }
+        number: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        state: { $ref: "#/components/schemas/RevisionState" }
+        changes_requested: { type: boolean }
+        has_conflicts: { type: boolean }
+        review_round: { type: integer }
+        base_sha: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        submitted_at: { type: string, format: date-time }
+        published_at: { type: string, format: date-time }
+        published_sha: { type: string }
+        change_request_url: { type: string }
+        closed_at: { type: string, format: date-time }
+    RevisionAccess:
+      type: object
+      required: [member, can_edit, can_manage]
+      properties:
+        member: { type: boolean }
+        can_edit: { type: boolean }
+        can_manage: { type: boolean }
+        reason: { type: string, description: "Why editing is off: viewer, not_member, or the revision state" }
+    RevisionMember:
+      type: object
+      required: [user_id, name, email, role, added_at]
+      properties:
+        user_id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [owner, editor] }
+        added_at: { type: string, format: date-time }
+    RevisionView:
+      allOf:
+        - $ref: "#/components/schemas/Revision"
+        - type: object
+          required: [access, members, file_count]
+          properties:
+            access: { $ref: "#/components/schemas/RevisionAccess" }
+            members: { type: array, items: { $ref: "#/components/schemas/RevisionMember" } }
+            file_count: { type: integer }
+    RevisionCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        path: { type: string, description: Add this page right away }
+        op: { type: string, enum: [modify, add] }
+        template: { type: string }
+    FileOpKind:
+      type: string
+      enum: [add, modify, rename, delete]
+    RevisionFile:
+      type: object
+      required: [id, path, op, has_conflicts, additions, deletions, updated_at]
+      properties:
+        id: { type: string }
+        path: { type: string }
+        op: { $ref: "#/components/schemas/FileOpKind" }
+        from_path: { type: string }
+        content_hash: { type: string }
+        materialized_at: { type: string, format: date-time }
+        has_conflicts: { type: boolean }
+        additions: { type: integer }
+        deletions: { type: integer }
+        updated_at: { type: string, format: date-time }
+    RevisionFileOp:
+      type: object
+      required: [op, path]
+      properties:
+        op: { $ref: "#/components/schemas/FileOpKind" }
+        path: { type: string }
+        from_path: { type: string }
+        template: { type: string }
+        content: { type: string }
+    RevisionContent:
+      type: object
+      required: [path, content, base, markdown, in_revision]
+      properties:
+        path: { type: string }
+        op: { $ref: "#/components/schemas/FileOpKind" }
+        from_path: { type: string }
+        content: { type: string }
+        base: { type: string }
+        markdown: { type: boolean }
+        in_revision: { type: boolean }
+    RevisionTreeNode:
+      allOf:
+        - $ref: "#/components/schemas/TreeNode"
+        - type: object
+          properties:
+            op: { $ref: "#/components/schemas/FileOpKind" }
+    RevisionEvent:
+      type: object
+      required: [id, actor_type, kind, data, created_at]
+      properties:
+        id: { type: string }
+        actor_type: { type: string, enum: [user, assistant, system] }
+        actor_id: { type: string }
+        actor_name: { type: string }
+        kind: { type: string }
+        data: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
     SearchHit:
       type: object
       required: [path, title, snippet]
