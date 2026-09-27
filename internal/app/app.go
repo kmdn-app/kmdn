@@ -9,6 +9,7 @@ import (
 
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/assistant"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/blobs"
 	"github.com/kmdn-app/kmdn/internal/branches"
 	"github.com/kmdn-app/kmdn/internal/collab"
 	"github.com/kmdn-app/kmdn/internal/config"
@@ -151,7 +153,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	idx.Routes(r)
 	a.Repos.Routes(r)
 	a.Repos.ForgeRoutes(r)
-	a.Revisions = &revisions.Service{DB: db, Repos: a.Repos, Log: log, DataDir: cfg.DataDir, UploadMaxMB: cfg.Limits.UploadMaxMB}
+	uploads := blobs.FS{Root: filepath.Join(cfg.DataDir, "uploads")}
+	a.Revisions = &revisions.Service{DB: db, Repos: a.Repos, Log: log, DataDir: cfg.DataDir, Blobs: uploads, UploadMaxMB: cfg.Limits.UploadMaxMB}
 	a.Revisions.Routes(r)
 	eng, err := docengine.New(docengine.Options{})
 	if err != nil {
@@ -160,7 +163,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}
 	a.Engine = eng
 	a.Realtime = &realtime.Hub{Auth: a.Auth, Origin: originOf(cfg.Server.BaseURL), Log: log, Authorize: a.authorizeScope}
-	a.Branches = &branches.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, DataDir: cfg.DataDir, Log: log}
+	a.Branches = &branches.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, DataDir: cfg.DataDir, Blobs: uploads, Log: log}
 	a.Branches.Register()
 	a.Collab = &collab.Hub{DB: db, Engine: eng, Revisions: a.Revisions, Branches: a.Branches, Log: log, Publish: a.Realtime.Publish}
 	a.Realtime.Rooms = a.Collab

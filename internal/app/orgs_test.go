@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"io/fs"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -280,5 +282,47 @@ func TestOrgSettingsAssistantSwitch(t *testing.T) {
 	repoID := connectLocal(t, a, admin, map[string]string{"docs/index.md": "# Handbook\n"})
 	if code, b := admin.do("POST", "/repos/"+repoID+"/assistant/threads", map[string]any{"text": "Hi"}); code != 409 {
 		t.Fatalf("assistant used while off: %d %v", code, b)
+	}
+}
+
+// The same image uploaded by two orgs is stored twice, once per org.
+func TestOrgUploadsAreSeparate(t *testing.T) {
+	a, root := newApp(t, multiOrgs)
+	ctx := context.Background()
+	alice, _ := users.Create(ctx, a.DB, "alice@acme.dev", "Alice", false)
+	bob, _ := users.Create(ctx, a.DB, "bob@globex.dev", "Bob", false)
+	signIn(t, a, root, alice)
+	bobC := &tc{t: t, base: root.base, c: newClient()}
+	signIn(t, a, bobC, bob)
+	root.do("POST", "/orgs", map[string]any{"name": "Acme", "slug": "acme"})
+	bobC.do("POST", "/orgs", map[string]any{"name": "Globex", "slug": "globex"})
+	files := map[string]string{"docs/index.md": "# Home\n"}
+	acmeRepo, _ := connectLocalIn(t, a, root, "acme", files)
+	globexRepo, _ := connectLocalIn(t, a, bobC, "globex", files)
+	img := pngBytes(t)
+	for _, c := range []struct {
+		who  *tc
+		repo string
+	}{{root, acmeRepo}, {bobC, globexRepo}} {
+		_, rev := c.who.do("POST", "/repos/"+c.repo+"/revisions", map[string]any{"title": "Picture", "path": "docs/index.md"})
+		if code, up := c.who.upload("/revisions/"+rev["id"].(string)+"/assets", "docs/index.md", "desk.png", img); code != 201 {
+			t.Fatalf("upload: %d %v", code, up)
+		}
+	}
+	var n, orgsWithIt int
+	_ = a.DB.QueryRowContext(ctx, `SELECT COUNT(*), COUNT(DISTINCT org_id) FROM uploads`).Scan(&n, &orgsWithIt)
+	if n != 2 || orgsWithIt != 2 {
+		t.Fatalf("uploads: %d rows in %d orgs", n, orgsWithIt)
+	}
+	var paths []string
+	_ = filepath.WalkDir(filepath.Join(a.Config.DataDir, "uploads"), func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			rel, _ := filepath.Rel(a.Config.DataDir, p)
+			paths = append(paths, rel)
+		}
+		return nil
+	})
+	if len(paths) != 2 {
+		t.Fatalf("files on disk: %v", paths)
 	}
 }

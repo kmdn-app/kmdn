@@ -80,7 +80,7 @@ func (h *Hub) SaveLocked(ctx context.Context, repo repos.Repo, rev revisions.Rev
 	if err != nil {
 		return CheckpointView{}, err
 	}
-	changes, _, err := h.Branches.SnapshotChanges(files, payload.Assets)
+	changes, _, err := h.Branches.SnapshotChanges(ctx, files, payload.Assets)
 	if err != nil {
 		return CheckpointView{}, err
 	}
