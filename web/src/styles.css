@@ -239,3 +239,6 @@
 .changes-view del { background: color-mix(in oklab, var(--destructive) 14%, transparent); color: var(--muted-foreground); }
 .changes-view .chg-added { border-left: 3px solid color-mix(in oklab, var(--success) 70%, transparent); padding-left: 12px; margin-left: -15px; background: color-mix(in oklab, var(--success) 6%, transparent); }
 .changes-view .chg-removed { border-left: 3px solid color-mix(in oklab, var(--destructive) 60%, transparent); padding-left: 12px; margin-left: -15px; opacity: 0.7; text-decoration: line-through; }
+/* Comment anchors */
+.kmdn-editor .comment-anchor { background: color-mix(in oklab, var(--warning) 22%, transparent); border-bottom: 2px solid color-mix(in oklab, var(--warning) 70%, transparent); cursor: pointer; }
+.kmdn-editor .comment-anchor.is-active { background: color-mix(in oklab, var(--warning) 40%, transparent); }

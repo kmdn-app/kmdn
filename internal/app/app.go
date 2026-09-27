@@ -33,6 +33,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/server"
 	"github.com/kmdn-app/kmdn/internal/setup"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/threads"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -55,6 +56,7 @@ type App struct {
 	Collab    *collab.Hub
 	Links     *links.Service
 	Publish   *publish.Service
+	Threads   *threads.Service
 	Invites   *invites.Service
 }
 
@@ -133,6 +135,16 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Publish = &publish.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Docs: collabDocs{a}, Engine: eng, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, DataDir: cfg.DataDir, Log: log}
 	a.Publish.Register()
 	a.Publish.Routes(r)
+	a.Threads = &threads.Service{DB: db, Publish: a.Realtime.Publish,
+		PlaceAnchor: func(ctx context.Context, rev revisions.Revision, c revisions.Caller, p, threadID string, pos []byte) error {
+			repo, err := repos.Get(ctx, db, rev.RepoID)
+			if err != nil {
+				return err
+			}
+			return a.Collab.PutAnchor(ctx, repo, rev, c, p, threadID, pos)
+		},
+	}
+	a.Threads.Routes(r)
 	a.Links = &links.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Engine: eng, Jobs: a.Jobs, Log: log}
 	a.Links.Register()
 	a.Links.Routes(r, links.ApplierFunc(func(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, md, kind string) error {

@@ -533,7 +533,8 @@
       "publishing": "opened a pull request",
       "published": "published it",
       "publish_blocked": "Publishing stopped: Published changed these pages",
-      "change_request_closed": "The pull request was closed without merging"
+      "change_request_closed": "The pull request was closed without merging",
+      "thread_opened": "commented on {{path}}"
     },
     "updateLinks_one": "Update {{count}} link in {{pages}} page",
     "updateLinks_other": "Update {{count}} links in {{pages}} pages",
@@ -660,5 +661,37 @@
     "noChanges": "No changes to this page yet.",
     "changes": "Changes",
     "removed": "Removed"
+  },
+  "comments": {
+    "edited": "edited",
+    "actions": "Comment actions",
+    "deleted": "Comment deleted",
+    "reactions": {
+      "+1": "Thumbs up",
+      "check": "Done",
+      "eyes": "Looking"
+    },
+    "activity_one": "{{count}} reply",
+    "activity_other": "{{count}} replies",
+    "resolve": "Resolve",
+    "reopen": "Reopen",
+    "replyPlaceholder": "Reply…",
+    "reply": "Reply",
+    "sort": "Sort comments",
+    "sorts": {
+      "hot": "Hot topics",
+      "updated": "Last updated"
+    },
+    "openCount_one": "{{count}} open",
+    "openCount_other": "{{count}} open",
+    "placeholder": "Add a comment…",
+    "new": "New comment",
+    "comment": "Comment",
+    "commentOnSelection": "Comment on the selected text",
+    "emptyHint": "Select text and click Comment to start a thread.",
+    "empty": "No comments on this page.",
+    "showResolved_one": "Show {{count}} resolved thread",
+    "showResolved_other": "Show {{count}} resolved threads",
+    "hideResolved": "Hide resolved"
   }
 }

@@ -1579,10 +1579,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get: operations["listRevisionThreads"];
+        put?: never;
+        /** Start a thread on a passage (the client stores its Yjs anchor in the page's document) */
+        post: operations["createRevisionThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/threads/{thread}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getThread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateThread"];
+        trace?: never;
+    };
+    "/threads/{thread}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["replyToThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comments/{comment}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteComment"];
+        options?: never;
+        head?: never;
+        patch: operations["editComment"];
+        trace?: never;
+    };
+    "/comments/{comment}/reactions/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment: string;
+                kind: "+1" | "check" | "eyes";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["addReaction"];
+        post?: never;
+        delete: operations["removeReaction"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ThreadAnchor: {
+            quote?: string;
+            prefix?: string;
+            suffix?: string;
+            sha?: string;
+        };
+        ThreadCreate: {
+            path: string;
+            anchor?: components["schemas"]["ThreadAnchor"];
+            body: string;
+            /** @description Yjs relative positions {start, end} (Y.relativePositionToJSON), stored in the page's document */
+            position?: {
+                [key: string]: unknown;
+            };
+        };
+        Reaction: {
+            kind: string;
+            users: string[];
+        };
+        Comment: {
+            id: string;
+            author_id?: string;
+            author_name?: string;
+            body: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            edited_at?: string;
+            deleted?: boolean;
+            reactions: components["schemas"]["Reaction"][];
+        };
+        Thread: {
+            id: string;
+            revision_id?: string;
+            path: string;
+            /** @enum {string} */
+            kind: "revision" | "discussion";
+            review_round: number;
+            anchor: components["schemas"]["ThreadAnchor"];
+            /** @enum {string} */
+            state: "open" | "resolved";
+            created_by?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_activity_at: string;
+            resolved_by?: string;
+            /** Format: date-time */
+            resolved_at?: string;
+            comments: components["schemas"]["Comment"][];
+            hot: number;
+        };
         DiffLine: {
             /** @enum {string} */
             op: " " | "+" | "-";
@@ -4787,6 +4931,233 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
+        };
+    };
+    listRevisionThreads: {
+        parameters: {
+            query?: {
+                path?: string;
+                sort?: "hot" | "updated";
+            };
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Threads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Thread"][];
+                    };
+                };
+            };
+        };
+    };
+    createRevisionThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreate"];
+            };
+        };
+        responses: {
+            /** @description Thread */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    state: "open" | "resolved";
+                };
+            };
+        };
+        responses: {
+            /** @description Thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    replyToThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Comment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Comment"];
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    editComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Edited */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    addReaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment: string;
+                kind: "+1" | "check" | "eyes";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Added */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    removeReaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment: string;
+                kind: "+1" | "check" | "eyes";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
 }

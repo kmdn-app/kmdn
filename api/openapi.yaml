@@ -22,6 +22,7 @@ tags:
   - name: admin
   - name: revisions
   - name: links
+  - name: threads
 paths:
   /auth/magic-link:
     post:
@@ -1436,6 +1437,98 @@ paths:
       responses:
         "200": { description: Diff, content: { application/json: { schema: { $ref: "#/components/schemas/FileDiff" } } } }
         "404": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/threads:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [threads]
+      operationId: listRevisionThreads
+      parameters:
+        - { name: path, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [hot, updated] } }
+      responses:
+        "200":
+          description: Threads
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Thread" } }
+    post:
+      tags: [threads]
+      operationId: createRevisionThread
+      summary: Start a thread on a passage (the client stores its Yjs anchor in the page's document)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ThreadCreate" } } }
+      responses:
+        "201": { description: Thread, content: { application/json: { schema: { $ref: "#/components/schemas/Thread" } } } }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /threads/{thread}:
+    parameters:
+      - { name: thread, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [threads]
+      operationId: getThread
+      responses:
+        "200": { description: Thread, content: { application/json: { schema: { $ref: "#/components/schemas/Thread" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [threads]
+      operationId: updateThread
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [state], properties: { state: { type: string, enum: [open, resolved] } } } } }
+      responses:
+        "200": { description: Thread, content: { application/json: { schema: { $ref: "#/components/schemas/Thread" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+  /threads/{thread}/comments:
+    parameters:
+      - { name: thread, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [threads]
+      operationId: replyToThread
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [body], properties: { body: { type: string } } } } }
+      responses:
+        "201": { description: Comment, content: { application/json: { schema: { $ref: "#/components/schemas/Comment" } } } }
+        "422": { $ref: "#/components/responses/Problem" }
+  /comments/{comment}:
+    parameters:
+      - { name: comment, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [threads]
+      operationId: editComment
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [body], properties: { body: { type: string } } } } }
+      responses:
+        "204": { description: Edited }
+        "403": { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [threads]
+      operationId: deleteComment
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Problem" }
+  /comments/{comment}/reactions/{kind}:
+    parameters:
+      - { name: comment, in: path, required: true, schema: { type: string } }
+      - { name: kind, in: path, required: true, schema: { type: string, enum: ["+1", check, eyes] } }
+    put:
+      tags: [threads]
+      operationId: addReaction
+      responses:
+        "204": { description: Added }
+    delete:
+      tags: [threads]
+      operationId: removeReaction
+      responses:
+        "204": { description: Removed }
 components:
   parameters:
     RepoID:
@@ -1466,6 +1559,60 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    ThreadAnchor:
+      type: object
+      properties:
+        quote: { type: string }
+        prefix: { type: string }
+        suffix: { type: string }
+        sha: { type: string }
+    ThreadCreate:
+      type: object
+      required: [path, body]
+      properties:
+        path: { type: string }
+        anchor: { $ref: "#/components/schemas/ThreadAnchor" }
+        body: { type: string }
+        position:
+          type: object
+          description: Yjs relative positions {start, end} (Y.relativePositionToJSON), stored in the page's document
+          additionalProperties: true
+    Reaction:
+      type: object
+      required: [kind, users]
+      properties:
+        kind: { type: string }
+        users: { type: array, items: { type: string } }
+    Comment:
+      type: object
+      required: [id, body, created_at, reactions]
+      properties:
+        id: { type: string }
+        author_id: { type: string }
+        author_name: { type: string }
+        body: { type: string }
+        created_at: { type: string, format: date-time }
+        edited_at: { type: string, format: date-time }
+        deleted: { type: boolean }
+        reactions: { type: array, items: { $ref: "#/components/schemas/Reaction" } }
+    Thread:
+      type: object
+      required: [id, path, kind, review_round, anchor, state, created_at, last_activity_at, comments, hot]
+      properties:
+        id: { type: string }
+        revision_id: { type: string }
+        path: { type: string }
+        kind: { type: string, enum: [revision, discussion] }
+        review_round: { type: integer }
+        anchor: { $ref: "#/components/schemas/ThreadAnchor" }
+        state: { type: string, enum: [open, resolved] }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        last_activity_at: { type: string, format: date-time }
+        resolved_by: { type: string }
+        resolved_at: { type: string, format: date-time }
+        comments: { type: array, items: { $ref: "#/components/schemas/Comment" } }
+        hot: { type: number }
     DiffLine:
       type: object
       required: [op, text]
