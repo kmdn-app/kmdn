@@ -43,8 +43,11 @@ smtp:
   password: ${KMDN_SMTP_PASSWORD}
   from: "kmdn <kmdn@northwind.dev>"
 auth:
-  auto_join_domains: []
+  auto_join_domains: []             # single mode: the default org's auto-join
   session_ttl: 720h
+orgs:
+  mode: single                       # or multi (see 16-organizations.md)
+  allow_create: admins               # multi mode: admins | anyone
 assistant:
   enabled: true
   # Optional: fix the provider here instead of the admin console (then shown locked).
@@ -76,7 +79,7 @@ On Upsun, `deploy/upsun/kmdn` derives the base URL, database, secret key and mai
 
 Served when no instance admin exists (protected by a one-time setup token printed in the server log to prevent hijacking a fresh instance):
 
-1. **Admin account**: name + email.
+1. **Admin account**: name + email, and the organization's name (the default org in `single` mode).
 2. **Email (SMTP)**: settings + "Send test email" (must succeed; the admin's magic link is sent through it).
 3. **Forge**: "Create GitHub App" (manifest flow, github.com or GHES URL) and/or "Add GitLab" (host URL, OAuth app ID/secret). Skippable.
 4. **Assistant**: provider, key, model, "Test". Skippable.
