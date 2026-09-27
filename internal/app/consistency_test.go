@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/access"
+	"github.com/kmdn-app/kmdn/internal/consistency"
 	"github.com/kmdn-app/kmdn/internal/consistency/evalcorpus"
 	"github.com/kmdn-app/kmdn/internal/llm"
 	"github.com/kmdn-app/kmdn/internal/repos"
@@ -315,5 +316,49 @@ func TestConsistencyScanConcurrency(t *testing.T) {
 	}
 	if judge.n != 10 || judge.peak < 2 || judge.peak > 4 || sc.Judged != 10 || sc.Status != "capped" {
 		t.Fatalf("calls %d, peak %d in flight, scan %+v", judge.n, judge.peak, sc)
+	}
+}
+
+// sameVector embeds every text alike: every pair is 100% similar.
+type sameVector struct{}
+
+func (sameVector) Embed(_ context.Context, _ string, texts []string) ([][]float32, int, error) {
+	out := make([][]float32, len(texts))
+	for i := range texts {
+		out[i] = []float32{1, 0, 0}
+	}
+	return out, len(texts), nil
+}
+
+// Near-identical passages that differ in a number go to the model: that's
+// where contradictions hide. Identical text is a duplicate without a call.
+func TestConsistencyNearIdenticalIsJudged(t *testing.T) {
+	a, admin := newApp(t, nil)
+	ctx := context.Background()
+	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
+	signIn(t, a, admin, maya)
+	repoID := connectLocal(t, a, admin, map[string]string{
+		"docs/laptops.md": "# Laptops\n\n## Refresh\n\nLaptops are replaced every three years, or sooner if they break beyond repair.\n",
+		"docs/it.md":      "# IT\n\n## Refresh\n\nLaptops are replaced every four years, or sooner if they break beyond repair.\n",
+		"docs/faq.md":     "# FAQ\n\n## Refresh\n\nLaptops are replaced every three years, or sooner if they break beyond repair.\n",
+	})
+	model := &scripted{}
+	model.push(judged("contradiction", "every four years", "every three years", "One page says four years, the other three."))
+	model.push(judged("contradiction", "every four years", "every three years", "One page says four years, the other three."))
+	a.LLM.Override = model
+	a.LLM.EmbedOverride = sameVector{}
+	if _, err := a.Consistency.Scan(ctx, repoID, ""); err != nil {
+		t.Fatal(err)
+	}
+	fs, err := a.Consistency.List(ctx, repoID, consistency.ScopePublished, "open")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]int{}
+	for _, f := range fs {
+		kinds[f.Kind]++
+	}
+	if n := judgeCalls(model); n != 2 || kinds[consistency.Contradiction] != 2 || kinds[consistency.Duplicate] != 1 {
+		t.Fatalf("judge calls %d, findings %v", n, kinds)
 	}
 }

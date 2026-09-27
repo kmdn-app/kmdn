@@ -101,7 +101,7 @@ Finds places where the repo says the same thing twice or says contradicting thin
 When a revision's changed passages are materialized (debounced 30 s) and at submit:
 
 1. For each changed passage, take the top-k (k=8) similar passages elsewhere in the repo above a similarity threshold (0.78).
-2. Pairs above 0.92 are **duplicate candidates** directly.
+2. Pairs above 0.92 whose text is identical (case and spacing aside) are **duplicates** directly; near-identical pairs still go to the model, since a changed number or date there is a contradiction (spike S8).
 3. The LLM (`short_text` task model) judges each remaining pair: `contradiction` (with the conflicting claims quoted), `duplicate`, `related`, or `none`.
 4. Findings appear in the revision overview (a Consistency section under the review card and checks), in the Publish dialog, and as an underline on the passage in the editor (wavy for contradictions, dotted for duplicates) with a hover card. Actions: **Fix** (briefs the revision's assistant thread to align the text, as suggestions), **Link instead** (duplicates: replace the repeated passage with a link to the other page, as a suggestion), **Ignore** (with a reason; ignored pairs are remembered by passage hashes across revisions and scans until either passage changes).
 
