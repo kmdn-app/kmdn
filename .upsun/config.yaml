@@ -1,0 +1,70 @@
+# kmdn on Upsun: one Go app (the SPA is embedded in the binary), PostgreSQL,
+# and a storage mount for git mirrors and uploads. Settings come from the
+# environment: see deploy/upsun/README.md.
+applications:
+  kmdn:
+    type: "composable:26.05"
+    source:
+      root: "/"
+    stack:
+      runtimes:
+        - "golang@1.26"
+        - "nodejs@24"
+      packages:
+        - pnpm  # pnpm 11, as pinned in package.json
+        - git   # kmdn runs git for its mirrors
+        - jq
+        - openssl
+
+    variables:
+      env:
+        CGO_ENABLED: "0"
+
+    hooks:
+      build: |
+        set -eu
+        export GOCACHE="$PLATFORM_CACHE_DIR/go-build" GOMODCACHE="$PLATFORM_CACHE_DIR/go-mod"
+        pnpm install --frozen-lockfile --store-dir "$PLATFORM_CACHE_DIR/pnpm-store"
+        pnpm --filter @kmdn/web build
+        find internal/web/dist -mindepth 1 ! -name .gitkeep -exec rm -rf {} +
+        cp -R web/dist/. internal/web/dist/
+        commit=$(printf %.12s "${PLATFORM_TREE_ID:-unknown}")
+        go build -trimpath -o bin/kmdn \
+          -ldflags "-s -w -X github.com/kmdn-app/kmdn/internal/version.Version=upsun-$commit -X github.com/kmdn-app/kmdn/internal/version.Commit=$commit" \
+          ./cmd/kmdn
+        rm -rf node_modules web/node_modules packages/*/node_modules e2e/node_modules
+        ./bin/kmdn version
+
+    relationships:
+      database:
+        service: db
+        endpoint: postgresql
+
+    mounts:
+      data:
+        source: storage
+        source_path: data
+
+    web:
+      commands:
+        start: ./deploy/upsun/kmdn serve
+      locations:
+        "/":
+          passthru: true
+          allow: false
+          # Realtime editing runs over a WebSocket, which buffering breaks.
+          request_buffering:
+            enabled: false
+
+services:
+  db:
+    type: postgresql:17
+
+routes:
+  "https://{default}/":
+    type: upstream
+    upstream: "kmdn:http"
+    primary: true
+    # kmdn sets its own cache headers; WebSockets need the cache off.
+    cache:
+      enabled: false

@@ -103,10 +103,19 @@ type Service struct {
 	Override Provider
 	// EmbedOverride replaces the embeddings endpoint (tests).
 	EmbedOverride Embedder
+	// Env is the provider fixed by the server config (env.go).
+	Env *Env
 }
 
-// Settings loads the configuration (zero value when unset).
+// Settings loads the effective configuration: the console's, with the
+// server config's provider on top (zero value when unset).
 func (s *Service) Settings(ctx context.Context) (Settings, error) {
+	st, err := s.stored(ctx)
+	return s.overlay(st), err
+}
+
+// stored loads the console's settings as saved.
+func (s *Service) stored(ctx context.Context) (Settings, error) {
 	st := Settings{Models: map[string]string{}, UserDailyTokens: DefaultUserDailyTokens}
 	st.Consistency.ScanEveryDays, st.Consistency.ScanMaxCalls = DefaultScanEveryDays, DefaultScanMaxCalls
 	err := settings.Get(ctx, s.DB, settingsKey, &st)
@@ -128,12 +137,21 @@ func (s *Service) Enabled(ctx context.Context) bool {
 		return true
 	}
 	st, err := s.Settings(ctx)
-	return err == nil && st.Provider != "" && st.Check != nil && st.Check.OK
+	if err != nil || st.Provider == "" {
+		return false
+	}
+	if s.managed() {
+		return st.Check == nil || st.Check.OK // checked at startup (CheckEnv)
+	}
+	return st.Check != nil && st.Check.OK
 }
 
 func (s *Service) build(ctx context.Context, st Settings, key string) (Provider, error) {
 	if s.Override != nil {
 		return s.Override, nil
+	}
+	if key == "" && s.managed() {
+		key = s.Env.APIKey
 	}
 	if key == "" && st.KeyRef != "" {
 		b, err := s.Secrets.Get(ctx, s.DB, st.KeyRef)

@@ -9,7 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/llm"
+	"github.com/kmdn-app/kmdn/internal/settings"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
@@ -112,5 +114,45 @@ func TestAIProviderAdmin(t *testing.T) {
 	_, u := admin.do("GET", "/admin/ai/usage", nil)
 	if u["month_tokens"].(float64) < 50 || len(u["by_user"].([]any)) == 0 || len(u["by_task"].([]any)) < 2 {
 		t.Fatalf("usage: %v", u)
+	}
+}
+
+// A provider fixed by the server config (KMDN_ASSISTANT_*) overrides the
+// console's: it's checked at startup, shown read-only, and saving the form
+// only changes budgets and scan settings.
+func TestAIProviderFromConfig(t *testing.T) {
+	good := fakeAnthropic(t, true)
+	defer good.Close()
+	a, admin := newApp(t, func(c *config.Config) {
+		c.Assistant.Provider, c.Assistant.APIKey, c.Assistant.BaseURL, c.Assistant.Model = "anthropic", "sk-ant-test", good.URL, "claude-sonnet-5"
+	})
+	ctx := context.Background()
+	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
+	signIn(t, a, admin, maya)
+	if _, st := admin.do("GET", "/assistant/status", nil); st["enabled"] != true {
+		t.Fatalf("status before the startup check: %v", st)
+	}
+	a.LLM.CheckEnv(ctx)
+	_, v := admin.do("GET", "/admin/ai", nil)
+	if v["managed"] != true || v["provider"] != "anthropic" || v["key_set"] != true || v["check"].(map[string]any)["ok"] != true || v["models"].(map[string]any)["chat"] != "claude-sonnet-5" {
+		t.Fatalf("settings: %v", v)
+	}
+	code, v := admin.do("PUT", "/admin/ai", map[string]any{"provider": "openai", "base_url": "http://localhost:1/v1", "api_key": "sk-other", "user_daily_tokens": 42})
+	if code != 200 || v["provider"] != "anthropic" || v["base_url"] != good.URL || v["user_daily_tokens"] != float64(42) || v["check"].(map[string]any)["ok"] != true {
+		t.Fatalf("save: %d %v", code, v)
+	}
+	var stored llm.Settings
+	if err := settings.Get(ctx, a.DB, "ai", &stored); err != nil || stored.Provider != "" || stored.KeyRef != "" || stored.UserDailyTokens != 42 {
+		t.Fatalf("stored: %+v %v", stored, err)
+	}
+	if strings.Contains(fmt.Sprint(v), "sk-ant-test") {
+		t.Fatal("the key came back")
+	}
+
+	// A key the provider refuses turns the assistant off at startup.
+	a.LLM.Env.APIKey = "sk-wrong"
+	a.LLM.CheckEnv(ctx)
+	if _, st := admin.do("GET", "/assistant/status", nil); st["enabled"] != false {
+		t.Fatalf("status with a refused key: %v", st)
 	}
 }

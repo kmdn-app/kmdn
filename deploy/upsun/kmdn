@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Runs kmdn on Upsun with its settings derived from what the platform
+# provides: `deploy/upsun/kmdn serve` (the start command), or over SSH,
+# `deploy/upsun/kmdn doctor`. Anything set as an Upsun variable
+# (env:KMDN_*) wins over the derived value. See deploy/upsun/README.md.
+set -euo pipefail
+
+app="${PLATFORM_APP_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+
+export KMDN_SERVER_LISTEN="${KMDN_SERVER_LISTEN:-:${PORT:-8080}}"
+export KMDN_DATA_DIR="${KMDN_DATA_DIR:-$app/data}"
+# Only Upsun's router reaches the app, and it sets X-Forwarded-For.
+export KMDN_SERVER_TRUSTED_PROXIES="${KMDN_SERVER_TRUSTED_PROXIES:-0.0.0.0/0,::/0}"
+# /metrics is public on Upsun unless a token protects it: off by default.
+export KMDN_TELEMETRY_METRICS="${KMDN_TELEMETRY_METRICS:-false}"
+
+# The environment's primary route, e.g. https://main-abc123.eu-5.platformsh.site
+if [ -z "${KMDN_SERVER_BASE_URL:-}" ] && [ -n "${PLATFORM_ROUTES:-}" ]; then
+  base=$(printf %s "$PLATFORM_ROUTES" | base64 -d | jq -r '[to_entries[] | select(.value.primary == true) | .key][0] // empty')
+  export KMDN_SERVER_BASE_URL="${base%/}"
+fi
+
+# PostgreSQL from the "database" relationship (Upsun's DATABASE_URL uses a
+# pgsql:// scheme, so the URL is rebuilt).
+if [ -z "${KMDN_DB_URL:-}" ] && [ -n "${DATABASE_HOST:-}" ]; then
+  enc() { jq -rn --arg v "$1" '$v|@uri'; }
+  export KMDN_DB_URL="postgres://$(enc "$DATABASE_USERNAME"):$(enc "$DATABASE_PASSWORD")@$DATABASE_HOST:$DATABASE_PORT/$DATABASE_PATH?sslmode=disable"
+fi
+
+# The key that encrypts stored credentials, stable for the project's life.
+# Set env:KMDN_SECRET_KEY instead to manage it yourself (then rotate with
+# `deploy/upsun/kmdn admin rotate-secret-key`).
+if [ -z "${KMDN_SECRET_KEY:-}" ] && [ -n "${PLATFORM_PROJECT_ENTROPY:-}" ]; then
+  KMDN_SECRET_KEY=$(printf %s "kmdn-secret-key:$PLATFORM_PROJECT_ENTROPY" | openssl dgst -sha256 -binary | base64)
+  export KMDN_SECRET_KEY
+fi
+
+# Mail through Upsun's relay (production environments) unless SMTP is set.
+if [ -z "${KMDN_SMTP_HOST:-}" ] && [ -n "${PLATFORM_SMTP_HOST:-}" ]; then
+  export KMDN_SMTP_HOST="$PLATFORM_SMTP_HOST" KMDN_SMTP_PORT=25 KMDN_SMTP_SECURITY=none
+  host="${KMDN_SERVER_BASE_URL#*://}"
+  export KMDN_SMTP_FROM="${KMDN_SMTP_FROM:-kmdn <kmdn@${host%%/*}>}"
+fi
+
+exec "$app/bin/kmdn" "$@"

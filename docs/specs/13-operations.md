@@ -46,7 +46,18 @@ auth:
   auto_join_domains: []
   session_ttl: 720h
 assistant:
-  enabled: true                      # providers configured in admin console
+  enabled: true
+  # Optional: fix the provider here instead of the admin console (then shown locked).
+  provider: anthropic                # or openai; empty: set in the admin console
+  api_key: ${KMDN_ASSISTANT_API_KEY}
+  base_url: ""                       # empty: the provider's API (openai: https://api.openai.com/v1)
+  model: ""                          # assistant; empty: the provider's default
+  review_model: ""
+  short_model: ""
+  embeddings:                        # consistency checks; set model to fix them here
+    base_url: ""                     # empty: https://api.openai.com/v1
+    api_key: ""
+    model: ""                        # e.g. text-embedding-3-small
 limits:
   upload_max_mb: 10
   wysiwyg_max_file_mb: 1
@@ -57,7 +68,9 @@ telemetry:
   log_format: json
 ```
 
-Forge connections, LLM providers and SMTP can also be managed in the admin console; values from config/env take precedence and are shown as locked in the UI.
+Forge connections, LLM providers and SMTP can also be managed in the admin console; values from config/env take precedence and are shown as locked in the UI. With `assistant.provider` set, the provider, key, base URL and models come from the config (budgets and scan settings stay editable), and kmdn runs the capability check at startup; a key the provider refuses turns the assistant off until the next restart or "Save and check".
+
+On Upsun, `deploy/upsun/kmdn` derives the base URL, database, secret key and mail relay from the platform; see [deploy/upsun/README.md](../../deploy/upsun/README.md).
 
 ## First-run setup wizard
 

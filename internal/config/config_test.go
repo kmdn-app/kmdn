@@ -94,3 +94,36 @@ func mustWrite(t *testing.T, p, body string) {
 		t.Fatal(err)
 	}
 }
+
+func TestAssistantFromEnv(t *testing.T) {
+	cfg, err := Load("", envMap(map[string]string{
+		"KMDN_SECRET_KEY":                   key,
+		"KMDN_ASSISTANT_PROVIDER":           "anthropic",
+		"KMDN_ASSISTANT_API_KEY":            "sk-ant-x",
+		"KMDN_ASSISTANT_MODEL":              "claude-sonnet-5",
+		"KMDN_ASSISTANT_EMBEDDINGS_MODEL":   "text-embedding-3-small",
+		"KMDN_ASSISTANT_EMBEDDINGS_API_KEY": "sk-y",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := cfg.Assistant
+	if a.Provider != "anthropic" || a.APIKey != "sk-ant-x" || a.Model != "claude-sonnet-5" || a.Embeddings.Model != "text-embedding-3-small" || a.Embeddings.APIKey != "sk-y" {
+		t.Fatalf("assistant: %+v", a)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ provider, key, base, want string }{
+		{"mistral", "k", "", "must be anthropic or openai"},
+		{"anthropic", "", "", "KMDN_ASSISTANT_API_KEY"},
+		{"openai", "", "", "KMDN_ASSISTANT_API_KEY"},
+		{"openai", "", "http://localhost:11434/v1", ""}, // local servers may need no key
+	} {
+		cfg.Assistant.Provider, cfg.Assistant.APIKey, cfg.Assistant.BaseURL = c.provider, c.key, c.base
+		err := cfg.Validate()
+		if (c.want == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), c.want)) {
+			t.Errorf("%+v: %v", c, err)
+		}
+	}
+}

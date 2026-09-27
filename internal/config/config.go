@@ -68,6 +68,28 @@ type Auth struct {
 
 type Assistant struct {
 	Enabled bool `yaml:"enabled"`
+	// Provider fixes the AI provider, "anthropic" or "openai" (empty: set in
+	// the admin console). With it, the key, base URL and models below replace
+	// the console's, which shows them read-only.
+	Provider string `yaml:"provider"`
+	APIKey   string `yaml:"api_key"`
+	// BaseURL: empty means the provider's own API (https://api.openai.com/v1
+	// for openai); set it for OpenAI-compatible servers.
+	BaseURL string `yaml:"base_url"`
+	// Model is the assistant's model; ReviewModel and ShortModel default to
+	// the provider's choice for those tasks.
+	Model       string `yaml:"model"`
+	ReviewModel string `yaml:"review_model"`
+	ShortModel  string `yaml:"short_model"`
+	// Embeddings (consistency checks): an OpenAI-compatible endpoint; set
+	// the model to fix them here too.
+	Embeddings Embeddings `yaml:"embeddings"`
+}
+
+type Embeddings struct {
+	BaseURL string `yaml:"base_url"`
+	APIKey  string `yaml:"api_key"`
+	Model   string `yaml:"model"`
 }
 
 type Limits struct {
@@ -223,6 +245,15 @@ func (c Config) Validate() error {
 	case "starttls", "tls", "none":
 	default:
 		errs = append(errs, fmt.Errorf("smtp.security %q must be starttls, tls or none", c.SMTP.Security))
+	}
+	switch c.Assistant.Provider {
+	case "":
+	case "anthropic", "openai":
+		if c.Assistant.APIKey == "" && (c.Assistant.Provider == "anthropic" || c.Assistant.BaseURL == "") {
+			errs = append(errs, fmt.Errorf("assistant.provider is %s but no API key is set (env %s)", c.Assistant.Provider, EnvName("assistant.api_key")))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("assistant.provider %q must be anthropic or openai (env %s)", c.Assistant.Provider, EnvName("assistant.provider")))
 	}
 	switch c.Telemetry.LogFormat {
 	case "json", "text":

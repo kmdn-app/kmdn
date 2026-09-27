@@ -2756,6 +2756,8 @@ export interface components {
                 base_url?: string;
                 model?: string;
                 key_set: boolean;
+                /** @description Fixed by the server config (assistant.embeddings.*, KMDN_ASSISTANT_EMBEDDINGS_*): read-only here */
+                managed: boolean;
             };
             user_daily_tokens: number;
             instance_monthly_tokens: number;
@@ -2767,6 +2769,8 @@ export interface components {
             };
             /** @description assistant.enabled is false in the server config */
             disabled: boolean;
+            /** @description The provider, key, base URL and models are fixed by the server config (assistant.provider, KMDN_ASSISTANT_*): read-only here; saving changes budgets and scan settings only */
+            managed: boolean;
             check?: {
                 ok: boolean;
                 message: string;

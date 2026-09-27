@@ -954,6 +954,7 @@
     "title": "AI provider",
     "desc": "The assistant, review summaries and consistency checks use this model provider. Keys are stored encrypted.",
     "disabledByConfig": "The assistant is turned off in the server configuration (assistant.enabled: false).",
+    "managedByConfig": "The provider, API key and models are set in the server configuration (KMDN_ASSISTANT_* variables). Change them there and restart kmdn; budgets and scan settings below can still be changed here.",
     "provider": "Provider",
     "off": "Off",
     "openai": "OpenAI-compatible (OpenAI, OpenRouter, Ollama, vLLM…)",
@@ -985,6 +986,7 @@
     "embeddingsURL": "Embeddings base URL",
     "embeddingsModel": "Embeddings model",
     "embeddingsKey": "Embeddings API key",
+    "embeddingsManaged": "The embeddings endpoint is set in the server configuration (KMDN_ASSISTANT_EMBEDDINGS_* variables).",
     "scanEvery": "Scan every (days, 0 = only on demand)",
     "scanCalls": "Model calls per scan"
   },
