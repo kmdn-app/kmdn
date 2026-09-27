@@ -1767,6 +1767,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/review-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** Checks on the revision's pages (always fresh) and the review assistant's summary card */
+        get: operations["getReviewSummary"];
+        put?: never;
+        /** Ask for a fresh summary (editors and reviewers) */
+        post: operations["requestReviewSummary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/change-summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** One-line summaries of a page's published changes, by commit */
+        get: operations["getChangeSummaries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/revisions/{revision}/assistant": {
         parameters: {
             query?: never;
@@ -2261,6 +2300,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ReviewFinding: {
+            /** @enum {string} */
+            kind: "broken_link" | "breaks_inbound" | "missing_alt" | "heading_jump" | "frontmatter" | "style";
+            path: string;
+            line?: number;
+            message: string;
+            quote?: string;
+        };
+        ReviewSummary: {
+            summary: string;
+            commit_title: string;
+            commit_body: string;
+            findings: components["schemas"]["ReviewFinding"][];
+            model?: string;
+            error?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description The revision changed since it was written */
+            stale: boolean;
+        };
         AssistantThread: {
             id: string;
             repo_id: string;
@@ -6147,6 +6206,85 @@ export interface operations {
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getReviewSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checks and summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        checks: components["schemas"]["ReviewFinding"][];
+                        review: components["schemas"]["ReviewSummary"] | null;
+                        /** @description A summary is being written */
+                        pending: boolean;
+                        /** @description The assistant is set up */
+                        available: boolean;
+                    };
+                };
+            };
+        };
+    };
+    requestReviewSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getChangeSummaries: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        by_commit: {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
         };
     };
     getRevisionAssistant: {

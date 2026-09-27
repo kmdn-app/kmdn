@@ -389,6 +389,19 @@ func (s *Service) ReadFile(ctx context.Context, r Repo, p, rev string) (File, er
 	return File{Path: p, CommitSHA: rev, Content: string(b), Markdown: IsMarkdown(p), Size: len(b)}, nil
 }
 
+// ReadConfigFile reads a file kmdn itself uses (style guides, .kmdn files),
+// wherever it is, at the published head.
+func (s *Service) ReadConfigFile(ctx context.Context, r Repo, p string) ([]byte, error) {
+	if r.HeadSHA == "" {
+		return nil, gitmirror.ErrNotFound
+	}
+	cred, err := s.credential(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	return s.Mirror(r).ReadFile(ctx, cred, r.HeadSHA, strings.TrimPrefix(path.Clean("/"+p), "/"))
+}
+
 // TemplatesDir holds page templates, outside the content root.
 const TemplatesDir = ".kmdn/templates"
 

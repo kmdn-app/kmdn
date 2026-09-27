@@ -48,6 +48,8 @@ type Service struct {
 	BaseURL   string // for Kmdn-Revision links
 	DataDir   string // uploads
 	Log       *slog.Logger
+	// SuggestedCommit is the review assistant's title and body, when current. Optional.
+	SuggestedCommit func(ctx context.Context, rev revisions.Revision) (title, body string, ok bool)
 }
 
 // Person is a name and commit email.
@@ -213,6 +215,11 @@ func shortTitle(t string) string {
 // Preview builds the commit message and who's credited.
 func (s *Service) Preview(ctx context.Context, repo repos.Repo, rev revisions.Revision, title, body string) (Preview, error) {
 	s.Docs.FlushRevision(ctx, rev.ID)
+	if title == "" && body == "" && s.SuggestedCommit != nil {
+		if t, b, ok := s.SuggestedCommit(ctx, rev); ok {
+			title, body = t, b
+		}
+	}
 	if title == "" {
 		title = rev.Title
 	}

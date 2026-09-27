@@ -38,6 +38,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/server"
 	"github.com/kmdn-app/kmdn/internal/setup"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/summaries"
 	"github.com/kmdn-app/kmdn/internal/threads"
 	"github.com/kmdn-app/kmdn/internal/updates"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -68,6 +69,7 @@ type App struct {
 	Hooks     *hooks.Service
 	LLM       *llm.Service
 	Assistant *assistant.Service
+	Summaries *summaries.Service
 	Invites   *invites.Service
 }
 
@@ -189,6 +191,11 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Links.Register()
 	a.Assistant = &assistant.Service{DB: db, LLM: a.LLM, Repos: a.Repos, Revisions: a.Revisions, Search: &idx.Index, Links: a.Links, Engine: eng, Docs: collabDocs{a}, Publish: a.Realtime.Publish, Log: log}
 	a.Assistant.Routes(r)
+	a.Summaries = &summaries.Service{DB: db, LLM: a.LLM, Repos: a.Repos, Revisions: a.Revisions, Links: a.Links, Engine: eng, Docs: collabDocs{a}, Jobs: a.Jobs, Publish: a.Realtime.Publish, Log: log,
+		ThreadText: func(ctx context.Context, revID string) string { return assistant.PeopleSaid(ctx, db, revID) }}
+	a.Summaries.Register()
+	a.Summaries.Routes(r)
+	a.Publish.SuggestedCommit = a.Summaries.SuggestedCommit
 	a.Links.Routes(r, links.ApplierFunc(func(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, md, kind string) error {
 		return a.Collab.Apply(ctx, repo, rev, c, p, md, kind)
 	}))
@@ -196,6 +203,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		a.Collab.RevisionChanged(ctx, rev)
 		a.Notify.Kick(ctx)
 		if kind == "published" {
+			a.Summaries.RequestChanges(ctx, rev)
 			// Discussions this revision fixed are resolved with it.
 			if _, err := a.Threads.RevisionPublished(ctx, rev); err != nil {
 				log.Error("resolve fixed discussions", "err", err, "revision", rev.ID)
@@ -210,6 +218,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		if _, err := a.Collab.Checkpoint(ctx, rev, by, "", collab.CheckpointSubmit); err != nil {
 			log.Error("submit checkpoint", "err", err, "revision", rev.ID)
 		}
+		a.Summaries.RequestReview(ctx, rev.ID, by)
 	}
 	a.Server.Mount("/ws", a.AuthH.Middleware(a.Realtime))
 	a.Server.Mount("/hooks", a.Repos.WebhookHandler())

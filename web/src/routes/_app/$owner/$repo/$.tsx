@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -252,6 +252,8 @@ function PublishedPage() {
               <>
                 {since && latest && view !== "blame" && (
                   <UpdatedBanner
+                    repoID={repo.id}
+                    path={path}
                     since={since}
                     commits={history.data ?? []}
                     showing={showChanges}
@@ -391,8 +393,13 @@ function FollowButton({ repoID, path }: { repoID: string; path: string }) {
 }
 
 /** "Updated since your last visit": who changed the page, what, and a way to see it. */
-function UpdatedBanner({ since, commits, showing, loading, changed, onToggle }: { since: { sha: string; at: string }; commits: Commit[]; showing: boolean; loading: boolean; changed?: number; onToggle: () => void }) {
+function UpdatedBanner({ repoID, path, since, commits, showing, loading, changed, onToggle }: { repoID: string; path: string; since: { sha: string; at: string }; commits: Commit[]; showing: boolean; loading: boolean; changed?: number; onToggle: () => void }) {
   const { t } = useTranslation();
+  // The assistant's summaries of each change, when it wrote them at publish.
+  const summaries = useQuery({
+    queryKey: ["change-summaries", repoID, path],
+    queryFn: async () => (await unwrap(api.GET("/repos/{repo}/change-summaries", { params: { path: { repo: repoID }, query: { path } } }))).by_commit,
+  });
   const at = commits.findIndex((c) => c.sha === since.sha);
   const news = (at >= 0 ? commits.slice(0, at) : commits.filter((c) => c.date > since.at)).slice(0, 5);
   if (!news.length) return null;
@@ -404,7 +411,7 @@ function UpdatedBanner({ since, commits, showing, loading, changed, onToggle }: 
         <div className="font-medium">
           {t("follow.updated", { date: new Date(news[0]!.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), people: people.slice(0, 3).join(", ") })}
         </div>
-        <div className="mt-0.5 text-muted-foreground">{news.map((c) => c.title).join(" · ")}</div>
+        <div className="mt-0.5 text-muted-foreground">{news.map((c) => summaries.data?.[c.sha] ?? c.title).join(" · ")}</div>
         {showing && changed === 0 && <div className="mt-1 text-[12.5px] text-muted-foreground">{t("follow.noVisibleChange")}</div>}
       </div>
       <Button size="sm" variant="outline" onClick={onToggle} disabled={loading}>
