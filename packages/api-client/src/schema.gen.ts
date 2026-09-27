@@ -1244,10 +1244,152 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{repo}/links/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        /** A published page's outgoing links (checked) and backlinks */
+        get: operations["getPageLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/links/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        /** A page's links as the revision sees it */
+        get: operations["getRevisionPageLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** Broken links in changed pages, and published links the revision would break */
+        get: operations["getRevisionChecks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/files/rename-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link changes a move needs (inbound links and the page's own relative links) */
+        post: operations["renamePreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/links/rewrite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update links after a page moved (adds linking pages to the revision) */
+        post: operations["rewriteLinks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        OutboundLink: {
+            url: string;
+            /** @enum {string} */
+            kind: "relative" | "route" | "anchor" | "external";
+            to_path?: string;
+            anchor?: string;
+            line: number;
+            image?: boolean;
+            /** @enum {string} */
+            broken?: "missing_page" | "missing_anchor";
+        };
+        InboundLink: {
+            from_path: string;
+            url: string;
+            anchor?: string;
+            line: number;
+        };
+        PageLinks: {
+            outgoing: components["schemas"]["OutboundLink"][];
+            incoming: components["schemas"]["InboundLink"][];
+        };
+        BrokenLink: {
+            path: string;
+            line: number;
+            url: string;
+            /** @enum {string} */
+            reason: "missing_page" | "missing_anchor";
+            target?: string;
+        };
+        RevisionChecks: {
+            broken_links: components["schemas"]["BrokenLink"][];
+            breaks_inbound: components["schemas"]["BrokenLink"][];
+        };
+        MoveInput: {
+            from: string;
+            to: string;
+        };
+        LinkRewrite: {
+            path: string;
+            line: number;
+            before: string;
+            after: string;
+        };
         RevisionAsset: {
             id: string;
             path: string;
@@ -3859,6 +4001,135 @@ export interface operations {
             };
             404: components["responses"]["Problem"];
             415: components["responses"]["Problem"];
+        };
+    };
+    getPageLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Links */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageLinks"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    getRevisionPageLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Links */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageLinks"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    getRevisionChecks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionChecks"];
+                };
+            };
+        };
+    };
+    renamePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveInput"];
+            };
+        };
+        responses: {
+            /** @description Rewrites */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["LinkRewrite"][];
+                    };
+                };
+            };
+        };
+    };
+    rewriteLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveInput"];
+            };
+        };
+        responses: {
+            /** @description Pages changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        pages: number;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
         };
     };
 }

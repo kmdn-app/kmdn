@@ -12,6 +12,7 @@ import { parse } from "./parse";
 import { serialize } from "./serialize";
 import { CONTENT, applyDoc, readDoc, writeDoc } from "./ydoc";
 import { nodeHash } from "./hash";
+import { extractLinks, rewriteLinks } from "./links";
 import type { DocNode, SourceMap } from "./schema";
 
 const u8 = (b: ArrayBuffer) => new Uint8Array(b);
@@ -71,6 +72,13 @@ const api = {
     });
     d.transact(() => applyDoc(d.getXmlFragment(CONTENT), parse(markdown).doc, nodeHash));
     return buf(out);
+  },
+  /** markdown → JSON {links, headings} */
+  links: (markdown: string): string => JSON.stringify(extractLinks(markdown)),
+  /** markdown + JSON {oldUrl: newUrl} → markdown with those destinations replaced */
+  rewriteLinks: (markdown: string, mapJSON: string): string => {
+    const map = JSON.parse(mapJSON) as Record<string, string>;
+    return rewriteLinks(markdown, (u) => map[u] ?? null);
   },
   /** merge updates into one (compaction) */
   yMerge: (updates: ArrayBuffer[]): ArrayBuffer => buf(Y.mergeUpdates(updates.map(u8))),

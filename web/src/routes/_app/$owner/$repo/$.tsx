@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ApiError, errorMessage } from "@/lib/api";
 import { pageTitle, useCreateRevision } from "@/lib/revisions";
 import { RevisionPage } from "@/components/editor/revision-page";
+import { LinksPanel } from "@/components/links-panel";
 import { atLeast, fileHref, rawUrl, useBlame, useFile, useHistory, type BlameLine, type Commit, type RepoView } from "@/lib/repos";
 import { useRepo } from "@/lib/use-repo";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,7 @@ function PublishedPage() {
   const panel = {
     initial: "history" as const,
     history: <HistoryPanel repo={repo} path={path} commits={history.data} current={sha} />,
+    links: file.data?.markdown ? <LinksPanel repo={repo} path={path} /> : undefined,
   };
 
   return (

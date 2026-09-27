@@ -2,6 +2,7 @@ package docengine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -153,5 +154,66 @@ func (e *Engine) YApplyMarkdown(ctx context.Context, state []byte, markdown stri
 	}
 	return e.binCall(ctx, "yApplyMarkdown", len(state), func(v *vm) []goja.Value {
 		return []goja.Value{bin(v, state), v.rt.ToValue(markdown), v.rt.ToValue(clientID)}
+	})
+}
+
+// Link is a link, image or reference definition found in a page.
+type Link struct {
+	Kind      string `json:"kind"` // link | image | definition
+	URL       string `json:"url"`
+	Start     int    `json:"start"`
+	End       int    `json:"end"`
+	Line      int    `json:"line"`
+	Bracketed bool   `json:"bracketed"`
+}
+
+// Heading is a heading and its anchor slug (deduplicated like GitHub).
+type Heading struct {
+	Text  string `json:"text"`
+	Depth int    `json:"depth"`
+	Slug  string `json:"slug"`
+	Line  int    `json:"line"`
+}
+
+// Links extracts a page's links and headings.
+func (e *Engine) Links(ctx context.Context, markdown string) ([]Link, []Heading, error) {
+	if len(markdown) > e.opts.MaxInputBytes {
+		return nil, nil, ErrTooLarge
+	}
+	s, err := e.call(ctx, func(v *vm) (goja.Value, error) {
+		f, err := v.fn("links")
+		if err != nil {
+			return nil, err
+		}
+		return f(goja.Undefined(), v.rt.ToValue(markdown))
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	var out struct {
+		Links    []Link    `json:"links"`
+		Headings []Heading `json:"headings"`
+	}
+	if err := json.Unmarshal([]byte(s), &out); err != nil {
+		return nil, nil, err
+	}
+	return out.Links, out.Headings, nil
+}
+
+// RewriteLinks replaces link destinations (by exact destination) and keeps every other byte.
+func (e *Engine) RewriteLinks(ctx context.Context, markdown string, replace map[string]string) (string, error) {
+	if len(markdown) > e.opts.MaxInputBytes {
+		return "", ErrTooLarge
+	}
+	b, err := json.Marshal(replace)
+	if err != nil {
+		return "", err
+	}
+	return e.call(ctx, func(v *vm) (goja.Value, error) {
+		f, err := v.fn("rewriteLinks")
+		if err != nil {
+			return nil, err
+		}
+		return f(goja.Undefined(), v.rt.ToValue(markdown), v.rt.ToValue(string(b)))
 	})
 }
