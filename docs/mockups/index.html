@@ -1641,7 +1641,7 @@ R['connect-repo']=()=>{
           <div class="grid2"><div class="field"><label class="label">Include</label><textarea class="textarea mono" rows="2">**/*.md
 **/*.markdown</textarea></div><div class="field"><label class="label">Exclude</label><textarea class="textarea mono" rows="2">docs/_archive/**
 **/CHANGELOG.md</textarea></div></div>
-          <div class="alert info">${ic('shieldcheck')}<div><div class="alert-t">main is protected: kmdn will open a pull request on publish</div><div class="alert-d">Branch protection requires 1 approving review and 2 status checks. Approved revisions wait in <b>Publishing</b> until the pull request is merged on GitHub.</div></div><div class="alert-a"><button class="btn btn-ghost btn-xs">${ic('refresh','sm')}Re-check</button></div></div>
+          <div class="alert info">${ic('shieldcheck')}<div><div class="alert-t">main is protected: kmdn still merges on publish</div><div class="alert-d">Branch protection requires 1 approving review and 2 status checks. Each revision is a draft pull request; publishing merges it through the GitHub API, with auto-merge while checks run. Add the kmdn App to the rule's bypass list so the required review doesn't block it.</div></div><div class="alert-a"><button class="btn btn-ghost btn-xs">${ic('refresh','sm')}Re-check</button></div></div>
           <div class="row wrap small muted" style="margin-top:12px;gap:14px"><span class="row g4">${ic('ccheck','sm')}412 markdown files</span><span class="row g4">${ic('image','sm')}38 images</span><span class="row g4">${ic('webhook','sm')}Webhook will be created</span><span class="row g4">${ic('info','sm')}No .kmdn.yml found</span></div>
         </div>
       </div>
@@ -1673,7 +1673,7 @@ function homeMain(){
     <div class="card"><div class="card-h"><div><div class="card-t">Recent revisions</div><div class="card-d">Revisions you created or joined</div></div><a class="btn btn-ghost btn-xs" href="#drafts">All</a></div><div class="card-c list">
       ${drow('Deploy freeze calendar','changes',['priya'],'Priya Raman \u00b7 1 file \u00b7 yesterday','review')}
       ${drow('Update expense limits','conflict',['tom'],'Tom Okafor \u00b7 2 files \u00b7 2 days ago','conflict')}
-      ${drow('Rename engineering folder','publishing',['priya','maya'],'Waiting for merge on GitHub','publish')}
+      ${drow('Rename engineering folder','publishing',['priya','maya'],'Auto-merge on GitHub \u00b7 waiting for checks','publish')}
     </div></div>
     <div class="card"><div class="card-h"><div><div class="card-t">Recently published</div><div class="card-d">Latest changes to Published</div></div></div><div class="card-c list">
       ${frow('Remote work','policies/remote-work.md','2 h ago','maya')}
@@ -1834,7 +1834,7 @@ R['draft-overview']=()=>{
             <div class="row">${av('sam','md')}<div style="flex:1"><div class="m small">Sam Lindqvist</div><div class="xsmall muted">IT \u00b7 it-setup.md owner</div></div><span class="badge badge-outline">Assigned on submit</span></div>
             <div class="help" style="margin-top:12px">All assigned reviewers must approve. While in review only reviewers edit; an edit by one reviewer resets the others' approvals.</div>
           </div></div>
-          <div class="card"><div class="card-c"><dl class="kv" style="margin:0"><dt>Publishes to</dt><dd class="row g4">${ic('github','sm')}northwind/handbook</dd><dt>Started</dt><dd>Sep 23 from Published</dd><dt>Assistant</dt><dd>Helped in 3 turns</dd><dt>Checkpoints</dt><dd><a class="linkbtn" href="#history">5 commits on the draft pull request</a></dd></dl></div></div>
+          <div class="card"><div class="card-c"><dl class="kv" style="margin:0"><dt>Publishes to</dt><dd class="row g4">${ic('github','sm')}northwind/handbook</dd><dt>Started</dt><dd>Sep 23 from Published</dd><dt>Assistant</dt><dd>Helped in 3 turns</dd><dt>Pull request</dt><dd class="row g4">${ic('pr','sm')}<a class="linkbtn" href="#drafts">Draft #482</a> \u00b7 kmdn/42-update-onboarding-for-2026</dd><dt>Checkpoints</dt><dd><a class="linkbtn" href="#history">5 commits on the draft pull request</a></dd></dl></div></div>
           <button class="btn btn-ghost btn-sm" style="color:var(--destructive-fg);justify-content:flex-start" data-toast="Revision closed. You can reopen it from All revisions.">${ic('x')}Close revision</button>
         </div>
       </div></div>`}));
@@ -1889,7 +1889,7 @@ const DRAFTS=[
 ];
 R.drafts=()=>{
   const set=uid('dr');
-  const rows=list=>list.map(d=>`<tr><td><a class="rowlink" href="#${d[5]}">${d[0]}</a>${d[1]==='publishing'?'<div class="xsmall muted">Waiting for merge on GitHub \u00b7 #482</div>':''}${d[1]==='conflict'?'<div class="xsmall" style="color:var(--destructive-fg)">1 conflict in expenses.md</div>':''}</td><td>${pill(d[1])}</td><td class="num tnum hide-sm">${d[2]}</td><td class="hide-sm">${avs(d[3],'sm')}</td><td class="muted hide-md" style="white-space:nowrap">${d[4]}</td><td style="width:40px"><button class="btn btn-ghost btn-xs btn-icon" aria-label="More">${ic('more','sm')}</button></td></tr>`).join('');
+  const rows=list=>list.map(d=>`<tr><td><a class="rowlink" href="#${d[5]}">${d[0]}</a>${d[1]==='publishing'?'<div class="xsmall muted">Auto-merge on GitHub once checks pass \u00b7 #482</div>':''}${d[1]==='conflict'?'<div class="xsmall" style="color:var(--destructive-fg)">1 conflict in expenses.md</div>':''}</td><td>${pill(d[1])}</td><td class="num tnum hide-sm">${d[2]}</td><td class="hide-sm">${avs(d[3],'sm')}</td><td class="muted hide-md" style="white-space:nowrap">${d[4]}</td><td style="width:40px"><button class="btn btn-ghost btn-xs btn-icon" aria-label="More">${ic('more','sm')}</button></td></tr>`).join('');
   const tbl=list=>`<div class="tcard"><table class="table"><thead><tr><th>Revision</th><th>State</th><th class="num hide-sm">Files</th><th class="hide-sm">People</th><th class="hide-md">Updated</th><th></th></tr></thead><tbody>${rows(list)}</tbody></table></div>`;
   const mine=DRAFTS.filter(d=>d[6].mine),rev=DRAFTS.filter(d=>d[6].rev);
   const sm=uid('stm');
@@ -2138,7 +2138,7 @@ R.publish=()=>{
     <div class="dlg-h"><h2 id="pub-t">Publish to northwind/handbook</h2><p>Merges the revision's pull request into <b style="color:var(--foreground)">main</b> with a merge commit: 5 files, and the 6 commits saved along the way stay in history. Published updates for everyone right after.</p></div>
     <div class="dlg-c">
       <div class="row wrap" style="margin-bottom:16px"><span class="xsmall muted">Mockup variant:</span><div class="tabs sm" role="tablist"><button class="tab" role="tab" data-tab="${set}:open" aria-selected="true">main is open</button><button class="tab" role="tab" data-tab="${set}:prot" aria-selected="false">main is protected</button></div></div>
-      <div class="field"><label class="label" for="pub-title">Commit title</label><input class="input" id="pub-title" value="Update onboarding for 2026"></div>
+      <div class="field"><label class="label" for="pub-title">Merge commit title</label><input class="input" id="pub-title" value="Update onboarding for 2026"></div>
       <div class="field"><label class="label" for="pub-body">Description</label><textarea class="textarea mono" id="pub-body" rows="5">Refresh the first-week guide and IT setup for the January cohort.
 
 - Rewrite IT setup intro in plain language
@@ -2157,15 +2157,15 @@ R.publish=()=>{
         ${tr('Kmdn-Revision','https://kmdn.northwind.dev/northwind/handbook/revisions/update-onboarding-2026','Link back')}
       </div></div>
       <div data-tabpanel="${set}:open">
-        <div class="alert">${ic('github')}<div style="flex:1"><div class="alert-t row wrap" style="gap:6px">Pushed as <span class="mono small">kmdn[bot]</span> to <span class="badge badge-outline">${ic('branch')}main</span><span class="badge badge-success">${ic('shieldcheck')}Signed by GitHub \u00b7 Verified</span></div><div class="alert-d">Squashed into 1 commit through the GitHub API. The revision closes as Published.</div></div></div>
+        <div class="alert">${ic('github')}<div style="flex:1"><div class="alert-t row wrap" style="gap:6px">Merges pull request <span class="mono small">#482</span> into <span class="badge badge-outline">${ic('branch')}main</span><span class="badge badge-success">${ic('shieldcheck')}Merge commit signed by GitHub \u00b7 Verified</span></div><div class="alert-d">A merge commit by <span class="mono">kmdn[bot]</span> through the GitHub API. The 6 commits saved on the revision stay in history, and the revision closes as Published.</div></div></div>
       </div>
       <div data-tabpanel="${set}:prot" hidden>
-        <div class="alert violet">${ic('pr')}<div style="flex:1"><div class="alert-t">Publishing will open pull request #482 on GitHub</div><div class="alert-d">main is protected (1 review, 2 status checks). The revision stays in <b>Publishing</b> until the pull request is merged. Merge it on GitHub, or enable auto-merge.</div></div></div>
+        <div class="alert violet">${ic('pr')}<div style="flex:1"><div class="alert-t">main is protected: kmdn merges pull request #482 through the GitHub API</div><div class="alert-d">1 review and 2 status checks are required; kmdn is on the rule's bypass list. While checks run, kmdn turns on auto-merge and the revision stays in <b>Publishing</b> until GitHub merges it.</div></div></div>
         <div class="xsmall muted m" style="margin:14px 0 6px">After you publish</div>
-        <div class="card flat"><div class="card-c row wrap" style="gap:10px">${pill('publishing')}<span class="small"><b>Waiting for merge on GitHub</b> \u00b7 <span class="mono">#482</span></span><span class="sp"></span><span class="xsmall muted row g4">${ic('ccheck','xs')}2 of 3 checks \u00b7 0 of 1 review</span><a class="btn btn-outline btn-xs" href="#drafts">${ic('ext','sm')}View on GitHub</a></div></div>
+        <div class="card flat"><div class="card-c row wrap" style="gap:10px">${pill('publishing')}<span class="small"><b>Auto-merge on GitHub</b> \u00b7 <span class="mono">#482</span></span><span class="sp"></span><span class="xsmall muted row g4">${ic('ccheck','xs')}2 of 3 checks \u00b7 0 of 1 review</span><a class="btn btn-outline btn-xs" href="#drafts">${ic('ext','sm')}View on GitHub</a></div></div>
       </div>
     </div>
-    <div class="dlg-f"><span class="xsmall muted sp hide-sm row g4">${ic('info','xs')}Can't be undone here. Restore from History if needed.</span><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-default" data-close data-toast="Published. a41c9e2 is on main.">${ic('upload')}Publish</button></div>
+    <div class="dlg-f"><span class="xsmall muted sp hide-sm row g4">${ic('info','xs')}Can't be undone here. Restore from History if needed.</span><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-default" data-close data-toast="Published. Merge commit a41c9e2 is on main.">${ic('upload')}Publish</button></div>
   </div></div>`;
   return frame('/northwind/handbook/revisions/update-onboarding-2026/publish',app({side:{rev:RV.approved,active:'overview'},top:pagebar([['Revisions','drafts'],'Update onboarding for 2026'],`<button class="btn btn-default btn-sm" data-open="pub-dlg">${ic('upload')}Publish</button>`),main:publishBg(),overlay:dlg}));
 };
@@ -2273,7 +2273,7 @@ R['repo-settings']=()=>{
         <div class="alert info" style="margin-bottom:16px">${ic('filetext')}<div><div class="alert-t">This repository has a .kmdn.yml</div><div class="alert-d">Values set there override these settings: <code>content_root</code> and <code>exclude</code>. Edit them in the repository, or remove the file to manage everything here.</div></div></div>
         <div class="grid2"><div class="field"><label class="label">Content root</label><div class="iaddon"><span class="pre">/</span><input class="input mono" value="docs/" readonly></div><div class="help row g4">${ic('lock','xs')}Set by .kmdn.yml</div></div>
         <div class="field"><label class="label">Target branch</label>${selectBox(`${ic('branch','sm')} main`)}<div class="help">Published is the content of this branch.</div></div></div>
-        <div class="alert" style="margin-bottom:16px">${ic('shieldcheck')}<div style="flex:1"><div class="alert-t">Protected: kmdn will open a pull request on publish</div><div class="alert-d">Detected from GitHub branch protection: 1 required review, 2 status checks. Checked 5 min ago.</div></div><div class="alert-a"><button class="btn btn-ghost btn-xs">${ic('refresh','sm')}Re-check</button></div></div>
+        <div class="alert" style="margin-bottom:16px">${ic('shieldcheck')}<div style="flex:1"><div class="alert-t">Protected: kmdn merges each revision's pull request through the GitHub API</div><div class="alert-d">Detected from GitHub branch protection: 1 required review, 2 status checks. kmdn is on the bypass list; auto-merge waits for the checks. Checked 5 min ago.</div></div><div class="alert-a"><button class="btn btn-ghost btn-xs">${ic('refresh','sm')}Re-check</button></div></div>
         <div class="grid2"><div class="field"><label class="label">Include</label><textarea class="textarea mono" rows="3">**/*.md
 **/*.markdown</textarea></div><div class="field"><label class="label">Exclude</label><textarea class="textarea mono" rows="3" readonly>docs/_archive/**
 **/CHANGELOG.md</textarea><div class="help row g4">${ic('lock','xs')}Set by .kmdn.yml</div></div></div>
@@ -2375,9 +2375,9 @@ function adminApp(A='users',overlay=''){
       </div>
       <div class="filters"><span class="sp"></span><a class="btn btn-default btn-sm" href="#connect-repo">${ic('plus')}Connect repository</a></div>
       <div class="tcard"><table class="table"><thead><tr><th>Repository</th><th class="hcq2">Content root</th><th class="hcq">Publishing</th><th>Webhook</th><th class="hcq">Last sync</th></tr></thead><tbody>
-        <tr><td><div class="row">${ic('github','sm')}<span class="m">northwind/handbook</span></div></td><td class="mono small hcq2">docs/</td><td class="hcq small">Pull request (protected)</td><td><span class="badge badge-success">Healthy</span></td><td class="small muted hcq">2 min ago</td></tr>
-        <tr><td><div class="row">${ic('github','sm')}<span class="m">northwind/api-docs</span></div></td><td class="mono small hcq2">content/</td><td class="hcq small">Direct push</td><td><span class="badge badge-success">Healthy</span></td><td class="small muted hcq">1 h ago</td></tr>
-        <tr><td><div class="row">${ic('gitlab','sm')}<span class="m">platform/runbooks</span></div></td><td class="mono small hcq2">runbooks/</td><td class="hcq small">Merge request (protected)</td><td><span class="badge badge-warning">3 failed</span></td><td class="small muted hcq">Yesterday</td></tr>
+        <tr><td><div class="row">${ic('github','sm')}<span class="m">northwind/handbook</span></div></td><td class="mono small hcq2">docs/</td><td class="hcq small">Merge PR \u00b7 protected</td><td><span class="badge badge-success">Healthy</span></td><td class="small muted hcq">2 min ago</td></tr>
+        <tr><td><div class="row">${ic('github','sm')}<span class="m">northwind/api-docs</span></div></td><td class="mono small hcq2">content/</td><td class="hcq small">Merge PR</td><td><span class="badge badge-success">Healthy</span></td><td class="small muted hcq">1 h ago</td></tr>
+        <tr><td><div class="row">${ic('gitlab','sm')}<span class="m">platform/runbooks</span></div></td><td class="mono small hcq2">runbooks/</td><td class="hcq small">Merge MR \u00b7 protected</td><td><span class="badge badge-warning">3 failed</span></td><td class="small muted hcq">Yesterday</td></tr>
       </tbody></table></div>`)+
     spanel(set,'ai',A,'AI provider','Powers the assistant, review assistant and suggestions.',`
       <div class="card"><div class="card-c">
@@ -2573,7 +2573,7 @@ const SCREENS=[
   ['review-source','Review & publish','Review (source diff)','Split and unified markdown diff with a line comment.','columns'],
   ['sync','Review & publish','Update from Published','Preview what Published changed in this revision, then apply. Viewer: Maya reviewing.','refresh'],
   ['conflict','Review & publish','Conflicts in editing','Applying updates with conflicts returns the revision to Editing; editors resolve inline.','alert'],
-  ['publish','Review & publish','Publish','Commit message, trailers, Verified, protected-branch variant.','upload'],
+  ['publish','Review & publish','Publish','Merge the revision\u2019s pull request: merge commit message, trailers, protected-branch variant.','upload'],
   ['history','History','History & blame','Published versions, checkpoints and a blame overlay.','history'],
   ['assistant','Assistant','Assistant Q&A','Private repo Q&A with citations and \u201cStart a revision\u201d.','sparkles'],
   ['inbox','Settings & admin','Inbox','Updates grouped per revision, browser push hint, followed pages.','inbox'],
