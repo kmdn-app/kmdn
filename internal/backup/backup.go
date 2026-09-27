@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -114,31 +115,64 @@ func (a *archive) addFile(name, src string) error {
 	return a.add(name, 0o600, fi.Size(), f)
 }
 
-// redact blanks secret_key and every password in a YAML config.
+// redact resolves aliases before removing credentials, including URL passwords.
 func redact(b []byte) ([]byte, error) {
-	var doc yaml.Node
+	var doc map[string]any
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		return nil, err
 	}
-	var walk func(n *yaml.Node)
-	walk = func(n *yaml.Node) {
-		if n.Kind == yaml.MappingNode {
-			for i := 0; i+1 < len(n.Content); i += 2 {
-				k, v := n.Content[i], n.Content[i+1]
-				if (k.Value == "secret_key" || k.Value == "password" || strings.HasSuffix(k.Value, "_secret")) && v.Kind == yaml.ScalarNode {
-					v.Value, v.Tag, v.Style = "", "!!str", yaml.DoubleQuotedStyle
-					continue
-				}
-				walk(v)
-			}
-			return
+	if err := redactFields(doc); err != nil {
+		return nil, err
+	}
+	return yaml.Marshal(&doc)
+}
+
+func secretField(key string) bool {
+	key = strings.ToLower(key)
+	return key == "secret_key" || key == "api_key" || key == "password" || key == "token" ||
+		strings.HasSuffix(key, "_secret") || strings.HasSuffix(key, "_password") || strings.HasSuffix(key, "_token")
+}
+
+func redactFields(fields map[string]any) error {
+	for key, value := range fields {
+		if secretField(key) {
+			fields[key] = ""
+			continue
 		}
-		for _, c := range n.Content {
-			walk(c)
+		switch value := value.(type) {
+		case map[string]any:
+			if err := redactFields(value); err != nil {
+				return err
+			}
+		case string:
+			if key != "url" && !strings.HasSuffix(key, "_url") && !strings.HasSuffix(key, "_endpoint") {
+				continue
+			}
+			u, err := url.Parse(value)
+			if err != nil {
+				return fmt.Errorf("invalid URL in config field %s", key)
+			}
+			if u.User != nil {
+				u.User = url.User(u.User.Username())
+			}
+			query, err := url.ParseQuery(u.RawQuery)
+			if err != nil {
+				return fmt.Errorf("invalid URL query in config field %s", key)
+			}
+			changed := false
+			for name := range query {
+				if secretField(name) || strings.EqualFold(name, "sslpassword") {
+					query.Del(name)
+					changed = true
+				}
+			}
+			if changed {
+				u.RawQuery = query.Encode()
+			}
+			fields[key] = u.String()
 		}
 	}
-	walk(&doc)
-	return yaml.Marshal(&doc)
+	return nil
 }
 
 // Backup writes a consistent backup of a running or stopped instance.
