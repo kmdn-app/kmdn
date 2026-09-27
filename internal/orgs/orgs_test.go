@@ -62,18 +62,21 @@ func TestCreateAndMembers(t *testing.T) {
 		t.Fatalf("reserved slug: %v", err)
 	}
 
-	role := func(mode, org string, u users.User) string {
+	if err := SetMode(ctx, db, Multi); err != nil {
+		t.Fatal(err)
+	}
+	role := func(org string, u users.User) string {
 		t.Helper()
-		r, err := Role(ctx, db, mode, org, u)
+		r, err := Role(ctx, db, org, u)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return r
 	}
-	if r := role(Multi, o.ID, alice); r != Owner {
+	if r := role(o.ID, alice); r != Owner {
 		t.Fatalf("alice = %q", r)
 	}
-	if r := role(Multi, o.ID, bob); r != "" {
+	if r := role(o.ID, bob); r != "" {
 		t.Fatalf("bob before joining = %q", r)
 	}
 	if err := AddMember(ctx, db, o.ID, bob.ID, Member, alice.ID); err != nil {
@@ -82,7 +85,7 @@ func TestCreateAndMembers(t *testing.T) {
 	if err := AddMember(ctx, db, o.ID, bob.ID, Admin, alice.ID); err != nil { // upsert
 		t.Fatal(err)
 	}
-	if r := role(Multi, o.ID, bob); r != Admin {
+	if r := role(o.ID, bob); r != Admin {
 		t.Fatalf("bob = %q", r)
 	}
 	if n, _ := CountOwners(ctx, db, o.ID); n != 1 {
@@ -91,7 +94,7 @@ func TestCreateAndMembers(t *testing.T) {
 	if err := SetMemberStatus(ctx, db, o.ID, bob.ID, Deactivated); err != nil {
 		t.Fatal(err)
 	}
-	if r := role(Multi, o.ID, bob); r != "" {
+	if r := role(o.ID, bob); r != "" {
 		t.Fatalf("deactivated bob = %q", r)
 	}
 	ms, err := Members(ctx, db, o.ID)
@@ -99,7 +102,7 @@ func TestCreateAndMembers(t *testing.T) {
 		t.Fatalf("members = %+v, %v", ms, err)
 	}
 
-	mine, err := ForUser(ctx, db, Multi, alice)
+	mine, err := ForUser(ctx, db, alice)
 	if err != nil || len(mine) != 1 || mine[0].ID != o.ID {
 		t.Fatalf("alice's orgs = %+v, %v", mine, err)
 	}
@@ -131,13 +134,26 @@ func TestSingleMode(t *testing.T) {
 		{carol, other.ID, ""}, // single mode only knows the default org
 	}
 	for _, c := range cases {
-		if r, _ := Role(ctx, db, Single, c.org, c.u); r != c.want {
+		if r, _ := Role(ctx, db, c.org, c.u); r != c.want {
 			t.Errorf("%s in %s = %q, want %q", c.u.Email, c.org, r, c.want)
 		}
 	}
+	// Going back to single mode is refused while several orgs exist.
+	if err := SetMode(ctx, db, Multi); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetMode(ctx, db, Single); !errors.Is(err, ErrModeChange) {
+		t.Fatalf("back to single with two orgs: %v", err)
+	}
 	// Multi mode needs a row.
-	if r, _ := Role(ctx, db, Multi, DefaultID, carol); r != "" {
+	if r, _ := Role(ctx, db, DefaultID, carol); r != "" {
 		t.Errorf("carol in multi mode without a row = %q", r)
+	}
+	if err := SetStatus(ctx, db, other.ID, Deleting); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetMode(ctx, db, Single); err != nil {
+		t.Fatal(err)
 	}
 	// A deactivated row still removes access in single mode.
 	if err := AddMember(ctx, db, DefaultID, carol.ID, Member, ""); err != nil {
@@ -146,15 +162,15 @@ func TestSingleMode(t *testing.T) {
 	if err := SetMemberStatus(ctx, db, DefaultID, carol.ID, Deactivated); err != nil {
 		t.Fatal(err)
 	}
-	if r, _ := Role(ctx, db, Single, DefaultID, carol); r != "" {
+	if r, _ := Role(ctx, db, DefaultID, carol); r != "" {
 		t.Errorf("deactivated carol = %q", r)
 	}
 	// Deactivated accounts have no role anywhere.
 	admin.Status = users.Deactivated
-	if r, _ := Role(ctx, db, Single, DefaultID, admin); r != "" {
+	if r, _ := Role(ctx, db, DefaultID, admin); r != "" {
 		t.Errorf("deactivated admin = %q", r)
 	}
-	orgs, err := ForUser(ctx, db, Single, carol)
+	orgs, err := ForUser(ctx, db, carol)
 	if err != nil || len(orgs) != 1 || orgs[0].ID != DefaultID {
 		t.Fatalf("single-mode orgs = %+v, %v", orgs, err)
 	}

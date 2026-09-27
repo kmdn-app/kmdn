@@ -173,9 +173,55 @@ func List(ctx context.Context, q store.Querier) ([]Org, error) {
 	return list(ctx, q, `SELECT `+cols+` FROM orgs WHERE status <> ? ORDER BY name, slug`, Deleting)
 }
 
+// modeKey is where the instance's mode lives (instance_settings, JSON), so
+// every access check agrees on it without the config at hand. A missing row
+// means single mode.
+const modeKey = "orgs_mode"
+
+// Mode returns the instance's mode.
+func Mode(ctx context.Context, q store.Querier) (string, error) {
+	var v string
+	err := store.QueryRow(ctx, q, `SELECT value FROM instance_settings WHERE key = ?`, modeKey).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) || v == `"single"` {
+		return Single, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return Multi, nil
+}
+
+// ErrModeChange is returned when single mode is asked for while several
+// orgs exist.
+var ErrModeChange = errors.New("orgs.mode can't go back to single while more than one organization exists")
+
+// SetMode records the configured mode at startup. Going back to single mode
+// is refused while more than one org exists.
+func SetMode(ctx context.Context, q store.Querier, mode string) error {
+	if mode != Single && mode != Multi {
+		return fmt.Errorf("orgs: bad mode %q", mode)
+	}
+	if mode == Single {
+		var n int
+		if err := store.QueryRow(ctx, q, `SELECT COUNT(*) FROM orgs WHERE status <> ?`, Deleting).Scan(&n); err != nil {
+			return err
+		}
+		if n > 1 {
+			return ErrModeChange
+		}
+	}
+	_, err := store.Exec(ctx, q, `INSERT INTO instance_settings (key, value, updated_at) VALUES (?, ?, ?)
+		ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, modeKey, `"`+mode+`"`, store.Millis(time.Now()))
+	return err
+}
+
 // ForUser returns the orgs u belongs to, by name. In single mode that is
 // the default org for every active account.
-func ForUser(ctx context.Context, q store.Querier, mode string, u users.User) ([]Org, error) {
+func ForUser(ctx context.Context, q store.Querier, u users.User) ([]Org, error) {
+	mode, err := Mode(ctx, q)
+	if err != nil {
+		return nil, err
+	}
 	if mode == Single {
 		if u.Status != users.Active {
 			return nil, nil
@@ -212,33 +258,33 @@ func list(ctx context.Context, q store.Querier, query string, args ...any) ([]Or
 // In single mode every active account is a member of the default org and
 // instance admins are its owners, whether or not a membership row exists;
 // a deactivated row still removes access.
-func Role(ctx context.Context, q store.Querier, mode, orgID string, u users.User) (string, error) {
+func Role(ctx context.Context, q store.Querier, orgID string, u users.User) (string, error) {
 	if u.Status != users.Active {
 		return "", nil
 	}
-	var role, status string
-	err := store.QueryRow(ctx, q, `SELECT role, status FROM org_members WHERE org_id = ? AND user_id = ?`, orgID, u.ID).Scan(&role, &status)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		role, status = "", ""
-	case err != nil:
+	// One round trip: the membership row (if any) and the instance mode.
+	var role, status, mode sql.NullString
+	err := store.QueryRow(ctx, q, `SELECT m.role, m.status, s.value FROM (SELECT 1 AS one) x
+		LEFT JOIN org_members m ON m.org_id = ? AND m.user_id = ?
+		LEFT JOIN instance_settings s ON s.key = ?`, orgID, u.ID, modeKey).Scan(&role, &status, &mode)
+	if err != nil {
 		return "", err
 	}
-	if status == Deactivated {
+	if status.String == Deactivated {
 		return "", nil
 	}
-	if mode == Single {
+	if !mode.Valid || mode.String == `"single"` {
 		if orgID != DefaultID {
 			return "", nil
 		}
 		if u.IsInstanceAdmin {
 			return Owner, nil
 		}
-		if role == "" {
+		if role.String == "" {
 			return Member, nil
 		}
 	}
-	return role, nil
+	return role.String, nil
 }
 
 // AddMember adds userID to the org with role, or reactivates and updates an
