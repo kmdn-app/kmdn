@@ -315,11 +315,16 @@ type Node struct {
 
 // Tree lists files in scope (and their folders) at the published head.
 func (s *Service) Tree(ctx context.Context, r Repo) ([]Node, error) {
-	if r.HeadSHA == "" {
+	return s.TreeAt(ctx, r, r.HeadSHA)
+}
+
+// TreeAt lists files in scope at a commit (a revision's base).
+func (s *Service) TreeAt(ctx context.Context, r Repo, sha string) ([]Node, error) {
+	if sha == "" {
 		return []Node{}, nil
 	}
 	sc := r.Scope()
-	entries, err := s.Mirror(r).Tree(ctx, r.HeadSHA, sc.Root)
+	entries, err := s.Mirror(r).Tree(ctx, sha, sc.Root)
 	if err != nil {
 		if errors.Is(err, gitmirror.ErrNotFound) {
 			return []Node{}, nil
@@ -380,6 +385,44 @@ func (s *Service) ReadFile(ctx context.Context, r Repo, p, rev string) (File, er
 		return File{}, err
 	}
 	return File{Path: p, CommitSHA: rev, Content: string(b), Markdown: IsMarkdown(p), Size: len(b)}, nil
+}
+
+// TemplatesDir holds page templates, outside the content root.
+const TemplatesDir = ".kmdn/templates"
+
+// Templates lists markdown templates at the published head.
+func (s *Service) Templates(ctx context.Context, r Repo) ([]Node, error) {
+	if r.HeadSHA == "" {
+		return []Node{}, nil
+	}
+	entries, err := s.Mirror(r).Tree(ctx, r.HeadSHA, TemplatesDir)
+	if err != nil {
+		if errors.Is(err, gitmirror.ErrNotFound) {
+			return []Node{}, nil
+		}
+		return nil, err
+	}
+	out := []Node{}
+	for _, e := range entries {
+		if e.Type == "blob" && IsMarkdown(e.Path) {
+			out = append(out, Node{Path: e.Path, Name: path.Base(e.Path), Type: "file", Markdown: true, Size: e.Size})
+		}
+	}
+	return out, nil
+}
+
+// ReadTemplate returns a template's markdown at the published head.
+func (s *Service) ReadTemplate(ctx context.Context, r Repo, p string) (string, error) {
+	p = strings.TrimPrefix(path.Clean("/"+p), "/")
+	if !strings.HasPrefix(p, TemplatesDir+"/") || !IsMarkdown(p) || r.HeadSHA == "" {
+		return "", gitmirror.ErrNotFound
+	}
+	cred, err := s.credential(ctx, r)
+	if err != nil {
+		return "", err
+	}
+	b, err := s.Mirror(r).ReadFile(ctx, cred, r.HeadSHA, p)
+	return string(b), err
 }
 
 // History returns published versions of a file.

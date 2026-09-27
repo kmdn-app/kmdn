@@ -20,6 +20,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/linking"
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/repos"
+	"github.com/kmdn-app/kmdn/internal/revisions"
 	"github.com/kmdn-app/kmdn/internal/search"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/server"
@@ -29,18 +30,19 @@ import (
 
 // App holds the running services.
 type App struct {
-	Config  config.Config
-	Log     *slog.Logger
-	DB      *store.DB
-	Secrets *secrets.Store
-	Jobs    *jobs.Queue
-	Server  *server.Server
-	Mail    *mail.Service
-	Auth    *auth.Service
-	AuthH   *auth.HTTP
-	Setup   *setup.Service
-	Repos   *repos.Service
-	Invites *invites.Service
+	Config    config.Config
+	Log       *slog.Logger
+	DB        *store.DB
+	Secrets   *secrets.Store
+	Jobs      *jobs.Queue
+	Server    *server.Server
+	Mail      *mail.Service
+	Auth      *auth.Service
+	AuthH     *auth.HTTP
+	Setup     *setup.Service
+	Repos     *repos.Service
+	Revisions *revisions.Service
+	Invites   *invites.Service
 }
 
 // New opens the database, applies migrations and builds the services.
@@ -103,6 +105,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	idx.Routes(r)
 	a.Repos.Routes(r)
 	a.Repos.ForgeRoutes(r)
+	a.Revisions = &revisions.Service{DB: db, Repos: a.Repos, Log: log}
+	a.Revisions.Routes(r)
 	a.Server.Mount("/hooks", a.Repos.WebhookHandler())
 	(&admin.People{DB: db, Auth: a.Auth}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL}

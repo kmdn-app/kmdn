@@ -26,6 +26,12 @@ const (
 	AgentKey   = "ak"
 	Upload     = "upl"
 	Audit      = "aud"
+
+	RevisionEvent = "rve"
+	RevisionFile  = "rvf"
+	Checkpoint    = "chk"
+	YDoc          = "ydc"
+	YSnapshot     = "yss"
 )
 
 var (

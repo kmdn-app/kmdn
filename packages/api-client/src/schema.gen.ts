@@ -897,10 +897,342 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{repo}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** Revisions, most recently updated first */
+        get: operations["listRevisions"];
+        put?: never;
+        /** Start a revision on the published head */
+        post: operations["createRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/revisions/by-number/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                number: number;
+            };
+            cookie?: never;
+        };
+        get: operations["getRevisionByNumber"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo}/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** Page templates in .kmdn/templates */
+        get: operations["listTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get: operations["getRevision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateRevision"];
+        trace?: never;
+    };
+    "/revisions/{revision}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["closeRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reopenRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** The base tree with the revision's file changes applied */
+        get: operations["getRevisionTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** The manifest */
+        get: operations["listRevisionFiles"];
+        put?: never;
+        /** Add, modify, rename or delete a page */
+        post: operations["revisionFileOp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/files/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        /** A page as seen in the revision */
+        get: operations["getRevisionFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get: operations["listRevisionMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/members/{user}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["addRevisionMember"];
+        post?: never;
+        delete: operations["removeRevisionMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get: operations["listRevisionEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        RevisionState: "editing" | "in_review" | "approved" | "publishing" | "published" | "closed";
+        Revision: {
+            id: string;
+            repo_id: string;
+            number: number;
+            title: string;
+            description: string;
+            state: components["schemas"]["RevisionState"];
+            changes_requested: boolean;
+            has_conflicts: boolean;
+            review_round: number;
+            base_sha: string;
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            submitted_at?: string;
+            /** Format: date-time */
+            published_at?: string;
+            published_sha?: string;
+            change_request_url?: string;
+            /** Format: date-time */
+            closed_at?: string;
+        };
+        RevisionAccess: {
+            member: boolean;
+            can_edit: boolean;
+            can_manage: boolean;
+            /** @description Why editing is off: viewer, not_member, or the revision state */
+            reason?: string;
+        };
+        RevisionMember: {
+            user_id: string;
+            name: string;
+            email: string;
+            /** @enum {string} */
+            role: "owner" | "editor";
+            /** Format: date-time */
+            added_at: string;
+        };
+        RevisionView: components["schemas"]["Revision"] & {
+            access: components["schemas"]["RevisionAccess"];
+            members: components["schemas"]["RevisionMember"][];
+            file_count: number;
+        };
+        RevisionCreate: {
+            title: string;
+            description?: string;
+            /** @description Add this page right away */
+            path?: string;
+            /** @enum {string} */
+            op?: "modify" | "add";
+            template?: string;
+        };
+        /** @enum {string} */
+        FileOpKind: "add" | "modify" | "rename" | "delete";
+        RevisionFile: {
+            id: string;
+            path: string;
+            op: components["schemas"]["FileOpKind"];
+            from_path?: string;
+            content_hash?: string;
+            /** Format: date-time */
+            materialized_at?: string;
+            has_conflicts: boolean;
+            additions: number;
+            deletions: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RevisionFileOp: {
+            op: components["schemas"]["FileOpKind"];
+            path: string;
+            from_path?: string;
+            template?: string;
+            content?: string;
+        };
+        RevisionContent: {
+            path: string;
+            op?: components["schemas"]["FileOpKind"];
+            from_path?: string;
+            content: string;
+            base: string;
+            markdown: boolean;
+            in_revision: boolean;
+        };
+        RevisionTreeNode: components["schemas"]["TreeNode"] & {
+            op?: components["schemas"]["FileOpKind"];
+        };
+        RevisionEvent: {
+            id: string;
+            /** @enum {string} */
+            actor_type: "user" | "assistant" | "system";
+            actor_id?: string;
+            actor_name?: string;
+            kind: string;
+            data: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at: string;
+        };
         SearchHit: {
             path: string;
             title: string;
@@ -1212,6 +1544,7 @@ export interface components {
     };
     parameters: {
         RepoID: string;
+        RevisionID: string;
         /** @description Repository-relative path; may contain slashes */
         FilePath: string;
     };
@@ -2753,6 +3086,414 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listRevisions: {
+        parameters: {
+            query?: {
+                /** @description open (default), all, or comma-separated states */
+                state?: string;
+                /** @description Only revisions the caller edits */
+                mine?: boolean;
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revisions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RevisionView"][];
+                    };
+                };
+            };
+        };
+    };
+    createRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevisionCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRevisionByNumber: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionView"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    listTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Templates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["TreeNode"][];
+                    };
+                };
+            };
+        };
+    };
+    getRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionView"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title?: string;
+                    description?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionView"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    closeRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionView"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    reopenRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionView"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    getRevisionTree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tree */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        base_sha: string;
+                        root: string;
+                        items: components["schemas"]["RevisionTreeNode"][];
+                    };
+                };
+            };
+        };
+    };
+    listRevisionFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Files */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RevisionFile"][];
+                    };
+                };
+            };
+        };
+    };
+    revisionFileOp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevisionFileOp"];
+            };
+        };
+        responses: {
+            /** @description Manifest entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionFile"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRevisionFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionContent"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listRevisionMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RevisionMember"][];
+                    };
+                };
+            };
+        };
+    };
+    addRevisionMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RevisionMember"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    removeRevisionMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    listRevisionEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Events, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RevisionEvent"][];
+                    };
+                };
             };
         };
     };
