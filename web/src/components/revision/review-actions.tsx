@@ -81,7 +81,12 @@ export function ReviewActions({ repo, rev, compact }: { repo: RepoView; rev: Rev
             <MessageSquareWarning />
             <span className={cn(compact && "max-lg:hidden")}>{t("review.requestChanges")}</span>
           </Button>
-          <Button size="sm" onClick={() => approve.mutate()} disabled={approve.isPending || mine?.state === "approved"}>
+          <Button
+            size="sm"
+            onClick={() => approve.mutate()}
+            disabled={approve.isPending || mine?.state === "approved" || rev.pending_suggestions > 0}
+            title={rev.pending_suggestions > 0 ? t("suggestions.blocking", { count: rev.pending_suggestions }) : undefined}
+          >
             {approve.isPending ? <Loader2 className="animate-spin" /> : <Check />}
             {mine?.state === "approved" ? t("review.approved") : t("review.approve")}
           </Button>
