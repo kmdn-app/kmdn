@@ -2,6 +2,12 @@
 // restarts, retry with exponential backoff, and can carry a unique key so at
 // most one pending/running job exists per (kind, key). Postgres claims rows
 // with FOR UPDATE SKIP LOCKED; SQLite relies on its single writer.
+//
+// Jobs belong to the org of the repo or revision in their payload. Workers
+// serve orgs fairly: the next job goes to the org with the fewest jobs
+// running, and an org runs at most PerOrg jobs of a kind at once, so one
+// org's import or scan can't hold every worker
+// (docs/specs/16-organizations.md#jobs-and-fairness).
 package jobs
 
 import (
@@ -36,6 +42,7 @@ const (
 // Job is a unit of work handed to a Handler.
 type Job struct {
 	ID          string
+	OrgID       string // "" for instance jobs
 	Kind        string
 	Key         string
 	Payload     json.RawMessage
@@ -68,7 +75,10 @@ type Options struct {
 	Workers      int           // default 4
 	PollInterval time.Duration // default 1s
 	LockFor      time.Duration // default 5m; a crashed worker's job is retried after this
-	Logger       *slog.Logger
+	// PerOrg caps the jobs of one kind an org runs at once (default: half
+	// the workers, at least 1). Instance jobs aren't capped.
+	PerOrg int
+	Logger *slog.Logger
 }
 
 // Queue enqueues and runs jobs.
@@ -94,6 +104,9 @@ func New(db *store.DB, o Options) *Queue {
 	if o.LockFor <= 0 {
 		o.LockFor = 5 * time.Minute
 	}
+	if o.PerOrg <= 0 {
+		o.PerOrg = max(1, o.Workers/2)
+	}
 	if o.Logger == nil {
 		o.Logger = slog.Default()
 	}
@@ -118,6 +131,9 @@ type EnqueueOptions struct {
 	Key         string    // unique while pending/running
 	RunAt       time.Time // zero means now
 	MaxAttempts int       // default 10
+	// OrgID is the org the job works for; empty means the org of the
+	// payload's repo_id or revision_id, or none (an instance job).
+	OrgID string
 }
 
 // Enqueue adds a job. When Key is set and an active job with the same kind
@@ -141,8 +157,10 @@ func (q *Queue) Enqueue(ctx context.Context, qr store.Querier, kind string, payl
 		key = o.Key
 	}
 	id := ids.New(ids.Job)
-	_, err = store.Exec(ctx, qr, `INSERT INTO jobs (id, kind, unique_key, payload, status, run_at, max_attempts, created_at, updated_at)
-		VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)`, id, kind, key, string(b), store.Millis(runAt), maxA, store.Millis(now), store.Millis(now))
+	repoID, revID := payloadRefs(b)
+	_, err = store.Exec(ctx, qr, `INSERT INTO jobs (id, kind, unique_key, payload, status, run_at, max_attempts, created_at, updated_at, org_id)
+		VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, COALESCE(?, (SELECT org_id FROM repos WHERE id = ?), (SELECT r.org_id FROM revisions v JOIN repos r ON r.id = v.repo_id WHERE v.id = ?)))`,
+		id, kind, key, string(b), store.Millis(runAt), maxA, store.Millis(now), store.Millis(now), nullable(o.OrgID), repoID, revID)
 	if err != nil {
 		if o.Key != "" && store.IsUniqueViolation(err) {
 			var existing string
@@ -154,6 +172,24 @@ func (q *Queue) Enqueue(ctx context.Context, qr store.Querier, kind string, payl
 	}
 	q.Notify()
 	return id, nil
+}
+
+// payloadRefs finds the repo_id and revision_id of a job's payload, which
+// say whose job it is.
+func payloadRefs(b []byte) (repoID, revisionID string) {
+	var p struct {
+		RepoID     string `json:"repo_id"`
+		RevisionID string `json:"revision_id"`
+	}
+	_ = json.Unmarshal(b, &p)
+	return p.RepoID, p.RevisionID
+}
+
+func nullable(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // Notify wakes an idle worker (call after a transaction that enqueued jobs commits).
@@ -171,7 +207,7 @@ func (q *Queue) Get(ctx context.Context, id string) (Job, error) {
 	return j, store.NotFound(err)
 }
 
-const jobCols = `id, kind, unique_key, payload, status, attempts, max_attempts, last_error, result, run_at, created_at, updated_at`
+const jobCols = `id, kind, unique_key, payload, status, attempts, max_attempts, last_error, result, run_at, created_at, updated_at, COALESCE(org_id, '')`
 
 type scanner interface{ Scan(...any) error }
 
@@ -180,7 +216,7 @@ func scanJob(r scanner) (Job, error) {
 	var key, lastErr, result sql.NullString
 	var payload string
 	var runAt, created, updated int64
-	if err := r.Scan(&j.ID, &j.Kind, &key, &payload, &j.Status, &j.Attempts, &j.MaxAttempts, &lastErr, &result, &runAt, &created, &updated); err != nil {
+	if err := r.Scan(&j.ID, &j.Kind, &key, &payload, &j.Status, &j.Attempts, &j.MaxAttempts, &lastErr, &result, &runAt, &created, &updated, &j.OrgID); err != nil {
 		return j, err
 	}
 	j.Key, j.LastError = key.String, lastErr.String
@@ -192,7 +228,9 @@ func scanJob(r scanner) (Job, error) {
 	return j, nil
 }
 
-// claim atomically takes the next runnable job for a registered kind.
+// claim atomically takes the next runnable job for a registered kind: from
+// the org with the fewest jobs running (instance jobs first among equals),
+// skipping orgs already running PerOrg jobs of that kind, oldest first.
 func (q *Queue) claim(ctx context.Context) (Job, bool, error) {
 	q.mu.RLock()
 	kinds := make([]any, 0, len(q.handlers))
@@ -209,14 +247,17 @@ func (q *Queue) claim(ctx context.Context) (Job, bool, error) {
 		lock = " FOR UPDATE SKIP LOCKED"
 	}
 	in := strings.TrimSuffix(strings.Repeat("?,", len(kinds)), ",")
+	// Jobs running under a live lock, per org (and kind).
+	running := `SELECT COUNT(*) FROM jobs r WHERE r.org_id = j.org_id AND r.status = 'running' AND r.locked_until >= ?`
 	query := `UPDATE jobs SET status = 'running', attempts = attempts + 1, locked_by = ?, locked_until = ?, updated_at = ?
-		WHERE id = (SELECT id FROM jobs WHERE kind IN (` + in + `)
-			AND ((status = 'pending' AND run_at <= ?) OR (status = 'running' AND locked_until < ?))
-			ORDER BY run_at LIMIT 1` + lock + `)
+		WHERE id = (SELECT j.id FROM jobs j WHERE j.kind IN (` + in + `)
+			AND ((j.status = 'pending' AND j.run_at <= ?) OR (j.status = 'running' AND j.locked_until < ?))
+			AND (j.org_id IS NULL OR (` + running + ` AND r.kind = j.kind) < ?)
+			ORDER BY CASE WHEN j.org_id IS NULL THEN 0 ELSE (` + running + `) END, j.run_at LIMIT 1` + lock + `)
 		RETURNING ` + jobCols
 	args := []any{q.workerID, now + q.opts.LockFor.Milliseconds(), now}
 	args = append(args, kinds...)
-	args = append(args, now, now)
+	args = append(args, now, now, now, q.opts.PerOrg, now)
 	j, err := scanJob(store.QueryRow(ctx, q.db, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Job{}, false, nil

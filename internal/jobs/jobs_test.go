@@ -152,3 +152,53 @@ func TestBackoffBounds(t *testing.T) {
 		}
 	}
 }
+
+// Orgs share the workers: a busy org's backlog doesn't hold back another
+// org's job, and one org runs at most PerOrg jobs of a kind at once.
+func TestFairAcrossOrgs(t *testing.T) {
+	ctx := context.Background()
+	db := storetest.Open(t)
+	for _, q := range []string{
+		`INSERT INTO orgs (id, slug, name, created_at) VALUES ('org_a', 'aa', 'A', 0), ('org_b', 'bb', 'B', 0)`,
+		`INSERT INTO forge_hosts (id, kind, display_name, created_at) VALUES ('fh_1', 'git', 'Git', 0)`,
+		`INSERT INTO repos (id, org_id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('rep_a', 'org_a', 'fh_1', 'o', 'a', 'a', 'main', 0), ('rep_b', 'org_b', 'fh_1', 'o', 'b', 'b', 'main', 0)`,
+	} {
+		if _, err := store.Exec(ctx, db, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	q := New(db, Options{Workers: 2, PerOrg: 1})
+	q.Register("scan", func(context.Context, Job) (any, error) { return nil, nil })
+	base := time.Now().Add(-time.Hour)
+	for i := 0; i < 5; i++ {
+		if _, err := q.Enqueue(ctx, db, "scan", map[string]string{"repo_id": "rep_a"}, EnqueueOptions{RunAt: base.Add(time.Duration(i) * time.Minute)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := q.Enqueue(ctx, db, "scan", map[string]string{"repo_id": "rep_b"}, EnqueueOptions{RunAt: base.Add(30 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.Enqueue(ctx, db, "scan", nil, EnqueueOptions{RunAt: base.Add(40 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	var orgs []string
+	for i := 0; i < 4; i++ {
+		j, ok, err := q.claim(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			orgs = append(orgs, "-")
+			continue
+		}
+		orgs = append(orgs, j.OrgID)
+	}
+	// A's oldest, then B's despite A's backlog, then the instance job; A's
+	// next waits for its first to finish.
+	want := []string{"org_a", "org_b", "", "-"}
+	for i := range want {
+		if orgs[i] != want[i] {
+			t.Fatalf("claim order %v, want %v", orgs, want)
+		}
+	}
+}

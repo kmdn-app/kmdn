@@ -121,7 +121,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		Log:     log,
 		DB:      db,
 		Secrets: sec,
-		Jobs:    jobs.New(db, jobs.Options{Logger: log}),
+		Jobs:    jobs.New(db, jobOptions(cfg, log)),
 		Server:  server.New(server.Options{Config: cfg, Logger: log}),
 	}
 	a.Server.AddReadyCheck("database", func(ctx context.Context) error { return db.PingContext(ctx) })
@@ -465,6 +465,16 @@ func (a *App) Close() error {
 		cancel()
 	}
 	return a.DB.Close()
+}
+
+// jobOptions shares workers fairly between orgs in multi mode; with one org
+// there's nothing to share.
+func jobOptions(cfg config.Config, log *slog.Logger) jobs.Options {
+	o := jobs.Options{Logger: log}
+	if cfg.Orgs.Mode != orgs.Multi {
+		o.PerOrg = 1 << 10
+	}
+	return o
 }
 
 // pushSubject identifies this instance to Web Push services.
