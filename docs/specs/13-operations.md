@@ -138,6 +138,7 @@ Append-only table ([10](10-data-model.md)). Recorded actions include: sign-in (m
 
 - `kmdn backup`: a consistent online copy of the SQLite database (`VACUUM INTO`, safe while the server runs; for Postgres, back up with `pg_dump` and `kmdn backup -skip-db` bundles the rest), uploads and the config file with `secret_key` and passwords blanked (unless `-include-secrets`). Collaborative documents (Yjs updates and snapshots) live in the database. Mirrors are excluded. The archive is `.tar.zst` (or `.tar.gz` by extension) with a `manifest.json` first (format, kmdn version, schema version, counts).
 - `kmdn restore -in FILE [-force]`: refuses while a server answers on `server.listen`, refuses to replace an existing database without `-force`, restores the database and uploads, writes the backed-up config to `<data_dir>/kmdn.yaml.restored` (never over the live one), deletes mirrors and queues a sync of every repo so they're cloned again on the next start.
+- Restore stages and validates the complete archive, required entries, counts, compression checksum and SQLite integrity before replacing data. Invalid backups leave the existing database, WAL, uploads and mirrors intact. Staging requires temporary disk space for the expanded backup. Files are then installed individually; an I/O failure during installation can still require retrying the restore.
 - `kmdn doctor [-offline]` (and Admin → System → Doctor): git ≥ 2.40, data dir writable and free space, `base_url` (https unless local), database and pending migrations, the secret key (decrypts every stored secret, naming the kinds that fail), failed jobs, and, online, SMTP reachability, each forge's API, and the AI provider as `serve` resolves it, the config's over the console's (reachable, last capability check). Exits non-zero when a check fails.
 - Documented recovery: the secret key is required to decrypt stored credentials; losing it means re-entering forge/SMTP/LLM secrets.
 
@@ -162,4 +163,3 @@ Append-only table ([10](10-data-model.md)). Recorded actions include: sign-in (m
 | 500 open revisions (created at ~126/s through the API) | Revisions list and picker p50 11 ms; a revision 2 ms; repo tree 7 ms; inbox 2 ms; search 2 ms |
 
 The limits that bound a file (50 concurrent editors, 1 MiB updates) are enforced by the room; beyond one node, see [03](03-architecture.md).
-
