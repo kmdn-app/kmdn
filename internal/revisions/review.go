@@ -109,8 +109,9 @@ func SavedHash(ctx context.Context, q store.Querier, revisionID string) (string,
 	return h, err
 }
 
-// Unsaved reports whether the revision's content differs from its last
-// Save all (before the first one: whether it has any change at all).
+// Unsaved reports whether Save all has something to commit: the revision's
+// content differs from its last Save all (before the first one: whether it
+// has any change at all), or updates from Published were applied since then.
 func Unsaved(ctx context.Context, q store.Querier, revisionID string) (bool, error) {
 	saved, err := SavedHash(ctx, q, revisionID)
 	if err != nil {
@@ -119,10 +120,29 @@ func Unsaved(ctx context.Context, q store.Querier, revisionID string) (bool, err
 	if saved == "" {
 		var n int
 		err := store.QueryRow(ctx, q, `SELECT (SELECT COUNT(*) FROM revision_files WHERE revision_id = ?) + (SELECT COUNT(*) FROM revision_assets WHERE revision_id = ?)`, revisionID, revisionID).Scan(&n)
-		return n > 0, err
+		if err != nil || n > 0 {
+			return n > 0, err
+		}
+		return UnmergedUpdates(ctx, q, revisionID)
 	}
 	now, err := ContentHash(ctx, q, revisionID)
-	return now != saved, err
+	if err != nil || now != saved {
+		return now != saved, err
+	}
+	return UnmergedUpdates(ctx, q, revisionID)
+}
+
+// UnmergedUpdates reports whether updates from Published were applied since
+// the revision's branch last merged its base. Even when the pages end up as
+// they were saved (a conflict resolved by keeping the revision's text), only
+// a commit with the new base as a parent lets the pull request merge. A base
+// that fast-forwarded past pages the revision doesn't touch needs nothing.
+func UnmergedUpdates(ctx context.Context, q store.Querier, revisionID string) (bool, error) {
+	var n int
+	err := store.QueryRow(ctx, q, `SELECT COUNT(*) FROM revisions r WHERE r.id = ? AND r.branch <> '' AND r.base_sha <> r.branch_base_sha
+AND EXISTS (SELECT 1 FROM revision_updates u WHERE u.revision_id = r.id AND u.state = 'applied'
+AND u.applied_at >= COALESCE((SELECT MAX(c.created_at) FROM revision_checkpoints c WHERE c.revision_id = r.id AND c.commit_sha <> ''), 0))`, revisionID).Scan(&n)
+	return n > 0, err
 }
 
 // ReviewerCandidate is a maintainer who could review.

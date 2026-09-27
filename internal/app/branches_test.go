@@ -108,6 +108,10 @@ func TestSaveMergesMovedBase(t *testing.T) {
 	if rev, _ = revisions.Get(ctx, a.DB, revID); rev.BaseSHA != head {
 		t.Fatalf("base didn't fast-forward: %s, head %s", rev.BaseSHA, head)
 	}
+	// The pull request still merges: nothing to save for that alone.
+	if _, r := admin.do("GET", "/revisions/"+revID, nil); r["unsaved_changes"] != false {
+		t.Fatalf("fast-forward reported as unsaved: %v", r["unsaved_changes"])
+	}
 	if err := a.Collab.Apply(ctx, repo, rev, caller, "docs/index.md", "# Handbook\n\nNewer intro.\n", "human"); err != nil {
 		t.Fatal(err)
 	}
