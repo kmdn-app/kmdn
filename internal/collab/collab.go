@@ -138,6 +138,16 @@ func (h *Hub) Join(ctx context.Context, c *realtime.Conn, channel uint32, ref re
 // room returns the loaded room, loading or creating its document. Loads for
 // different files run in parallel; joins for the same file wait for one load.
 func (h *Hub) room(ctx context.Context, repo repos.Repo, rev revisions.Revision, p string, canCreate bool, userID string) (*Room, error) {
+	ctx, unlock, err := h.Revisions.Gate(ctx, rev.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	rev, err = revisions.Get(ctx, h.DB, rev.ID)
+	if err != nil {
+		return nil, err
+	}
+	canCreate = canCreate && (rev.State == revisions.Editing || rev.State == revisions.InReview || rev.State == revisions.Approved)
 	k := key(rev.ID, p)
 	for {
 		h.mu.Lock()
@@ -356,6 +366,7 @@ func (r *Room) load(ctx context.Context, repo repos.Repo, rev revisions.Revision
 	}
 	if _, err := revisions.FileAt(ctx, h.DB, rev.ID, r.path); err == nil {
 		r.inManifest = true
+		r.dirty = rev.State == revisions.Editing || rev.State == revisions.InReview || rev.State == revisions.Approved
 	}
 	return crows.Err()
 }
@@ -611,8 +622,12 @@ func (p *Peer) update(ctx context.Context, data []byte) {
 	if len(clients) == 0 && len(data) <= 2 {
 		return // an empty update (e.g. step 2 from an up-to-date client); deletions have no clients but more bytes
 	}
-	if err := r.ingest(ctx, data, clients, caller, p, "human"); errors.Is(err, errClientConflict) {
-		p.refuse("client_conflict", "Your editor's id collided with someone else's. Reload the page.")
+	if err := r.ingest(ctx, data, clients, caller, p, "human"); err != nil {
+		if errors.Is(err, errClientConflict) {
+			p.refuse("client_conflict", "Your editor's id collided with someone else's. Reload the page.")
+		} else {
+			p.refuse("read_only", "Your changes weren't saved: this revision is read-only or could not accept the change.")
+		}
 	}
 }
 
@@ -623,12 +638,34 @@ var errClientConflict = errors.New("collab: client id belongs to someone else")
 // the manifest entry on the first edit. kind is recorded for new client ids
 // (human, restore, assistant).
 func (r *Room) ingest(ctx context.Context, data []byte, clients []uint64, c revisions.Caller, from *Peer, kind string) error {
+	ctx, unlock, err := r.hub.Revisions.Gate(ctx, r.revID)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if kind != "comment" {
+		var rev revisions.Revision
+		ctx, rev, _, err = r.hub.Revisions.Mutate(ctx, r.revID)
+		if err != nil {
+			return err
+		}
+		// A peer may have obtained write permission before waiting for Gate.
+		if from != nil {
+			acc, err := r.hub.Revisions.AccessFor(ctx, rev, c)
+			if err != nil {
+				return err
+			}
+			if !acc.CanEdit {
+				return revisions.ErrForbidden
+			}
+		}
+	}
 	telemetry.YjsUpdates.Inc()
 	uid := c.User.ID
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
-		return nil
+		return revisions.ErrForbidden
 	}
 	var newClients []uint64
 	for _, id := range clients {
@@ -645,11 +682,13 @@ func (r *Room) ingest(ctx context.Context, data []byte, clients []uint64, c revi
 	r.seq++
 	r.tail = append(r.tail, data)
 	r.pending = append(r.pending, pendingUpdate{seq: r.seq, data: data, userID: uid, at: store.Millis(time.Now())})
-	r.dirty = true
-	if r.editors == nil {
-		r.editors = map[string]bool{}
+	if kind != "comment" {
+		r.dirty = true
+		if r.editors == nil {
+			r.editors = map[string]bool{}
+		}
+		r.editors[uid] = true
 	}
-	r.editors[uid] = true
 	targets := make([]*Peer, 0, len(r.peers))
 	for q := range r.peers {
 		if q != from {
@@ -797,23 +836,37 @@ func (p *Peer) Close() {
 
 func (r *Room) evict() {
 	h := r.hub
-	h.mu.Lock()
+	ctx, unlock, err := h.Revisions.Gate(context.Background(), r.revID)
+	if err != nil {
+		return
+	}
+	defer unlock()
 	r.mu.Lock()
+	busy := len(r.peers) > 0 || r.evicted
+	r.mu.Unlock()
+	if busy {
+		return
+	}
+	// Keep accepted updates visible to saves until both persistence and
+	// materialization succeed. The gate also excludes a concurrent claim.
+	r.flush(ctx)
+	r.materialize(ctx)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if len(r.peers) > 0 || r.evicted {
-		r.mu.Unlock()
-		h.mu.Unlock()
+		return
+	}
+	if len(r.pending) != 0 || r.dirty {
+		r.evictT = time.AfterFunc(h.Options.EvictAfter, r.evict)
 		return
 	}
 	r.evicted = true
 	k := key(r.revID, r.path)
-	r.mu.Unlock()
 	if h.rooms[k] == r {
 		delete(h.rooms, k)
 	}
-	h.mu.Unlock()
-	ctx := context.Background()
-	r.flush(ctx)
-	r.materialize(ctx)
 }
 
 func (r *Room) shutdown(reason string) {
@@ -839,6 +892,11 @@ func (r *Room) shutdown(reason string) {
 
 // flush writes pending updates, then compacts when the log is long.
 func (r *Room) flush(ctx context.Context) {
+	ctx, unlock, err := r.hub.Revisions.Gate(ctx, r.revID)
+	if err != nil {
+		return
+	}
+	defer unlock()
 	r.work.Lock()
 	defer r.work.Unlock()
 	r.mu.Lock()
@@ -908,6 +966,11 @@ func (r *Room) compact(ctx context.Context) {
 
 // materialize stores the page's markdown when it changed since last time.
 func (r *Room) materialize(ctx context.Context) {
+	ctx, unlock, err := r.hub.Revisions.Gate(ctx, r.revID)
+	if err != nil {
+		return
+	}
+	defer unlock()
 	r.work.Lock()
 	defer r.work.Unlock()
 	r.mu.Lock()
@@ -946,7 +1009,12 @@ func (r *Room) materialize(ctx context.Context) {
 	if n, err := r.hub.Engine.YConflicts(ctx, state); err == nil {
 		if err := r.hub.Revisions.SetConflicts(ctx, r.revID, p, n > 0); err != nil {
 			r.hub.Log.Error("record conflicts", "err", err, "doc", r.docID)
+			r.markDirty()
+			return
 		}
+	} else {
+		r.markDirty()
+		return
 	}
 	if r.hub.Publish != nil {
 		r.hub.Publish("revision:"+r.revID, map[string]any{"type": "file_content", "revision": r.revID, "path": p})

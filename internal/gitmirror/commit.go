@@ -119,6 +119,14 @@ func (m *Mirror) KeepRef(ctx context.Context, ref, sha string) error {
 	return err
 }
 
+// DropRef removes a private ref after its durable operation is finalized.
+func (m *Mirror) DropRef(ctx context.Context, ref string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, err := m.Git.run(ctx, m.Path, nil, nil, "update-ref", "-d", ref)
+	return err
+}
+
 // HasCommit says whether the mirror holds commit sha.
 func (m *Mirror) HasCommit(ctx context.Context, sha string) bool {
 	if sha == "" {

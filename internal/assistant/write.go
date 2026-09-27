@@ -94,6 +94,12 @@ func (e env) attrs() docengine.SuggestAttrs {
 }
 
 func (e env) editFile(ctx context.Context, in json.RawMessage) (string, error) {
+	ctx, freshRevision, unlock, gateErr := e.s.Revisions.Mutate(ctx, e.rev.ID)
+	if gateErr != nil {
+		return "", gateErr
+	}
+	defer unlock()
+	e.rev = &freshRevision
 	var args struct {
 		Path  string `json:"path"`
 		Edits []struct {
@@ -156,6 +162,12 @@ func (e env) editFile(ctx context.Context, in json.RawMessage) (string, error) {
 }
 
 func (e env) createFile(ctx context.Context, in json.RawMessage) (string, error) {
+	ctx, freshRevision, unlock, gateErr := e.s.Revisions.Mutate(ctx, e.rev.ID)
+	if gateErr != nil {
+		return "", gateErr
+	}
+	defer unlock()
+	e.rev = &freshRevision
 	var args struct {
 		Path     string `json:"path"`
 		Markdown string `json:"markdown"`

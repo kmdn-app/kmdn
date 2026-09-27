@@ -2,9 +2,7 @@ package revisions
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -78,25 +76,11 @@ func ContentHash(ctx context.Context, q store.Querier, revisionID string) (strin
 	if err != nil {
 		return "", err
 	}
-	h := sha256.New()
-	for _, f := range files {
-		h.Write([]byte(f.Path + "\x00" + f.Op + "\x00" + f.FromPath + "\x00" + f.ContentHash + "\n"))
-	}
-	var assets []string
-	rows, err := store.Query(ctx, q, `SELECT path, sha256 FROM revision_assets WHERE revision_id = ? ORDER BY path`, revisionID)
+	assets, err := Assets(ctx, q, revisionID)
 	if err != nil {
 		return "", err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var p, sha string
-		if err := rows.Scan(&p, &sha); err != nil {
-			return "", err
-		}
-		assets = append(assets, p+"\x00"+sha)
-	}
-	h.Write([]byte(strings.Join(assets, "\n")))
-	return hex.EncodeToString(h.Sum(nil)[:16]), rows.Err()
+	return SnapshotHash(files, assets), nil
 }
 
 // SavedHash is the content hash of the revision's last Save all ("" before the first).
@@ -307,6 +291,12 @@ type Submitted func(ctx context.Context, rev Revision, by string)
 // Reviewers of a previous round who were asked for changes are kept unless
 // the list says otherwise.
 func (s *Service) Submit(ctx context.Context, repo repos.Repo, rev Revision, c Caller, in SubmitInput) (Revision, error) {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return Revision{}, gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return rev, err
@@ -433,6 +423,12 @@ func (s *Service) setReviewers(ctx context.Context, tx *store.Tx, revID string, 
 
 // AddReviewer assigns another reviewer (while Editing, In review or Approved).
 func (s *Service) AddReviewer(ctx context.Context, repo repos.Repo, rev Revision, c Caller, userID string) error {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return err
@@ -470,6 +466,12 @@ func (s *Service) AddReviewer(ctx context.Context, repo repos.Repo, rev Revision
 // RemoveReviewer unassigns a reviewer. Removing the last one while in review
 // returns the revision to Editing; if everyone left has approved, it's Approved.
 func (s *Service) RemoveReviewer(ctx context.Context, rev Revision, c Caller, userID string) error {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return err
@@ -536,6 +538,12 @@ func (s *Service) settle(ctx context.Context, tx *store.Tx, revID string) error 
 
 // Approve records the caller's approval of the current content.
 func (s *Service) Approve(ctx context.Context, rev Revision, c Caller) (Revision, error) {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return Revision{}, gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return rev, err
@@ -585,6 +593,12 @@ func (s *Service) Approve(ctx context.Context, rev Revision, c Caller) (Revision
 // RequestChanges sends the revision back to Editing with a note; approvals
 // are dismissed and the same reviewers are asked again on resubmit.
 func (s *Service) RequestChanges(ctx context.Context, rev Revision, c Caller, note string) (Revision, error) {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return Revision{}, gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return rev, err
@@ -620,6 +634,12 @@ func (s *Service) RequestChanges(ctx context.Context, rev Revision, c Caller, no
 
 // Withdraw takes a revision out of review so its editors can change it.
 func (s *Service) Withdraw(ctx context.Context, rev Revision, c Caller) (Revision, error) {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return Revision{}, gateErr
+	}
+	defer unlock()
+	rev = current
 	a, err := s.AccessFor(ctx, rev, c)
 	if err != nil {
 		return rev, err
@@ -652,6 +672,12 @@ func (s *Service) Withdraw(ctx context.Context, rev Revision, c Caller) (Revisio
 // in review: everyone's but the people who made the change. An Approved
 // revision goes back to In review.
 func (s *Service) ContentChanged(ctx context.Context, revID string, by []string) error {
+	ctx, current, unlock, gateErr := s.Mutate(ctx, revID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	_ = current
 	rev, err := Get(ctx, s.DB, revID)
 	if err != nil {
 		return err

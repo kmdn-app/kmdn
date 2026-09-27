@@ -9,6 +9,18 @@ import (
 
 // MarkPublishing records the pull/merge request opened for a protected branch.
 func (s *Service) MarkPublishing(ctx context.Context, revID, by, url, ref string) error {
+	ctx, unlock, gateErr := s.Gate(ctx, revID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	var claims int
+	if err := store.QueryRow(ctx, s.DB, `SELECT COUNT(*) FROM revision_publish_claims WHERE revision_id = ?`, revID).Scan(&claims); err != nil {
+		return err
+	}
+	if claims != 0 {
+		return conflict("publishing", "This revision has an active publish claim.")
+	}
 	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
 		res, err := store.Exec(ctx, tx, `UPDATE revisions SET state = ?, change_request_url = ?, change_request_ref = ? WHERE id = ? AND state IN (?, ?)`,
 			string(Publishing), url, ref, revID, string(Approved), string(Publishing))
@@ -30,6 +42,18 @@ func (s *Service) MarkPublishing(ctx context.Context, revID, by, url, ref string
 // sha. Besides kmdn's own publish, the forge can merge the pull request
 // while the revision is still being edited or reviewed.
 func (s *Service) MarkPublished(ctx context.Context, revID, by, sha string) error {
+	ctx, unlock, gateErr := s.Gate(ctx, revID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	var claims int
+	if err := store.QueryRow(ctx, s.DB, `SELECT COUNT(*) FROM revision_publish_claims WHERE revision_id = ?`, revID).Scan(&claims); err != nil {
+		return err
+	}
+	if claims != 0 {
+		return conflict("publishing", "This revision has an active publish claim.")
+	}
 	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
 		res, err := store.Exec(ctx, tx, `UPDATE revisions SET state = ?, published_sha = ?, published_at = ? WHERE id = ? AND state IN (?, ?, ?, ?)`,
 			string(Published), sha, store.Millis(time.Now()), revID, string(Editing), string(InReview), string(Approved), string(Publishing))
@@ -54,6 +78,18 @@ func (s *Service) MarkPublished(ctx context.Context, revID, by, sha string) erro
 // PublishStopped returns a Publishing revision to Approved (the pull request
 // was closed unmerged) or an Approved one stays, with an event saying why.
 func (s *Service) PublishStopped(ctx context.Context, revID, kind string, data map[string]any) error {
+	ctx, unlock, gateErr := s.Gate(ctx, revID)
+	if gateErr != nil {
+		return gateErr
+	}
+	defer unlock()
+	var claims int
+	if err := store.QueryRow(ctx, s.DB, `SELECT COUNT(*) FROM revision_publish_claims WHERE revision_id = ?`, revID).Scan(&claims); err != nil {
+		return err
+	}
+	if claims != 0 {
+		return conflict("publishing", "This revision has an active publish claim.")
+	}
 	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
 		if _, err := store.Exec(ctx, tx, `UPDATE revisions SET state = ? WHERE id = ? AND state = ?`, string(Approved), revID, string(Publishing)); err != nil {
 			return err

@@ -393,6 +393,12 @@ func (s *Service) RenamePreview(ctx context.Context, repo repos.Repo, rev revisi
 // RewriteAfterRename updates links for a page that moved from → to (call it
 // after the rename). Pages not yet in the revision are added to it.
 func (s *Service) RewriteAfterRename(ctx context.Context, apply Applier, repo repos.Repo, rev revisions.Revision, c revisions.Caller, from, to string) (int, error) {
+	ctx, current, unlock, gateErr := s.Revisions.Mutate(ctx, rev.ID)
+	if gateErr != nil {
+		return 0, gateErr
+	}
+	defer unlock()
+	rev = current
 	plans, _, err := s.planRename(ctx, repo, rev, from, to)
 	if err != nil {
 		return 0, err
