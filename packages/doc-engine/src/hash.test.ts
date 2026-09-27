@@ -1,7 +1,11 @@
 import { canonical, fnv1a64, nodeHash } from "./hash";
 
-test("canonical sorts keys and drops undefined", () => {
+test("canonical sorts keys and drops absent or empty values", () => {
   expect(canonical({ b: 1, a: [true, null, { d: "x", c: undefined }] })).toBe('{"a":[true,null,{"d":"x"}],"b":1}');
+  // null attrs, empty attrs and empty content all mean "none"
+  expect(canonical({ type: "codeBlock", attrs: { lang: null, meta: null } })).toBe(canonical({ type: "codeBlock", attrs: {} }));
+  expect(canonical({ type: "paragraph", attrs: {}, content: [] })).toBe(canonical({ type: "paragraph" }));
+  expect(canonical({ align: [null, "left"] })).toBe('{"align":[null,"left"]}');
 });
 
 test("fnv1a64 matches the reference vectors", () => {

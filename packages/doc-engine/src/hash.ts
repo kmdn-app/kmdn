@@ -4,14 +4,22 @@
  * code units, hex encoded.
  */
 
+/**
+ * Object keys holding null, undefined, {} or [] are left out: "absent" and
+ * "empty" mean the same in the document model, and the collaborative encoding
+ * (like y-prosemirror) doesn't store null attributes.
+ */
 export function canonical(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
   if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
   const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj)
-    .filter((k) => obj[k] !== undefined)
-    .sort();
-  return "{" + keys.map((k) => JSON.stringify(k) + ":" + canonical(obj[k])).join(",") + "}";
+  const parts: string[] = [];
+  for (const k of Object.keys(obj).sort()) {
+    if (obj[k] === undefined) continue;
+    const c = canonical(obj[k]);
+    if (c !== "null" && c !== "{}" && c !== "[]") parts.push(JSON.stringify(k) + ":" + c);
+  }
+  return "{" + parts.join(",") + "}";
 }
 
 // FNV-1a 64-bit using two 32-bit halves (no BigInt, for older engines).
