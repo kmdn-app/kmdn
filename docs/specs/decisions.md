@@ -77,5 +77,5 @@ Flagged so they can be challenged in review:
 - Reviewer suggestions based on who reviewed the touched folders in the last 6 months, falling back to all maintainers.
 - Hot score: recency-weighted replies/reactions (6 h half-life-style decay).
 - Push coalescing: one push per revision per 5 minutes, none while the revision is open and focused.
-- Consistency thresholds: 0.78 candidate, 0.92 direct duplicate; scan cap 500 LLM calls; embeddings via an OpenAI-compatible endpoint (Anthropic has no embeddings API).
+- Consistency thresholds: 0.78 candidate, 0.92 direct duplicate only for identical text (near-identical pairs are judged: that is where contradictions hide, spike S8); scan cap 500 LLM calls (verdicts are cached, so a capped scan continues on the next one); judgments run 4 at a time; embeddings via an OpenAI-compatible endpoint (Anthropic has no embeddings API).
 - "Changes requested" and "Conflict" are flags on Editing, not states.
