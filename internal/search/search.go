@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
 )
 
@@ -85,6 +86,41 @@ func Terms(q string) []string {
 
 // Search finds documents matching every term (prefix match on the last one).
 func (x *Index) Search(ctx context.Context, repoID, scope, query string, limit int) ([]Hit, error) {
+	if len(Terms(query)) == 0 {
+		return []Hit{}, nil
+	}
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	repo, err := repos.Get(ctx, x.DB, repoID)
+	if err != nil {
+		return nil, err
+	}
+	current := repo.Scope()
+	out := []Hit{}
+	// A settings change takes effect before the queued rebuild completes.
+	// Scan beyond hidden hits so they do not crowd out allowed results.
+	const pageSize = 50
+	for offset := 0; ; offset += pageSize {
+		page, err := x.searchPage(ctx, repoID, scope, query, pageSize, offset)
+		if err != nil {
+			return nil, err
+		}
+		for _, hit := range page {
+			if current.Contains(hit.Path) {
+				out = append(out, hit)
+				if len(out) == limit {
+					return out, nil
+				}
+			}
+		}
+		if len(page) < pageSize {
+			return out, nil
+		}
+	}
+}
+
+func (x *Index) searchPage(ctx context.Context, repoID, scope, query string, limit, offset int) ([]Hit, error) {
 	terms := Terms(query)
 	if len(terms) == 0 {
 		return []Hit{}, nil
@@ -100,17 +136,17 @@ func (x *Index) Search(ctx context.Context, repoID, scope, query string, limit i
 			parts[i] = `"` + t + `"*`
 		}
 		sqlq = `SELECT path, title, snippet(search_fts, 5, char(2), char(3), '…', 14), headings FROM search_fts
-			WHERE search_fts MATCH ? AND repo_id = ? AND scope = ? ORDER BY bm25(search_fts, 0, 0, 0, 10.0, 4.0, 1.0) LIMIT ?`
-		args = []any{strings.Join(parts, " "), repoID, scope, limit}
+			WHERE search_fts MATCH ? AND repo_id = ? AND scope = ? ORDER BY bm25(search_fts, 0, 0, 0, 10.0, 4.0, 1.0), path LIMIT ? OFFSET ?`
+		args = []any{strings.Join(parts, " "), repoID, scope, limit, offset}
 	} else {
 		parts := make([]string, len(terms))
 		for i, t := range terms {
 			parts[i] = t + ":*"
 		}
 		sqlq = `SELECT path, title, ts_headline('simple', body, to_tsquery('simple', ?), 'StartSel=' || chr(2) || ', StopSel=' || chr(3) || ', MaxWords=24, MinWords=8'), headings
-			FROM search_docs WHERE repo_id = ? AND scope = ? AND tsv @@ to_tsquery('simple', ?) ORDER BY ts_rank(tsv, to_tsquery('simple', ?)) DESC LIMIT ?`
+			FROM search_docs WHERE repo_id = ? AND scope = ? AND tsv @@ to_tsquery('simple', ?) ORDER BY ts_rank(tsv, to_tsquery('simple', ?)) DESC, path LIMIT ? OFFSET ?`
 		tq := strings.Join(parts, " & ")
-		args = []any{tq, repoID, scope, tq, tq, limit}
+		args = []any{tq, repoID, scope, tq, tq, limit, offset}
 	}
 	rows, err := store.Query(ctx, x.DB, sqlq, args...)
 	if err != nil {

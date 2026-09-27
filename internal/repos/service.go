@@ -47,6 +47,8 @@ type Service struct {
 	Log      *slog.Logger
 
 	OnHeadChanged []HeadChanged
+	// OnScopeChanged refreshes derived content after root or filter changes.
+	OnScopeChanged []func(context.Context, Repo) error
 	// OnChangeRequest runs when a pull/merge request is merged or closed.
 	OnChangeRequest []ChangeRequestHook
 }
@@ -550,7 +552,18 @@ func (s *Service) Update(ctx context.Context, by auth.Principal, r Repo, in Upda
 			return r, err
 		}
 	}
-	return Get(ctx, s.DB, r.ID)
+	updated, err := Get(ctx, s.DB, r.ID)
+	if err != nil {
+		return r, err
+	}
+	if in.ContentRoot != nil || in.Include != nil || in.Exclude != nil {
+		for _, changed := range s.OnScopeChanged {
+			if err := changed(ctx, updated); err != nil {
+				return updated, err
+			}
+		}
+	}
+	return updated, nil
 }
 
 func validGlob(g string) bool { return doublestar.ValidatePattern(g) }
