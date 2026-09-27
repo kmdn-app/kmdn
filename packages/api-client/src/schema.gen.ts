@@ -957,7 +957,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/agent-keys": {
+    "/orgs/{org}/admin/agent-keys": {
         parameters: {
             query?: never;
             header?: never;
@@ -975,7 +975,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/agent-keys/{id}/revoke": {
+    "/orgs/{org}/admin/agent-keys/{id}/revoke": {
         parameters: {
             query?: never;
             header?: never;
@@ -993,7 +993,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/agent-keys/{id}/calls": {
+    "/orgs/{org}/admin/agent-keys/{id}/calls": {
         parameters: {
             query?: never;
             header?: never;
@@ -1065,7 +1065,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/invites": {
+    "/orgs/{org}/admin/invites": {
         parameters: {
             query?: never;
             header?: never;
@@ -3516,6 +3516,7 @@ export interface components {
         };
         AgentKey: {
             id: string;
+            org_id: string;
             name: string;
             description: string;
             all_repos: boolean;
@@ -3597,6 +3598,8 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             instance_name: string;
+            /** @description The organization the invite is for (the instance name in single mode) */
+            org_name?: string;
             has_account: boolean;
         };
         LinkedAccount: {
@@ -5698,7 +5701,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -5722,7 +5728,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody: {
@@ -5766,6 +5775,8 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
             };
             cookie?: never;
         };
@@ -5787,6 +5798,8 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
             };
             cookie?: never;
         };
@@ -5905,7 +5918,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
             cookie?: never;
         };
         requestBody: {

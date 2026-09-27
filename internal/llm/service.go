@@ -270,8 +270,9 @@ func (s *Service) StartRun(ctx context.Context, r Run) (string, error) {
 	if r.ID == "" {
 		r.ID = ids.New("run")
 	}
-	_, err := store.Exec(ctx, s.DB, `INSERT INTO assistant_runs (id, user_id, repo_id, revision_id, task, provider, model, status, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?)`,
-		r.ID, nullable(r.UserID), nullable(r.RepoID), nullable(r.RevisionID), r.Task, r.Provider, r.Model, store.Millis(time.Now()))
+	_, err := store.Exec(ctx, s.DB, `INSERT INTO assistant_runs (id, user_id, repo_id, revision_id, task, provider, model, status, started_at, org_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, (SELECT org_id FROM repos WHERE id = ?))`,
+		r.ID, nullable(r.UserID), nullable(r.RepoID), nullable(r.RevisionID), r.Task, r.Provider, r.Model, store.Millis(time.Now()), r.RepoID)
 	return r.ID, err
 }
 

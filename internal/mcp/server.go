@@ -717,7 +717,7 @@ func (t tools) middleware(next sdk.MethodHandler) sdk.MethodHandler {
 			return next(ctx, method, req)
 		}
 		res, err := next(ctx, method, req)
-		e := audit.Entry{ActorType: audit.ActorAgentKey, ActorID: t.c.key.ID, IP: t.c.ip, Data: map[string]any{"key_name": t.c.key.Name}}
+		e := audit.Entry{ActorType: audit.ActorAgentKey, ActorID: t.c.key.ID, OrgID: t.c.key.OrgID, IP: t.c.ip, Data: map[string]any{"key_name": t.c.key.Name}}
 		if r, ok := req.(*sdk.CallToolRequest); ok && r.Params != nil {
 			e.Action = "mcp." + r.Params.Name
 			var args map[string]any

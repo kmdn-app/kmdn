@@ -151,8 +151,9 @@ func (s *Service) deliver(ctx context.Context, n Notification, to []string) {
 		m := n
 		m.ID, m.userID, m.CreatedAt = ids.New("ntf"), uid, time.Now()
 		if p.inApp {
-			if _, err := store.Exec(ctx, s.DB, `INSERT INTO notifications (id, user_id, kind, repo_id, revision_id, thread_id, actor_id, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				m.ID, uid, m.Kind, nullable(m.RepoID), nullable(m.RevisionID), nullable(m.ThreadID), nullable(m.ActorID), string(m.Data), store.Millis(m.CreatedAt)); err != nil {
+			if _, err := store.Exec(ctx, s.DB, `INSERT INTO notifications (id, user_id, kind, repo_id, revision_id, thread_id, actor_id, data, created_at, org_id)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT org_id FROM repos WHERE id = ?), 'org_default'))`,
+				m.ID, uid, m.Kind, nullable(m.RepoID), nullable(m.RevisionID), nullable(m.ThreadID), nullable(m.ActorID), string(m.Data), store.Millis(m.CreatedAt), m.RepoID); err != nil {
 				s.Log.Error("store notification", "err", err, "user", uid)
 				continue
 			}
