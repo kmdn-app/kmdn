@@ -46,6 +46,11 @@ type Service struct {
 	// Removed is called when a file's collaborative document goes away
 	// (deleted add, revision closed). Optional.
 	Removed func(ctx context.Context, rev Revision, path string)
+	// OnSubmitted runs after a revision goes in review (the submit checkpoint). Optional.
+	OnSubmitted Submitted
+	// PendingUpdates reports updates from Published not yet applied (they
+	// block approving and publishing). Optional.
+	PendingUpdates func(ctx context.Context, rev Revision) (bool, error)
 }
 
 func (s *Service) changed(ctx context.Context, revID, kind string) {
@@ -66,33 +71,64 @@ type Caller struct {
 // Access is what a caller can do on a revision right now.
 type Access struct {
 	Member bool `json:"member"`
+	// Reviewer: assigned to review this revision.
+	Reviewer bool `json:"reviewer"`
 	// CanEdit: content and file operations.
 	CanEdit bool `json:"can_edit"`
 	// CanManage: title, description, members, close/reopen.
 	CanManage bool `json:"can_manage"`
+	// CanSubmit: send for review (Editing), or change reviewers.
+	CanSubmit bool `json:"can_submit"`
+	// CanReview: approve or request changes (In review, Approved).
+	CanReview bool `json:"can_review"`
+	// CanWithdraw: take it back to Editing.
+	CanWithdraw bool `json:"can_withdraw"`
+	// CanPublish: any maintainer once Approved.
+	CanPublish bool `json:"can_publish"`
 	// Reason explains read-only access: viewer, not_member, in_review, approved, publishing, published, closed.
 	Reason string `json:"reason,omitempty"`
 }
 
-// AccessFor evaluates docs/specs/07-review.md#who-can-do-what-by-state for the
-// states that exist so far. Assigned reviewers (M3) will add edit rights while
-// In review.
+// AccessFor evaluates docs/specs/07-review.md#who-can-do-what-by-state.
 func (s *Service) AccessFor(ctx context.Context, rev Revision, c Caller) (Access, error) {
 	member, err := IsMember(ctx, s.DB, rev.ID, c.User.ID)
 	if err != nil {
 		return Access{}, err
 	}
+	reviewer, err := IsReviewer(ctx, s.DB, rev.ID, c.User.ID)
+	if err != nil {
+		return Access{}, err
+	}
+	contrib := c.Role.AtLeast(access.Contributor)
 	maint := c.Role.AtLeast(access.Maintainer)
-	a := Access{Member: member, CanManage: (member && c.Role.AtLeast(access.Contributor)) || maint}
-	switch {
-	case !c.Role.AtLeast(access.Contributor):
-		a.Reason = "viewer"
-	case rev.State != Editing:
-		a.Reason = string(rev.State)
-	case member || maint:
-		a.CanEdit = true
+	reviewer = reviewer && maint // a reviewer who lost the role can't act as one
+	a := Access{Member: member, Reviewer: reviewer, CanManage: (member && contrib) || maint}
+	switch rev.State {
+	case Editing:
+		switch {
+		case !contrib:
+			a.Reason = "viewer"
+		case member || maint:
+			a.CanEdit, a.CanSubmit = true, true
+		default:
+			a.Reason = "not_member"
+		}
+	case InReview, Approved:
+		// Reviewers edit directly; editors are read-only so reviewers have a
+		// stable target, and can withdraw.
+		a.CanEdit = reviewer
+		a.CanReview = reviewer
+		a.CanWithdraw = (member && contrib) || maint
+		a.CanSubmit = (member && contrib) || maint // change reviewers
+		a.CanPublish = rev.State == Approved && maint
+		if !reviewer {
+			a.Reason = string(rev.State)
+			if !contrib {
+				a.Reason = "viewer"
+			}
+		}
 	default:
-		a.Reason = "not_member"
+		a.Reason = string(rev.State)
 	}
 	if !rev.State.Open() {
 		a.CanManage = a.CanManage && rev.State == Closed // reopen only
@@ -292,6 +328,9 @@ func (s *Service) ApplyFileOp(ctx context.Context, repo repos.Repo, rev Revision
 		return err
 	})
 	if err != nil {
+		return File{}, err
+	}
+	if err := s.ContentChanged(ctx, rev.ID, []string{c.User.ID}); err != nil {
 		return File{}, err
 	}
 	s.changed(ctx, rev.ID, "files")
@@ -572,7 +611,7 @@ func titleFromPath(p string) string {
 
 // SetContent stores a file's materialized markdown (from the collaborative
 // document) and refreshes its +/− counts.
-func (s *Service) SetContent(ctx context.Context, revID, p, md string) error {
+func (s *Service) SetContent(ctx context.Context, revID, p, md string, by []string) error {
 	f, err := FileAt(ctx, s.DB, revID, p)
 	if err != nil {
 		return err
@@ -587,8 +626,10 @@ func (s *Service) SetContent(ctx context.Context, revID, p, md string) error {
 		md, h, add, del, now, now, f.ID); err != nil {
 		return err
 	}
-	_, err = store.Exec(ctx, s.DB, `UPDATE revisions SET updated_at = ? WHERE id = ?`, now, revID)
-	return err
+	if _, err = store.Exec(ctx, s.DB, `UPDATE revisions SET updated_at = ? WHERE id = ?`, now, revID); err != nil {
+		return err
+	}
+	return s.ContentChanged(ctx, revID, by)
 }
 
 // Content is a page as seen inside a revision.

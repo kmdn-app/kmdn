@@ -140,6 +140,11 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		a.Realtime.Publish("repo:"+rev.RepoID, map[string]any{"type": "revision", "kind": kind, "revision": rev.ID, "number": rev.Number, "state": rev.State})
 	}
 	a.Revisions.Removed = func(_ context.Context, rev revisions.Revision, p string) { a.Collab.FileRemoved(rev, p) }
+	a.Revisions.OnSubmitted = func(ctx context.Context, rev revisions.Revision, by string) {
+		if _, err := a.Collab.Checkpoint(ctx, rev, by, "", collab.CheckpointSubmit); err != nil {
+			log.Error("submit checkpoint", "err", err, "revision", rev.ID)
+		}
+	}
 	a.Server.Mount("/ws", a.AuthH.Middleware(a.Realtime))
 	a.Server.Mount("/hooks", a.Repos.WebhookHandler())
 	(&admin.People{DB: db, Auth: a.Auth}).Routes(r)

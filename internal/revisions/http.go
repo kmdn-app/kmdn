@@ -22,9 +22,10 @@ import (
 // View is a revision with what the caller can do and who works on it.
 type View struct {
 	Revision
-	Access  Access   `json:"access"`
-	Members []Member `json:"members"`
-	Files   int      `json:"file_count"`
+	Access    Access     `json:"access"`
+	Members   []Member   `json:"members"`
+	Reviewers []Reviewer `json:"reviewers"`
+	Files     int        `json:"file_count"`
 }
 
 // Routes registers revision endpoints.
@@ -48,6 +49,14 @@ func (s *Service) Routes(r chi.Router) {
 			r.Put("/members/{user}", s.putMember)
 			r.Delete("/members/{user}", s.deleteMember)
 			r.Get("/events", s.events)
+			r.Post("/submit", s.submit)
+			r.Post("/withdraw", s.withdraw)
+			r.Post("/approve", s.approve)
+			r.Post("/request-changes", s.requestChanges)
+			r.Get("/reviewers", s.reviewers)
+			r.Put("/reviewers/{user}", s.putReviewer)
+			r.Delete("/reviewers/{user}", s.deleteReviewer)
+			r.Get("/reviewer-suggestions", s.reviewerSuggestions)
 			r.Get("/assets", s.listAssets)
 			r.Post("/assets", s.upload)
 			r.Get("/raw/*", s.raw)
@@ -111,11 +120,15 @@ func (s *Service) view(r *http.Request, rev Revision, c Caller) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
+	rs, err := Reviewers(r.Context(), s.DB, rev)
+	if err != nil {
+		return View{}, err
+	}
 	var n int
 	if err := store.QueryRow(r.Context(), s.DB, `SELECT COUNT(*) FROM revision_files WHERE revision_id = ?`, rev.ID).Scan(&n); err != nil {
 		return View{}, err
 	}
-	return View{Revision: rev, Access: a, Members: ms, Files: n}, nil
+	return View{Revision: rev, Access: a, Members: ms, Reviewers: rs, Files: n}, nil
 }
 
 func (s *Service) respond(w http.ResponseWriter, r *http.Request, status int, rev Revision, c Caller) {
@@ -477,4 +490,123 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
 	h.Set("Cache-Control", "private, no-cache")
 	_, _ = w.Write(b)
+}
+
+func (s *Service) submit(w http.ResponseWriter, r *http.Request) {
+	rev, repo, c, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	var in SubmitInput
+	if err := api.Decode(r, &in); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	rev, err := s.Submit(r.Context(), repo, rev, c, in)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	s.respond(w, r, http.StatusOK, rev, c)
+}
+
+func (s *Service) withdraw(w http.ResponseWriter, r *http.Request) {
+	rev, _, c, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	rev, err := s.Withdraw(r.Context(), rev, c)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	s.respond(w, r, http.StatusOK, rev, c)
+}
+
+func (s *Service) approve(w http.ResponseWriter, r *http.Request) {
+	rev, _, c, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	rev, err := s.Approve(r.Context(), rev, c)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	s.respond(w, r, http.StatusOK, rev, c)
+}
+
+func (s *Service) requestChanges(w http.ResponseWriter, r *http.Request) {
+	rev, _, c, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Note string `json:"note"`
+	}
+	if err := api.Decode(r, &in); err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	rev, err := s.RequestChanges(r.Context(), rev, c, in.Note)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	s.respond(w, r, http.StatusOK, rev, c)
+}
+
+func (s *Service) reviewers(w http.ResponseWriter, r *http.Request) {
+	rev, _, _, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	rs, err := Reviewers(r.Context(), s.DB, rev)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"items": rs})
+}
+
+func (s *Service) putReviewer(w http.ResponseWriter, r *http.Request) {
+	rev, repo, c, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	if err := s.AddReviewer(r.Context(), repo, rev, c, chi.URLParam(r, "user")); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	s.reviewers(w, r)
+}
+
+func (s *Service) deleteReviewer(w http.ResponseWriter, r *http.Request) {
+	rev, _, c, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	if err := s.RemoveReviewer(r.Context(), rev, c, chi.URLParam(r, "user")); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Service) reviewerSuggestions(w http.ResponseWriter, r *http.Request) {
+	rev, repo, _, ok := s.load(w, r)
+	if !ok {
+		return
+	}
+	editors, err := s.editorSet(r.Context(), rev.ID)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	list, err := s.ReviewerCandidates(r.Context(), repo, rev, editors)
+	if err != nil {
+		api.Error(w, r, err)
+		return
+	}
+	api.JSON(w, http.StatusOK, map[string]any{"items": list})
 }

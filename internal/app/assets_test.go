@@ -90,6 +90,11 @@ func TestUploadImagesIntoRevision(t *testing.T) {
 	if _, list := admin.do("GET", "/revisions/"+revID+"/assets", nil); len(list["items"].([]any)) != 1 {
 		t.Fatalf("assets: %v", list)
 	}
+	// A page linking the uploaded image isn't flagged by the link checker.
+	admin.do("POST", "/revisions/"+revID+"/files", map[string]any{"op": "add", "path": "docs/guides/photos.md", "content": "# Photos\n\n![desk](images/desk-2.png)\n"})
+	if _, ch := admin.do("GET", "/revisions/"+revID+"/checks", nil); len(ch["broken_links"].([]any)) != 0 {
+		t.Fatalf("uploaded image flagged as broken: %v", ch)
+	}
 	// Refusals: wrong type, lying extension, script SVG, viewer.
 	if code, _ := admin.upload("/revisions/"+revID+"/assets", "docs/guides/first-week.md", "notes.txt", []byte("hi")); code != 422 {
 		t.Fatalf("txt: %d", code)

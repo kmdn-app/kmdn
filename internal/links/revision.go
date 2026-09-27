@@ -28,6 +28,7 @@ type revisionTree struct {
 	s      *Service
 	base   *publishedTree
 	files  map[string]revisions.File // manifest by path (non-deleted)
+	assets map[string]bool           // images uploaded into the revision
 	gone   map[string]bool           // deleted or renamed away
 	heads  map[string][]string
 	repo   repos.Repo
@@ -43,7 +44,14 @@ func (s *Service) revisionTree(ctx context.Context, repo repos.Repo, rev revisio
 	if err != nil {
 		return nil, err
 	}
-	t := &revisionTree{s: s, base: base, files: map[string]revisions.File{}, gone: map[string]bool{}, heads: map[string][]string{}, repo: repo, baseSH: rev.BaseSHA}
+	t := &revisionTree{s: s, base: base, files: map[string]revisions.File{}, assets: map[string]bool{}, gone: map[string]bool{}, heads: map[string][]string{}, repo: repo, baseSH: rev.BaseSHA}
+	as, err := revisions.Assets(ctx, s.DB, rev.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range as {
+		t.assets[a.Path] = true
+	}
 	for _, f := range files {
 		switch f.Op {
 		case revisions.OpDelete:
@@ -59,7 +67,7 @@ func (s *Service) revisionTree(ctx context.Context, repo repos.Repo, rev revisio
 }
 
 func (t *revisionTree) Exists(p string) bool {
-	if _, ok := t.files[p]; ok {
+	if _, ok := t.files[p]; ok || t.assets[p] {
 		return true
 	}
 	return !t.gone[p] && t.base.Exists(p)

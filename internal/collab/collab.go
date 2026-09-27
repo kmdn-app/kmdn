@@ -273,7 +273,8 @@ type Room struct {
 	awareness  map[uint64]awarenessEntry
 	awOwner    map[uint64]*Peer
 	inManifest bool
-	dirty      bool // updates not yet materialized
+	dirty      bool            // updates not yet materialized
+	editors    map[string]bool // who changed it since the last materialization
 	flushT     *time.Timer
 	quietT     *time.Timer
 	evictT     *time.Timer
@@ -568,6 +569,10 @@ func (r *Room) ingest(ctx context.Context, data []byte, clients []uint64, c revi
 	r.tail = append(r.tail, data)
 	r.pending = append(r.pending, pendingUpdate{seq: r.seq, data: data, userID: uid, at: store.Millis(time.Now())})
 	r.dirty = true
+	if r.editors == nil {
+		r.editors = map[string]bool{}
+	}
+	r.editors[uid] = true
 	targets := make([]*Peer, 0, len(r.peers))
 	for q := range r.peers {
 		if q != from {
@@ -837,6 +842,11 @@ func (r *Room) materialize(ctx context.Context) {
 		return
 	}
 	r.dirty = false
+	by := make([]string, 0, len(r.editors))
+	for u := range r.editors {
+		by = append(by, u)
+	}
+	r.editors = nil
 	r.mu.Unlock()
 	state := r.merged(ctx)
 	if state == nil {
@@ -849,7 +859,7 @@ func (r *Room) materialize(ctx context.Context) {
 		r.markDirty()
 		return
 	}
-	if err := r.hub.Revisions.SetContent(ctx, r.revID, p, md); err != nil {
+	if err := r.hub.Revisions.SetContent(ctx, r.revID, p, md, by); err != nil {
 		r.hub.Log.Error("store materialized content", "err", err, "doc", r.docID)
 		r.markDirty()
 		return

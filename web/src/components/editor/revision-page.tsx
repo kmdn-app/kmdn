@@ -8,6 +8,7 @@ import { TopBar } from "@/components/shell/top-bar";
 import { DocView } from "@/components/doc/doc-view";
 import { LinksPanel } from "@/components/links-panel";
 import { PresenceStack } from "@/components/revision/presence";
+import { ReviewActions } from "@/components/revision/review-actions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, errorMessage, useMe } from "@/lib/api";
@@ -91,6 +92,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
                 {rev.data && <PresenceStack repo={repo} rev={rev.data} path={path} />}
                 {status && !status.error && <ModeToggle mode={mode} onChange={setMode} />}
                 {rev.data && <RevisionPill rev={rev.data} />}
+                {rev.data?.access.can_review && <ReviewActions repo={repo} rev={rev.data} compact />}
                 <SaveState status={status} />
                 <Button asChild size="sm" variant="outline">
                   <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: path }}>
