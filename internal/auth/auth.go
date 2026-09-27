@@ -19,6 +19,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/settings"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -91,18 +92,21 @@ func InstanceName(ctx context.Context, q store.Querier) string {
 	return name
 }
 
-func (s *Service) canAutoJoin(email string) bool {
+// autoJoinOrg returns the org an address may join on its own: the default
+// org for the configured domains (auth.auto_join_domains), else the org
+// that verified the address's domain; "" when none.
+func (s *Service) autoJoinOrg(ctx context.Context, q store.Querier, email string) (string, error) {
 	at := strings.LastIndexByte(email, '@')
 	if at < 0 {
-		return false
+		return "", nil
 	}
 	domain := email[at+1:]
 	for _, d := range s.AutoJoinDomains {
 		if strings.EqualFold(strings.TrimPrefix(d, "@"), domain) {
-			return true
+			return orgs.DefaultID, nil
 		}
 	}
-	return false
+	return orgs.AutoJoinOrg(ctx, q, email)
 }
 
 // RequestLink emails a sign-in link and code if email belongs to an active
@@ -113,9 +117,15 @@ func (s *Service) RequestLink(ctx context.Context, email, ip string) (bool, erro
 	switch {
 	case err == nil && u.Status != users.Active:
 		return false, nil
-	case errors.Is(err, store.ErrNotFound) && !s.canAutoJoin(email):
-		return false, nil
-	case err != nil && !errors.Is(err, store.ErrNotFound):
+	case errors.Is(err, store.ErrNotFound):
+		org, err := s.autoJoinOrg(ctx, s.DB, email)
+		if err != nil {
+			return false, err
+		}
+		if org == "" {
+			return false, nil
+		}
+	case err != nil:
 		return false, err
 	}
 	token, code := Token(32), sixDigits()
@@ -203,19 +213,31 @@ func (s *Service) VerifyCode(ctx context.Context, email, code string) (users.Use
 }
 
 func (s *Service) userForSignIn(ctx context.Context, q store.Querier, email string) (users.User, error) {
+	org, err := s.autoJoinOrg(ctx, q, email)
+	if err != nil {
+		return users.User{}, err
+	}
 	u, err := users.ByEmail(ctx, q, email)
 	if errors.Is(err, store.ErrNotFound) {
-		if !s.canAutoJoin(email) {
+		if org == "" {
 			return u, ErrNoAccount
 		}
 		name := email[:strings.IndexByte(email, '@')]
-		return users.Create(ctx, q, email, name, false)
-	}
-	if err != nil {
+		if u, err = users.Create(ctx, q, email, name, false); err != nil {
+			return u, err
+		}
+	} else if err != nil {
 		return u, err
 	}
 	if u.Status != users.Active {
 		return u, ErrDeactivated
+	}
+	// People on an org's domain join it when they sign in (not when the org
+	// already has them, deactivated or not).
+	if org != "" {
+		if err := orgs.Join(ctx, q, org, u.ID); err != nil {
+			return u, err
+		}
 	}
 	return u, nil
 }

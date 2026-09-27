@@ -17,6 +17,8 @@ export const REVIEWER = { email: "rui@acme.test", name: "Rui Reviewer" };
 
 export type State = {
   repoID: string;
+  /** The org's slug (the default org, named at setup). */
+  org: string;
   owner: string;
   name: string;
   pids: number[];

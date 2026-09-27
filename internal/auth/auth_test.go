@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/storetest"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
@@ -236,5 +237,68 @@ func TestSessionsListRevokeAndRolling(t *testing.T) {
 	h.now = h.now.Add(31 * 24 * time.Hour)
 	if _, _, err := h.svc.Lookup(ctx, tokA); err == nil {
 		t.Fatal("expired session accepted")
+	}
+}
+
+// People on an org's verified domain join that org when they sign in; an
+// unverified claim does nothing, and an org that deactivated someone keeps
+// them out.
+func TestAutoJoinOrgDomain(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	db := h.svc.DB
+	if err := orgs.SetMode(ctx, db, orgs.Multi); err != nil {
+		t.Fatal(err)
+	}
+	acme, err := orgs.Create(ctx, db, "acme", "Acme", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orgs.AddDomain(ctx, db, acme.ID, "@Acme.dev"); err != nil {
+		t.Fatal(err)
+	}
+	signIn := func(email string) (int, string) {
+		c := h.client(t)
+		before := len(h.mail.Sent)
+		c.do("POST", "/auth/magic-link", `{"email":"`+email+`"}`, false)
+		if len(h.mail.Sent) == before {
+			return 0, ""
+		}
+		m, _ := h.mail.Last()
+		res, body := c.do("POST", "/auth/magic-link/verify", `{"token":"`+tokenRe.FindStringSubmatch(m.Text)[1]+`"}`, false)
+		return res.StatusCode, body
+	}
+	if code, _ := signIn("dave@acme.dev"); code != 0 {
+		t.Fatalf("unverified domain let dave in: %d", code)
+	}
+	if err := orgs.VerifyDomain(ctx, db, acme.ID, "acme.dev"); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := signIn("dave@acme.dev"); code != 200 {
+		t.Fatalf("verified domain: %d %s", code, body)
+	}
+	dave, _ := users.ByEmail(ctx, db, "dave@acme.dev")
+	if r, _ := orgs.Role(ctx, db, acme.ID, dave); r != orgs.Member {
+		t.Fatalf("dave in acme: %q", r)
+	}
+	// Deactivated in the org: signing in again doesn't bring him back.
+	_ = orgs.SetMemberStatus(ctx, db, acme.ID, dave.ID, orgs.Deactivated)
+	signIn("dave@acme.dev")
+	if r, _ := orgs.Role(ctx, db, acme.ID, dave); r != "" {
+		t.Fatalf("deactivated dave rejoined: %q", r)
+	}
+	// Another org can't take a verified domain; an unverified one it can.
+	other, _ := orgs.Create(ctx, db, "other", "Other", "")
+	if _, err := orgs.AddDomain(ctx, db, other.ID, "acme.dev"); !errors.Is(err, orgs.ErrDomainTaken) {
+		t.Fatalf("taking a verified domain: %v", err)
+	}
+	if _, err := orgs.AddDomain(ctx, db, acme.ID, "pending.dev"); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := orgs.AddDomain(ctx, db, other.ID, "pending.dev"); err != nil || d.OrgID != other.ID {
+		t.Fatalf("taking an unverified claim: %+v %v", d, err)
+	}
+	if _, err := orgs.AddDomain(ctx, db, acme.ID, "not a domain"); !errors.Is(err, orgs.ErrDomain) {
+		t.Fatalf("bad domain: %v", err)
 	}
 }

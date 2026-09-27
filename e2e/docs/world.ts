@@ -73,14 +73,15 @@ export async function signInByLink(email: string): Promise<Client> {
   return c;
 }
 
-export async function connectHandbook(maya: Client): Promise<{ repoID: string; hostID: string }> {
+export async function connectHandbook(maya: Client): Promise<{ repoID: string; hostID: string; org: string }> {
   const host = await maya.call("POST", "/admin/forges", {
     kind: "gitlab",
     base_url: FORGE_URL,
     display_name: "Northwind GitLab",
   });
   const [owner, name] = REPO.split("/");
-  const connected = await maya.call("POST", "/orgs/default/repos", {
+  const org = (await maya.call("GET", "/orgs")).items[0].slug as string;
+  const connected = await maya.call("POST", `/orgs/${org}/repos`, {
     forge_host_id: host.id,
     owner,
     name,
@@ -89,7 +90,7 @@ export async function connectHandbook(maya: Client): Promise<{ repoID: string; h
   });
   const repoID = connected.repo.id as string;
   await waitUntil("the repository to sync", async () => (await maya.call("GET", `/repos/${repoID}`)).head_sha);
-  return { repoID, hostID: host.id };
+  return { repoID, hostID: host.id, org };
 }
 
 const ROLES: Record<Exclude<Person, "maya">, string> = {
@@ -105,9 +106,8 @@ export async function invitePeople(maya: Client, repoID: string): Promise<Record
   for (const [who, role] of Object.entries(ROLES) as [Exclude<Person, "maya">, string][]) {
     const p = PEOPLE[who];
     const since = logSize();
-    await maya.call("POST", "/orgs/default/admin/invites", {
+    await maya.call("POST", `/repos/${repoID}/invites`, {
       email: p.email,
-      repo_id: repoID,
       role,
     });
     const link = await emailLink(p.email, since, /https?:\/\/\S+\/invite\/[\w-]+/);

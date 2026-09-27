@@ -17,6 +17,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/settings"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -157,6 +158,19 @@ func (s *Service) createAdmin(w http.ResponseWriter, r *http.Request) {
 			if err := settings.Set(ctx, tx, "instance_name", in); err != nil {
 				return err
 			}
+			// The default org takes the name, and a matching address while
+			// it still has the placeholder one.
+			if err := orgs.Rename(ctx, tx, orgs.DefaultID, in); err != nil {
+				return err
+			}
+			if o, err := orgs.ByID(ctx, tx, orgs.DefaultID); err == nil && o.Slug == "default" {
+				if err := orgs.SetSlug(ctx, tx, orgs.DefaultID, orgs.Slugify(in)); err != nil && !errors.Is(err, orgs.ErrSlugTaken) {
+					return err
+				}
+			}
+		}
+		if err := orgs.AddMember(ctx, tx, orgs.DefaultID, u.ID, orgs.Owner, ""); err != nil {
+			return err
 		}
 		if err := settings.Delete(ctx, tx, tokenKey); err != nil {
 			return err
