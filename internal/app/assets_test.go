@@ -54,7 +54,7 @@ func TestUploadImagesIntoRevision(t *testing.T) {
 	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
 	signIn(t, a, admin, maya)
 	repoID := connectLocal(t, a, admin, map[string]string{
-		"docs/guides/first-week.md": "# First week\n",
+		"docs/guides/first-week.md":   "# First week\n",
 		"docs/guides/images/desk.png": "existing",
 	})
 	vic, _ := users.Create(ctx, a.DB, "vic@northwind.dev", "Vic", false)
