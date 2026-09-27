@@ -391,6 +391,24 @@
     "modes": {
       "visual": "Visual",
       "source": "Markdown"
+    },
+    "properties": "Properties",
+    "editYaml": "Edit YAML",
+    "frontmatterSource": "Front matter YAML",
+    "removeItem": "Remove {{item}}",
+    "addItem": "Add to {{key}}",
+    "removeProperty": "Remove {{key}}",
+    "newProperty": "Add a property",
+    "done": "Done",
+    "editSource": "Edit source",
+    "rawSource": "Source",
+    "raw": {
+      "html": "HTML",
+      "alert": "Callout",
+      "container": "Container",
+      "shortcode": "Shortcode",
+      "definition": "Link definition",
+      "unknown": "Markdown kept as written"
     }
   },
   "revision": {

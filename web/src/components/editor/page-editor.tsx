@@ -32,6 +32,15 @@ import type { RoomProvider, RoomStatus } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { schemaExtensions } from "./schema";
+import { EditorDocContext, nodeViewExtensions } from "./node-views";
+import type { DocContext } from "@/components/doc/doc-view";
+import type { AnyExtension } from "@tiptap/core";
+
+/** Replaces schema nodes by their versions with node views (same name, same schema). */
+function withViews(base: AnyExtension[], views: AnyExtension[]): AnyExtension[] {
+  const byName = new Map(views.map((v) => [v.name, v]));
+  return base.map((e) => byName.get(e.name) ?? e);
+}
 
 export type EditorUser = { id: string; name: string };
 
@@ -60,12 +69,15 @@ export function PageEditor({
   resolveImage,
   upload,
   onEditor,
+  docCtx,
 }: {
   provider: RoomProvider;
   user: EditorUser;
   resolveImage: (src: string) => string;
   upload?: ImageUploader;
   onEditor?: (e: Editor | null) => void;
+  /** Links and images in previews inside the editor (raw blocks, alerts). */
+  docCtx: DocContext;
 }) {
   const { t } = useTranslation();
   const status = useRoomStatus(provider);
@@ -75,7 +87,7 @@ export function PageEditor({
   }, [upload]);
   const extensions = useMemo(
     () => [
-      ...schemaExtensions({ resolveImage }),
+      ...withViews(schemaExtensions({ resolveImage }), nodeViewExtensions),
       Collaboration.configure({ document: provider.doc, field: CONTENT }),
       CollaborationCaret.configure({ provider, user: { name: user.name, color: userColor(user.id), id: user.id } }),
       Placeholder.configure({ placeholder: t("editor.placeholder") }),
@@ -134,7 +146,11 @@ export function PageEditor({
     onEditor?.(editor);
     return () => onEditor?.(null);
   }, [editor, onEditor]);
-  return <EditorContent editor={editor} className={cn(!status?.synced && "opacity-60 transition-opacity")} />;
+  return (
+    <EditorDocContext.Provider value={docCtx}>
+      <EditorContent editor={editor} className={cn(!status?.synced && "opacity-60 transition-opacity")} />
+    </EditorDocContext.Provider>
+  );
 }
 
 function Btn({ label, active, disabled, onClick, children }: { label: string; active?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
