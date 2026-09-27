@@ -156,3 +156,107 @@ func TestPublishMergesTheRevisionBranch(t *testing.T) {
 		t.Fatalf("no publish_blocked event: %v", ev)
 	}
 }
+
+// A conflict from Published resolved by keeping the revision's text leaves
+// the pages as they were saved, but the branch still has to merge the new
+// base: without that commit the pull request conflicts and the forge
+// refuses to merge it.
+func TestPublishAfterKeepingTheRevisionInAConflict(t *testing.T) {
+	a, admin := newApp(t, nil)
+	a.Collab.Options = collab.Options{FlushDelay: time.Millisecond, QuietPeriod: time.Millisecond}
+	ctx := context.Background()
+	maya, _ := users.Create(ctx, a.DB, "maya@northwind.dev", "Maya", true)
+	signIn(t, a, admin, maya)
+	const page = "docs/onboarding/it-setup.md"
+	repoID, remote := connectLocalRemote(t, a, admin, map[string]string{page: "# IT setup\n\nAsk IT for a laptop.\n"})
+	tom, _ := users.Create(ctx, a.DB, "tom@northwind.dev", "Tom Okafor", false)
+	_ = access.Grant(ctx, a.DB, repoID, "user", tom.ID, access.Maintainer)
+	tomC := &tc{t: t, base: admin.base, c: newClient()}
+	signIn(t, a, tomC, tom)
+
+	_, body := admin.do("POST", "/repos/"+repoID+"/revisions", map[string]any{"title": "Laptops", "path": page})
+	revID := body["id"].(string)
+	runJobs(t, a)
+	repo, _ := repos.Get(ctx, a.DB, repoID)
+	apply := func(md string) {
+		t.Helper()
+		rev, _ := revisions.Get(ctx, a.DB, revID)
+		if err := a.Collab.Apply(ctx, repo, rev, revisions.Caller{User: maya, Role: access.Admin}, page, md, "human"); err != nil {
+			t.Fatal(err)
+		}
+		a.Collab.FlushRevision(ctx, revID)
+	}
+	unsaved := func() bool {
+		t.Helper()
+		_, r := admin.do("GET", "/revisions/"+revID, nil)
+		return r["unsaved_changes"] == true
+	}
+	const ours = "# IT setup\n\nOrder a laptop from the portal.\n"
+	apply(ours)
+	if _, r := admin.do("POST", "/revisions/"+revID+"/submit", map[string]any{"reviewers": []string{tom.ID}}); r["state"] != "in_review" {
+		t.Fatalf("submit: %v", r)
+	}
+	savedHash, _ := revisions.SavedHash(ctx, a.DB, revID)
+
+	// Someone changes the same line on main; the reviewer applies it.
+	writeFile(t, remote, page, "# IT setup\n\nAsk IT for a laptop on day one.\n")
+	gitIn(t, remote, "commit", "--quiet", "-am", "Laptops on main")
+	head := gitIn(t, remote, "rev-parse", "main")
+	admin.do("POST", "/repos/"+repoID+"/refresh", nil)
+	runJobs(t, a)
+	_, body = tomC.do("GET", "/revisions/"+revID+"/updates", nil)
+	up, _ := body["update"].(map[string]any)
+	if up == nil || up["conflicts"] != float64(1) {
+		t.Fatalf("pending update: %v", body)
+	}
+	if code, res := tomC.do("POST", "/revisions/"+revID+"/updates/"+up["id"].(string)+"/apply", nil); code != 200 || res["reopened"] != true {
+		t.Fatalf("apply: %d %v", code, res)
+	}
+
+	// The editor keeps the revision's text: the content is what was saved...
+	apply(ours)
+	if rev, _ := revisions.Get(ctx, a.DB, revID); rev.HasConflicts || rev.BaseSHA != head {
+		t.Fatalf("after resolving: conflicts %v, base %s", rev.HasConflicts, rev.BaseSHA)
+	}
+	if now, _ := revisions.ContentHash(ctx, a.DB, revID); now != savedHash {
+		t.Fatalf("content differs from the save: %s vs %s", now, savedHash)
+	}
+	// ...but the new base isn't on the branch yet, so there is something to save.
+	if !unsaved() {
+		t.Fatal("applied updates not reported as unsaved")
+	}
+
+	// Resubmitting saves: a merge of the new base.
+	if _, r := admin.do("POST", "/revisions/"+revID+"/submit", map[string]any{"reviewers": []string{tom.ID}}); r["state"] != "in_review" {
+		t.Fatalf("resubmit: %v", r)
+	}
+	rev, _ := revisions.Get(ctx, a.DB, revID)
+	if parents := strings.Fields(gitIn(t, remote, "log", "-1", "--format=%P", rev.Branch)); len(parents) != 2 || parents[1] != head {
+		t.Fatalf("branch tip parents %v, want the previous save and %s", parents, head)
+	}
+	if out, err := gitInErr(remote, "merge-tree", "--write-tree", "main", rev.Branch); err != nil {
+		t.Fatalf("the pull request conflicts: %s", out)
+	}
+	if unsaved() {
+		t.Fatal("still unsaved after the merge commit")
+	}
+	if code, b := tomC.do("POST", "/revisions/"+revID+"/save", map[string]any{}); code != 409 || b["code"] != "nothing_to_save" {
+		t.Fatalf("second save: %d %v", code, b)
+	}
+
+	tomC.do("POST", "/revisions/"+revID+"/approve", nil)
+	if code, b := tomC.do("POST", "/revisions/"+revID+"/publish", map[string]any{}); code != 202 {
+		t.Fatalf("publish: %d %v", code, b)
+	}
+	runJobs(t, a)
+	_, r := admin.do("GET", "/revisions/"+revID, nil)
+	if r["state"] != "published" {
+		t.Fatalf("after publish: %v", r)
+	}
+	if got := gitIn(t, remote, "rev-parse", "HEAD^2"); got != rev.BranchSHA {
+		t.Fatalf("published merge's second parent %s, branch %s", got, rev.BranchSHA)
+	}
+	if got := gitIn(t, remote, "show", "HEAD:"+page); !strings.Contains(got, "Order a laptop from the portal.") {
+		t.Fatalf("published page: %q", got)
+	}
+}

@@ -49,9 +49,18 @@ func (h *Hub) SaveLocked(ctx context.Context, repo repos.Repo, rev revisions.Rev
 	if err != nil {
 		return CheckpointView{}, err
 	}
+	saved, err := revisions.SavedHash(ctx, h.DB, rev.ID)
+	if err != nil {
+		return CheckpointView{}, err
+	}
 	name := strings.TrimSpace(message)
 	title := name
-	if title == "" {
+	switch {
+	case title != "":
+	case hash == saved:
+		// Only updates from Published to merge (revisions.UnmergedUpdates).
+		title = "Merge updates from Published"
+	default:
 		title = saveTitle(files)
 	}
 	msg := title + "\n\nKmdn-Revision: " + h.Branches.RevisionURL(repo, rev) + "\n"
