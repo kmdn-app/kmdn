@@ -467,7 +467,7 @@
     "renamedFrom": "renamed from {{path}}",
     "pageActions": "Actions for {{path}}",
     "renameOrMove": "Rename or move",
-    "renameDesc": "Links to this page from other pages aren't updated yet.",
+    "renameDesc": "Pages that link here can be updated in the same revision.",
     "deletePage": "Delete page",
     "discardPage": "Discard new page",
     "ops": {
@@ -497,7 +497,13 @@
       "version_named": "saved a checkpoint",
       "restored": "restored a checkpoint",
       "asset_added": "added the image {{path}}"
-    }
+    },
+    "updateLinks_one": "Update {{count}} link in {{pages}} page",
+    "updateLinks_other": "Update {{count}} links in {{pages}} pages",
+    "checks": "Checks",
+    "linksOk": "All links in this revision work.",
+    "brokenLink": "links to {{url}}",
+    "breaksInbound": "links to {{target}}, which this revision removes"
   },
   "common": {
     "cancel": "Cancel",
@@ -525,6 +531,22 @@
       "submit": "Submitted for review",
       "pre_update": "Before updates from Published",
       "pre_restore": "Before a restore"
+    }
+  },
+  "links": {
+    "unavailable": "Links aren't available for this page.",
+    "outgoing_one": "Links from this page ({{count}})",
+    "outgoing_other": "Links from this page ({{count}})",
+    "incoming_one": "Linked from ({{count}})",
+    "incoming_other": "Linked from ({{count}})",
+    "broken_one": "{{count}} broken",
+    "broken_other": "{{count}} broken",
+    "noneOut": "This page doesn't link anywhere.",
+    "noneIn": "No other page links here.",
+    "line": "line {{line}}",
+    "reasons": {
+      "missing_page": "page not found",
+      "missing_anchor": "section not found"
     }
   }
 }

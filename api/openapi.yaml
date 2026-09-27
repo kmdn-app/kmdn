@@ -21,6 +21,7 @@ tags:
   - name: setup
   - name: admin
   - name: revisions
+  - name: links
 paths:
   /auth/magic-link:
     post:
@@ -1192,6 +1193,72 @@ paths:
         "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
         "404": { $ref: "#/components/responses/Problem" }
         "415": { $ref: "#/components/responses/Problem" }
+  /repos/{repo}/links/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RepoID" }
+      - { $ref: "#/components/parameters/FilePath" }
+    get:
+      tags: [links]
+      operationId: getPageLinks
+      summary: A published page's outgoing links (checked) and backlinks
+      responses:
+        "200": { description: Links, content: { application/json: { schema: { $ref: "#/components/schemas/PageLinks" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/links/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { $ref: "#/components/parameters/FilePath" }
+    get:
+      tags: [links]
+      operationId: getRevisionPageLinks
+      summary: A page's links as the revision sees it
+      responses:
+        "200": { description: Links, content: { application/json: { schema: { $ref: "#/components/schemas/PageLinks" } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/checks:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [links]
+      operationId: getRevisionChecks
+      summary: Broken links in changed pages, and published links the revision would break
+      responses:
+        "200": { description: Checks, content: { application/json: { schema: { $ref: "#/components/schemas/RevisionChecks" } } } }
+  /revisions/{revision}/files/rename-preview:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [links]
+      operationId: renamePreview
+      summary: Link changes a move needs (inbound links and the page's own relative links)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MoveInput" } } }
+      responses:
+        "200":
+          description: Rewrites
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/LinkRewrite" } }
+  /revisions/{revision}/links/rewrite:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [links]
+      operationId: rewriteLinks
+      summary: Update links after a page moved (adds linking pages to the revision)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MoveInput" } } }
+      responses:
+        "200":
+          description: Pages changed
+          content: { application/json: { schema: { type: object, required: [pages], properties: { pages: { type: integer } } } } }
+        "403": { $ref: "#/components/responses/Problem" }
 components:
   parameters:
     RepoID:
@@ -1222,6 +1289,60 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    OutboundLink:
+      type: object
+      required: [url, kind, line]
+      properties:
+        url: { type: string }
+        kind: { type: string, enum: [relative, route, anchor, external] }
+        to_path: { type: string }
+        anchor: { type: string }
+        line: { type: integer }
+        image: { type: boolean }
+        broken: { type: string, enum: [missing_page, missing_anchor] }
+    InboundLink:
+      type: object
+      required: [from_path, url, line]
+      properties:
+        from_path: { type: string }
+        url: { type: string }
+        anchor: { type: string }
+        line: { type: integer }
+    PageLinks:
+      type: object
+      required: [outgoing, incoming]
+      properties:
+        outgoing: { type: array, items: { $ref: "#/components/schemas/OutboundLink" } }
+        incoming: { type: array, items: { $ref: "#/components/schemas/InboundLink" } }
+    BrokenLink:
+      type: object
+      required: [path, line, url, reason]
+      properties:
+        path: { type: string }
+        line: { type: integer }
+        url: { type: string }
+        reason: { type: string, enum: [missing_page, missing_anchor] }
+        target: { type: string }
+    RevisionChecks:
+      type: object
+      required: [broken_links, breaks_inbound]
+      properties:
+        broken_links: { type: array, items: { $ref: "#/components/schemas/BrokenLink" } }
+        breaks_inbound: { type: array, items: { $ref: "#/components/schemas/BrokenLink" } }
+    MoveInput:
+      type: object
+      required: [from, to]
+      properties:
+        from: { type: string }
+        to: { type: string }
+    LinkRewrite:
+      type: object
+      required: [path, line, before, after]
+      properties:
+        path: { type: string }
+        line: { type: integer }
+        before: { type: string }
+        after: { type: string }
     RevisionAsset:
       type: object
       required: [id, path, size, mime, sha256, created_at]

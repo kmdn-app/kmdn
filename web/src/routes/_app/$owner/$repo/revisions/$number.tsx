@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -10,6 +10,8 @@ import {
   Eye,
   History as HistoryIcon,
   RotateCcw,
+  TriangleAlert,
+  CircleCheck,
   FilePen,
   FilePlus,
   FileText,
@@ -79,6 +81,7 @@ function Overview() {
                 <>
                   <Header repo={repo} rev={r} />
                   <Pages repo={repo} rev={r} />
+                  <Checks repo={repo} rev={r} />
                   <People repo={repo} rev={r} />
                   <Checkpoints repo={repo} rev={r} />
                   <Activity rev={r} />
@@ -387,9 +390,28 @@ function AddPageDialog({ repo, rev, onClose }: { repo: RepoView; rev: RevisionVi
 function RenameDialog({ repo, rev, file, onClose }: { repo: RepoView; rev: RevisionView; file: RevisionFile; onClose: () => void }) {
   const { t } = useTranslation();
   const [path, setPath] = useState(file.path);
+  const [debounced, setDebounced] = useState(file.path);
+  const [updateLinks, setUpdateLinks] = useState(true);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(path), 300);
+    return () => clearTimeout(id);
+  }, [path]);
   const invalidate = useInvalidate(repo, rev);
+  const preview = useQuery({
+    queryKey: ["rename-preview", rev.id, file.path, debounced],
+    queryFn: async () =>
+      (await unwrap(api.POST("/revisions/{revision}/files/rename-preview", { params: { path: { revision: rev.id } }, body: { from: file.path, to: debounced } }))).items,
+    enabled: debounced !== file.path && /\.(md|markdown|mdx)$/i.test(debounced),
+  });
+  const rewrites = preview.data ?? [];
+  const pages = new Set(rewrites.map((r) => r.path)).size;
   const rename = useMutation({
-    mutationFn: () => unwrap(api.POST("/revisions/{revision}/files", { params: { path: { revision: rev.id } }, body: { op: "rename", from_path: file.path, path } })),
+    mutationFn: async () => {
+      await unwrap(api.POST("/revisions/{revision}/files", { params: { path: { revision: rev.id } }, body: { op: "rename", from_path: file.path, path } }));
+      if (updateLinks && rewrites.length > 0) {
+        await unwrap(api.POST("/revisions/{revision}/links/rewrite", { params: { path: { revision: rev.id } }, body: { from: file.path, to: path } }));
+      }
+    },
     onSuccess: () => {
       invalidate();
       onClose();
@@ -397,7 +419,7 @@ function RenameDialog({ repo, rev, file, onClose }: { repo: RepoView; rev: Revis
   });
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("revision.renameOrMove")}</DialogTitle>
           <DialogDescription>{t("revision.renameDesc")}</DialogDescription>
@@ -410,12 +432,28 @@ function RenameDialog({ repo, rev, file, onClose }: { repo: RepoView; rev: Revis
           }}
         >
           <Input value={path} onChange={(e) => setPath(e.target.value)} className="font-mono text-[13px]" autoFocus aria-label={t("revision.pagePath")} />
+          {rewrites.length > 0 && (
+            <div className="rounded-lg border">
+              <label className="flex items-center gap-2 border-b px-3 py-2 text-[13px] font-medium">
+                <input type="checkbox" checked={updateLinks} onChange={(e) => setUpdateLinks(e.target.checked)} className="accent-primary" />
+                {t("revision.updateLinks", { count: rewrites.length, pages })}
+              </label>
+              <ul className="max-h-40 overflow-auto px-3 py-2 font-mono text-[11.5px] text-muted-foreground">
+                {rewrites.map((r, i) => (
+                  <li key={i} className="truncate" title={`${r.path}:${r.line}`}>
+                    {r.path}:{r.line} <span className="line-through">{r.before}</span> → <span className="text-foreground">{r.after}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {rename.error && <p className="text-[13px] text-destructive">{errorMessage(rename.error, t("errors.generic"))}</p>}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={rename.isPending || path === file.path}>
+              {rename.isPending && <Loader2 className="animate-spin" />}
               {t("common.rename")}
             </Button>
           </DialogFooter>
@@ -641,5 +679,52 @@ function CheckpointDialog({ repo, rev, id, onClose }: { repo: RepoView; rev: Rev
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Checks({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
+  const { t } = useTranslation();
+  const checks = useQuery({
+    queryKey: ["revision-checks", rev.id, rev.updated_at],
+    queryFn: () => unwrap(api.GET("/revisions/{revision}/checks", { params: { path: { revision: rev.id } } })),
+  });
+  if (!checks.data) return null;
+  const { broken_links: broken, breaks_inbound: inbound } = checks.data;
+  const page = (p: string, line: number) => (
+    <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: p }} search={{ revision: rev.number }} className="font-medium hover:underline">
+      {p}:{line}
+    </Link>
+  );
+  return (
+    <section>
+      <SectionTitle title={t("revision.checks")} />
+      <div className="overflow-hidden rounded-xl border text-[13.5px]">
+        {broken.length === 0 && inbound.length === 0 ? (
+          <p className="flex items-center gap-2 px-4 py-3 text-muted-foreground">
+            <CircleCheck className="size-4 text-success" />
+            {t("revision.linksOk")}
+          </p>
+        ) : (
+          <ul>
+            {broken.map((b, i) => (
+              <li key={"b" + i} className="flex items-start gap-2 border-b px-4 py-2.5 last:border-b-0">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+                <span>
+                  {page(b.path, b.line)} {t("revision.brokenLink", { url: b.url })} <span className="text-muted-foreground">({t(`links.reasons.${b.reason}`)})</span>
+                </span>
+              </li>
+            ))}
+            {inbound.map((b, i) => (
+              <li key={"i" + i} className="flex items-start gap-2 border-b px-4 py-2.5 last:border-b-0">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+                <span>
+                  {page(b.path, b.line)} {t("revision.breaksInbound", { target: b.target })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }

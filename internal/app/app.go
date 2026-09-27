@@ -22,6 +22,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/invites"
 	"github.com/kmdn-app/kmdn/internal/jobs"
 	"github.com/kmdn-app/kmdn/internal/linking"
+	"github.com/kmdn-app/kmdn/internal/links"
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/repos"
@@ -51,6 +52,7 @@ type App struct {
 	Engine    *docengine.Engine
 	Realtime  *realtime.Hub
 	Collab    *collab.Hub
+	Links     *links.Service
 	Invites   *invites.Service
 }
 
@@ -126,6 +128,11 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Collab = &collab.Hub{DB: db, Engine: eng, Revisions: a.Revisions, Log: log, Publish: a.Realtime.Publish}
 	a.Realtime.Rooms = a.Collab
 	a.Collab.Routes(r)
+	a.Links = &links.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Engine: eng, Jobs: a.Jobs, Log: log}
+	a.Links.Register()
+	a.Links.Routes(r, links.ApplierFunc(func(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, md, kind string) error {
+		return a.Collab.Apply(ctx, repo, rev, c, p, md, kind)
+	}))
 	a.Revisions.Changed = func(ctx context.Context, rev revisions.Revision, kind string) {
 		a.Collab.RevisionChanged(ctx, rev)
 		ev := map[string]any{"type": "revision", "kind": kind, "revision": rev.ID, "number": rev.Number, "state": rev.State}
@@ -154,6 +161,7 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	go a.periodic(ctx, time.Hour, "auth.purge")
+	a.catchUpIndexes(ctx)
 	done := make(chan struct{})
 	go func() { a.Jobs.Run(ctx); close(done) }()
 	err := a.Server.Run(ctx)
@@ -163,6 +171,24 @@ func (a *App) Run(ctx context.Context) error {
 	cancel()
 	<-done
 	return err
+}
+
+// catchUpIndexes schedules an incremental link index of every repo, so
+// repos connected before the index existed get one without waiting for a push.
+func (a *App) catchUpIndexes(ctx context.Context) {
+	list, err := repos.List(ctx, a.DB, nil, true)
+	if err != nil {
+		a.Log.Error("list repos for indexing", "error", err)
+		return
+	}
+	for _, r := range list {
+		if r.HeadSHA == "" {
+			continue
+		}
+		if _, err := a.Jobs.Enqueue(ctx, a.DB, links.JobIndex, map[string]string{"repo_id": r.ID}, jobs.EnqueueOptions{Key: links.JobIndex + ":" + r.ID}); err != nil {
+			a.Log.Error("enqueue link index", "repo", r.ID, "error", err)
+		}
+	}
 }
 
 // originOf returns scheme://host of the base URL (the only allowed WebSocket Origin).

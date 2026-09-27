@@ -14,11 +14,5 @@ export function isExternal(href: string): boolean {
   return /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//");
 }
 
-/** GitHub-style heading anchor. */
-export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
-    .replace(/\s/g, "-");
-}
+/** GitHub-style heading anchor (the same function the server uses). */
+export { slugify } from "@kmdn/doc-engine";

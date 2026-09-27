@@ -6,6 +6,7 @@ import { Check, ChevronRight, CloudOff, FilePen, Loader2, Lock } from "lucide-re
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { DocView } from "@/components/doc/doc-view";
+import { LinksPanel } from "@/components/links-panel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, errorMessage, useMe } from "@/lib/api";
@@ -66,7 +67,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
     );
   }
   return (
-    <AppShell repo={repo} revision={rev.data} currentPath={path}>
+    <AppShell repo={repo} revision={rev.data} currentPath={path} panel={rev.data ? { initial: "links", links: <LinksPanel repo={repo} path={path} revision={rev.data} /> } : undefined}>
       {(controls) => (
         <>
           <TopBar
