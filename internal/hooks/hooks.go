@@ -213,7 +213,12 @@ func (s *Service) Create(ctx context.Context, repoID, by string, in Input) (Hook
 	var secret string
 	h := Hook{ID: ids.New("hk"), Kind: in.Kind, URLHost: u.Host, Events: in.Events, Active: true, CreatedAt: time.Now(), repoID: repoID}
 	err = s.DB.InTx(ctx, func(tx *store.Tx) error {
-		ref, err := s.Secrets.Put(ctx, tx, "hook_url", []byte(u.String()))
+		// The URL and signing secret are the repo's org's secrets.
+		var orgID string
+		if err := store.QueryRow(ctx, tx, `SELECT org_id FROM repos WHERE id = ?`, repoID).Scan(&orgID); err != nil {
+			return store.NotFound(err)
+		}
+		ref, err := s.Secrets.PutOrg(ctx, tx, orgID, "hook_url", []byte(u.String()))
 		if err != nil {
 			return err
 		}
@@ -222,7 +227,7 @@ func (s *Service) Create(ctx context.Context, repoID, by string, in Input) (Hook
 			b := make([]byte, 24)
 			_, _ = rand.Read(b)
 			secret = "whsec_" + hex.EncodeToString(b)
-			if h.secretRef, err = s.Secrets.Put(ctx, tx, "hook_secret", []byte(secret)); err != nil {
+			if h.secretRef, err = s.Secrets.PutOrg(ctx, tx, orgID, "hook_secret", []byte(secret)); err != nil {
 				return err
 			}
 		}

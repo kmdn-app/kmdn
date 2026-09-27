@@ -17,6 +17,7 @@ kmdn migrate [up|status]           DB migrations (also run automatically on serv
 kmdn doctor                        check git version, data dir perms, DB, SMTP, forge reachability, LLM
 kmdn admin create-invite --email   bootstrap/recovery when locked out
 kmdn admin rotate-secret-key
+kmdn admin rotate-org-key -org SLUG
 kmdn backup  --out file.tar.zst    consistent backup (DB online backup + uploads + ydocs)
 kmdn restore --in file.tar.zst
 kmdn version
