@@ -516,6 +516,13 @@
     "reviewSoon": "Review and publishing arrive in the next milestone.",
     "editDetails": "Edit title and description",
     "startedBy": "started by {{name}}",
+    "reviewer": "Reviewer",
+    "participant": "Took part",
+    "participated": "Took part · {{what}}",
+    "did": {
+      "edited": "edited",
+      "commented": "commented"
+    },
     "changeRequest": {
       "pr": "Pull request",
       "prDraft": "Draft pull request",

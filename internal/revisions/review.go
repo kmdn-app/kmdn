@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -166,12 +167,35 @@ func maintainers(ctx context.Context, q store.Querier, repoID string) ([]users.U
 
 // ReviewerCandidates lists who can review, suggested ones first: maintainers
 // who reviewed published changes in the touched folders over the last six
-// months (Reviewed-by trailers), falling back to all maintainers.
+// months (Reviewed-by trailers), falling back to all maintainers. The
+// repository's maintainers and admins, every instance admin and everyone
+// who took part in the revision are candidates; admins always are, other
+// editors only when the repository allows self-approval.
 func (s *Service) ReviewerCandidates(ctx context.Context, repo repos.Repo, rev Revision, editors map[string]bool) ([]ReviewerCandidate, error) {
 	ms, err := maintainers(ctx, s.DB, repo.ID)
 	if err != nil {
 		return nil, err
 	}
+	ps, err := Participants(ctx, s.DB, rev.ID)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	for _, u := range ms {
+		seen[u.ID] = true
+	}
+	for _, p := range ps {
+		if seen[p.UserID] {
+			continue
+		}
+		if u, err := users.ByID(ctx, s.DB, p.UserID); err == nil {
+			if role, err := access.Effective(ctx, s.DB, u, repo.ID); err == nil && role.AtLeast(access.Contributor) {
+				ms = append(ms, u)
+				seen[u.ID] = true
+			}
+		}
+	}
+	sort.Slice(ms, func(i, j int) bool { return ms[i].Name < ms[j].Name })
 	reviewed := map[string]bool{} // emails
 	if s.Repos != nil && repo.HeadSHA != "" {
 		files, _ := Files(ctx, s.DB, rev.ID)
@@ -199,7 +223,7 @@ func (s *Service) ReviewerCandidates(ctx context.Context, repo repos.Repo, rev R
 	allowSelf := repo.Settings.AllowSelfApproval
 	out := []ReviewerCandidate{}
 	for _, u := range ms {
-		if editors[u.ID] && !allowSelf {
+		if editors[u.ID] && !allowSelf && !isAdmin(ctx, s.DB, u, repo.ID) {
 			continue
 		}
 		out = append(out, ReviewerCandidate{UserID: u.ID, Name: u.Name, Email: u.Email, Suggested: reviewed[strings.ToLower(u.Email)]})
@@ -230,10 +254,19 @@ func (s *Service) checkReviewer(ctx context.Context, repo repos.Repo, rev Revisi
 	if err != nil {
 		return err
 	}
-	if !role.AtLeast(access.Maintainer) {
-		return invalid("reviewers", u.Name+" isn't a maintainer of this repository, so they can't review.")
+	admin := isAdmin(ctx, s.DB, u, repo.ID)
+	if !role.AtLeast(access.Maintainer) && !admin {
+		// People who took part in the revision can review too.
+		ps, err := Participants(ctx, s.DB, rev.ID)
+		if err != nil {
+			return err
+		}
+		took := editors[userID] || slices.ContainsFunc(ps, func(p Participant) bool { return p.UserID == userID })
+		if !took || !role.AtLeast(access.Contributor) {
+			return invalid("reviewers", u.Name+" isn't a maintainer of this repository and hasn't taken part in this revision, so they can't review.")
+		}
 	}
-	if editors[userID] && !repo.Settings.AllowSelfApproval {
+	if editors[userID] && !repo.Settings.AllowSelfApproval && !admin {
 		return invalid("reviewers", u.Name+" edits this revision, so they can't review it. (Repository settings can allow self-approval.)")
 	}
 	return nil
@@ -640,4 +673,75 @@ func (s *Service) ContentChanged(ctx context.Context, revID string, by []string)
 		s.changed(ctx, revID, "approvals_reset")
 	}
 	return err
+}
+
+// Participant is someone who took part in a revision without being one of
+// its editors or assigned reviewers: they edited a page, commented or
+// changed files.
+type Participant struct {
+	UserID string `json:"user_id"`
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	// Did: edited, commented, or both ("edited,commented").
+	Did string `json:"did"`
+}
+
+// Participants lists everyone who took part in the revision other than its
+// editors and assigned reviewers, by name.
+func Participants(ctx context.Context, q store.Querier, revisionID string) ([]Participant, error) {
+	rows, err := store.Query(ctx, q, `SELECT x.user_id, x.did FROM (
+		SELECT c.user_id AS user_id, 'edited' AS did FROM ydoc_clients c JOIN ydocs d ON d.id = c.ydoc_id
+			WHERE d.revision_id = ? AND c.user_id IS NOT NULL AND c.user_id <> '' AND c.kind <> 'sync'
+		UNION SELECT e.actor_id, 'edited' FROM revision_events e
+			WHERE e.revision_id = ? AND e.actor_type = 'user' AND e.actor_id IS NOT NULL AND e.actor_id <> ''
+			AND e.kind IN ('file_added', 'file_deleted', 'file_renamed', 'asset_added', 'saved', 'suggestions_accepted', 'suggestions_rejected', 'restored')
+		UNION SELECT cm.author_id, 'commented' FROM comments cm JOIN threads t ON t.id = cm.thread_id
+			WHERE t.revision_id = ? AND cm.author_id IS NOT NULL
+		) x
+		WHERE x.user_id NOT IN (SELECT user_id FROM revision_members WHERE revision_id = ?)
+		AND x.user_id NOT IN (SELECT user_id FROM revision_reviewers WHERE revision_id = ? AND removed_at IS NULL)`,
+		revisionID, revisionID, revisionID, revisionID, revisionID)
+	if err != nil {
+		return nil, err
+	}
+	did := map[string][]string{}
+	var order []string
+	for rows.Next() {
+		var id, d string
+		if err := rows.Scan(&id, &d); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if _, ok := did[id]; !ok {
+			order = append(order, id)
+		}
+		if !slices.Contains(did[id], d) {
+			did[id] = append(did[id], d)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := []Participant{}
+	for _, id := range order {
+		u, err := users.ByID(ctx, q, id)
+		if err != nil || u.Status != users.Active {
+			continue
+		}
+		d := did[id]
+		sort.Strings(d)
+		out = append(out, Participant{UserID: u.ID, Name: u.Name, Email: u.Email, Did: strings.Join(d, ",")})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// isAdmin: instance admins and the repository's admins can always review.
+func isAdmin(ctx context.Context, q store.Querier, u users.User, repoID string) bool {
+	if u.IsInstanceAdmin {
+		return true
+	}
+	role, err := access.Effective(ctx, q, u, repoID)
+	return err == nil && role.AtLeast(access.Admin)
 }

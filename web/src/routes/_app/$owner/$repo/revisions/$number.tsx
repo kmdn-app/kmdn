@@ -533,6 +533,16 @@ function People({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
             )}
           </div>
         ))}
+        {rev.participants.map((p) => (
+          <div key={p.user_id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
+            <Avatar name={p.name} id={p.user_id} />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13.5px] font-medium">{p.name}</div>
+              <div className="truncate text-[12px] text-muted-foreground">{p.email}</div>
+            </div>
+            <span className="text-[12px] text-muted-foreground">{t("revision.participated", { what: p.did.split(",").map((d) => t(`revision.did.${d}`)).join(", ") })}</span>
+          </div>
+        ))}
         {manage && (
           <div className="relative border-t px-4 py-2.5">
             <div className="flex items-center gap-2">

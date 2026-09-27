@@ -3332,13 +3332,23 @@ components:
       allOf:
         - $ref: "#/components/schemas/Revision"
         - type: object
-          required: [access, members, reviewers, file_count, unsaved_changes]
+          required: [access, members, reviewers, participants, file_count, unsaved_changes]
           properties:
             access: { $ref: "#/components/schemas/RevisionAccess" }
             members: { type: array, items: { $ref: "#/components/schemas/RevisionMember" } }
             reviewers: { type: array, items: { $ref: "#/components/schemas/Reviewer" } }
+            participants: { type: array, items: { $ref: "#/components/schemas/Participant" } }
             file_count: { type: integer }
             unsaved_changes: { type: boolean, description: "The content differs from the last Save all" }
+    Participant:
+      type: object
+      description: Someone who took part in a revision without being an editor or an assigned reviewer
+      required: [user_id, name, email, did]
+      properties:
+        user_id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        did: { type: string, description: "edited, commented, or both (comma-separated)" }
     RevisionCreate:
       type: object
       required: [title]

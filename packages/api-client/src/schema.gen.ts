@@ -3270,9 +3270,18 @@ export interface components {
             access: components["schemas"]["RevisionAccess"];
             members: components["schemas"]["RevisionMember"][];
             reviewers: components["schemas"]["Reviewer"][];
+            participants: components["schemas"]["Participant"][];
             file_count: number;
             /** @description The content differs from the last Save all */
             unsaved_changes: boolean;
+        };
+        /** @description Someone who took part in a revision without being an editor or an assigned reviewer */
+        Participant: {
+            user_id: string;
+            name: string;
+            email: string;
+            /** @description edited, commented, or both (comma-separated) */
+            did: string;
         };
         RevisionCreate: {
             title: string;
