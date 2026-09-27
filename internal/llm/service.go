@@ -99,6 +99,8 @@ type Service struct {
 	// OrgAllows reports whether an org has AI features on (its settings, its
 	// plan); nil allows every org.
 	OrgAllows func(ctx context.Context, orgID string) bool
+	// OrgBudget is an org's monthly token budget (0: none of its own).
+	OrgBudget func(ctx context.Context, orgID string) int
 	// HTTP overrides the providers' client (tests).
 	HTTP *http.Client
 	Log  *slog.Logger
@@ -227,19 +229,29 @@ func startOfMonth(t time.Time) time.Time {
 }
 
 func (s *Service) used(ctx context.Context, since time.Time, userID string) (int, error) {
+	return s.usedBy(ctx, since, userID, "")
+}
+
+// usedBy sums tokens since a time, for a user and/or an org when given.
+func (s *Service) usedBy(ctx context.Context, since time.Time, userID, orgID string) (int, error) {
 	q := `SELECT COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens), 0) FROM assistant_runs WHERE started_at >= ?`
 	args := []any{store.Millis(since)}
 	if userID != "" {
 		q += ` AND user_id = ?`
 		args = append(args, userID)
 	}
+	if orgID != "" {
+		q += ` AND org_id = ?`
+		args = append(args, orgID)
+	}
 	var n int
 	err := store.QueryRow(ctx, s.DB, q, args...).Scan(&n)
 	return n, err
 }
 
-// CheckBudget refuses a run when the user's daily or the instance's monthly budget is used up.
-func (s *Service) CheckBudget(ctx context.Context, userID string) error {
+// CheckBudget refuses a run when the user's daily budget, the monthly budget
+// of the repo's org, or the instance's monthly budget is used up.
+func (s *Service) CheckBudget(ctx context.Context, userID, repoID string) error {
 	st, err := s.Settings(ctx)
 	if err != nil {
 		return err
@@ -261,6 +273,20 @@ func (s *Service) CheckBudget(ctx context.Context, userID string) error {
 		}
 		if n >= st.InstanceMonthlyTokens {
 			return &ErrBudget{"This instance has used its assistant budget for the month."}
+		}
+	}
+	if s.OrgBudget != nil && repoID != "" {
+		var orgID string
+		if err := store.QueryRow(ctx, s.DB, `SELECT org_id FROM repos WHERE id = ?`, repoID).Scan(&orgID); err == nil {
+			if limit := s.OrgBudget(ctx, orgID); limit > 0 {
+				n, err := s.usedBy(ctx, startOfMonth(now), "", orgID)
+				if err != nil {
+					return err
+				}
+				if n >= limit {
+					return &ErrBudget{"This organization has used its AI budget for the month. It resets on the 1st (UTC)."}
+				}
+			}
 		}
 	}
 	return nil
@@ -318,7 +344,7 @@ func (s *Service) FinishRun(ctx context.Context, id string, u Usage, tools []str
 
 // Complete is a metered one-shot call for a task (titles, summaries).
 func (s *Service) Complete(ctx context.Context, task string, r Run, req ChatRequest) (Result, error) {
-	if err := s.CheckBudget(ctx, r.UserID); err != nil {
+	if err := s.CheckBudget(ctx, r.UserID, r.RepoID); err != nil {
 		return Result{}, err
 	}
 	p, model, err := s.For(ctx, task)

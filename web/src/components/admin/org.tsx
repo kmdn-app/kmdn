@@ -26,6 +26,8 @@ export function OrganizationPanel() {
   const [name, setName] = useState<string | null>(null);
   const [slug, setSlug] = useState<string | null>(null);
   const [domain, setDomain] = useState("");
+  const [budget, setBudget] = useState<string | null>(null);
+  const usage = useQuery({ queryKey: ["org-ai-usage", currentOrg()], queryFn: () => unwrap(api.GET("/orgs/{org}/admin/ai/usage", { params: { path: { org: currentOrg() } } })) });
   const settings = useQuery({ queryKey: ["org-settings", currentOrg()], queryFn: () => unwrap(api.GET("/orgs/{org}/admin/settings", { params: { path: { org: currentOrg() } } })) });
   const domains = useQuery({ queryKey: ["org-domains", currentOrg()], queryFn: async () => (await unwrap(api.GET("/orgs/{org}/admin/domains", { params: { path: { org: currentOrg() } } }))).items });
   const save = useMutation({
@@ -48,6 +50,16 @@ export function OrganizationPanel() {
     },
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
   });
+  const saveBudget = useMutation({
+    mutationFn: () => unwrap(api.PATCH("/orgs/{org}/admin/settings", { params: { path: { org: currentOrg() } }, body: { monthly_tokens: Number(budget) } })),
+    onSuccess: () => {
+      setBudget(null);
+      toast.success(t("orgs.saved"));
+      void qc.invalidateQueries({ queryKey: ["org-settings"] });
+      void qc.invalidateQueries({ queryKey: ["org-ai-usage"] });
+    },
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
   const addDomain = useMutation({
     mutationFn: () => unwrap(api.POST("/orgs/{org}/admin/domains", { params: { path: { org: currentOrg() } }, body: { domain } })),
     onSuccess: () => (setDomain(""), void qc.invalidateQueries({ queryKey: ["org-domains"] })),
@@ -61,6 +73,10 @@ export function OrganizationPanel() {
   if (!org) return null;
   const owner = org.role === "owner";
   const assistantLocked = settings.data?.locked.includes("assistant");
+  const budgetLocked = settings.data?.locked.includes("monthly_tokens");
+  const fmt = (n: number) => n.toLocaleString();
+  const month = usage.data?.month_tokens ?? 0;
+  const limit = usage.data?.monthly_budget ?? 0;
   return (
     <Panel title={t("orgs.organization")} desc={t("orgs.organizationDesc")}>
       <Card
@@ -90,6 +106,27 @@ export function OrganizationPanel() {
             onCheckedChange={(v) => setAssistant.mutate(v)}
           />
         </Row>
+        <div className="grid gap-1.5">
+          <Label htmlFor="org-budget">{t("orgs.budget")}</Label>
+          <div className="flex gap-2">
+            <Input
+              id="org-budget"
+              type="number"
+              min={0}
+              step={1000}
+              value={budget ?? String(settings.data?.settings.monthly_tokens ?? 0)}
+              disabled={budgetLocked}
+              onChange={(e) => setBudget(e.target.value)}
+            />
+            <Button variant="outline" disabled={budget === null || saveBudget.isPending} onClick={() => saveBudget.mutate()}>
+              {t("orgs.saveBudget")}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {budgetLocked ? t("orgs.managed") : t("orgs.budgetHint")}{" "}
+            {limit > 0 ? t("orgs.usedOfBudget", { used: fmt(month), budget: fmt(limit) }) : t("orgs.usedThisMonth", { used: fmt(month) })}
+          </p>
+        </div>
       </Card>
       <Card>
         <div>

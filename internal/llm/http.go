@@ -10,6 +10,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/orghttp"
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/settings"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -26,9 +27,11 @@ func (s *Service) Routes(r chi.Router) {
 	})
 }
 
-// OrgRoutes registers the assistant's status for an org (under /orgs/{org}).
+// OrgRoutes registers the assistant's status and the org's AI usage
+// (under /orgs/{org}).
 func (s *Service) OrgRoutes(r chi.Router) {
 	r.Get("/assistant/status", s.status)
+	r.With(orghttp.RequireAdmin).Get("/admin/ai/usage", s.usage)
 }
 
 // status says whether AI features are available in the org: set up on the
@@ -222,20 +225,28 @@ type UsageRow struct {
 	Runs   int    `json:"runs"`
 }
 
+// usage reports token use this month: the instance's (instance console) or
+// one org's (under /orgs/{org}, with its budget).
 func (s *Service) usage(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
-	today, err := s.used(r.Context(), startOfDay(now), "")
+	c, inOrg := orgs.FromContext(r.Context())
+	org := c.Org.ID
+	today, err := s.usedBy(r.Context(), startOfDay(now), "", org)
 	if err != nil {
 		api.Error(w, r, err)
 		return
 	}
-	month, err := s.used(r.Context(), startOfMonth(now), "")
+	month, err := s.usedBy(r.Context(), startOfMonth(now), "", org)
 	if err != nil {
 		api.Error(w, r, err)
 		return
+	}
+	where, args := "", []any{store.Millis(startOfMonth(now))}
+	if inOrg {
+		where, args = " AND a.org_id = ?", append(args, org)
 	}
 	group := func(q string) ([]UsageRow, error) {
-		rows, err := store.Query(r.Context(), s.DB, q, store.Millis(startOfMonth(now)))
+		rows, err := store.Query(r.Context(), s.DB, q, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -251,17 +262,21 @@ func (s *Service) usage(w http.ResponseWriter, r *http.Request) {
 		return out, rows.Err()
 	}
 	sum := `COALESCE(SUM(a.input_tokens + a.output_tokens + a.cache_read_tokens + a.cache_write_tokens), 0)`
-	byUser, err := group(`SELECT COALESCE(a.user_id, ''), COALESCE(u.name, ''), ` + sum + `, COUNT(*) FROM assistant_runs a LEFT JOIN users u ON u.id = a.user_id WHERE a.started_at >= ? GROUP BY a.user_id, u.name ORDER BY 3 DESC LIMIT 20`)
+	byUser, err := group(`SELECT COALESCE(a.user_id, ''), COALESCE(u.name, ''), ` + sum + `, COUNT(*) FROM assistant_runs a LEFT JOIN users u ON u.id = a.user_id WHERE a.started_at >= ?` + where + ` GROUP BY a.user_id, u.name ORDER BY 3 DESC LIMIT 20`)
 	if err != nil {
 		api.Error(w, r, err)
 		return
 	}
-	byTask, err := group(`SELECT a.task, '', ` + sum + `, COUNT(*) FROM assistant_runs a WHERE a.started_at >= ? GROUP BY a.task ORDER BY 3 DESC`)
+	byTask, err := group(`SELECT a.task, '', ` + sum + `, COUNT(*) FROM assistant_runs a WHERE a.started_at >= ?` + where + ` GROUP BY a.task ORDER BY 3 DESC`)
 	if err != nil {
 		api.Error(w, r, err)
 		return
 	}
-	api.JSON(w, http.StatusOK, map[string]any{"today_tokens": today, "month_tokens": month, "by_user": byUser, "by_task": byTask})
+	out := map[string]any{"today_tokens": today, "month_tokens": month, "by_user": byUser, "by_task": byTask}
+	if inOrg && s.OrgBudget != nil {
+		out["monthly_budget"] = s.OrgBudget(r.Context(), org)
+	}
+	api.JSON(w, http.StatusOK, out)
 }
 
 func contains(l []string, s string) bool {

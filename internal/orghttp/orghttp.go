@@ -316,7 +316,11 @@ func (s *Service) updateSettings(w http.ResponseWriter, r *http.Request) {
 	})
 	var syntax *json.SyntaxError
 	var typeErr *json.UnmarshalTypeError
+	var bad *orgs.ErrInvalid
 	switch {
+	case errors.As(err, &bad):
+		api.Error(w, r, api.Invalid(bad.Field, bad.Reason))
+		return
 	case errors.Is(err, orgs.ErrLocked):
 		api.Error(w, r, api.Err(http.StatusConflict, "setting_managed", "This setting is managed by the deployment and can't be changed here."))
 		return

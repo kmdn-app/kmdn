@@ -185,6 +185,10 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		OrgAllows: func(ctx context.Context, orgID string) bool {
 			st, _, err := orgSettings.Get(ctx, orgID)
 			return err == nil && st.Assistant
+		},
+		OrgBudget: func(ctx context.Context, orgID string) int {
+			st, _, _ := orgSettings.Get(ctx, orgID)
+			return st.MonthlyTokens
 		}}
 	a.LLM.Routes(r)
 	a.Notify = &notify.Service{DB: db, Jobs: a.Jobs, PublishUser: a.Realtime.PublishUser, BaseURL: a.Repos.BaseURL, Log: log,

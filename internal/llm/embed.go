@@ -143,7 +143,7 @@ func (s *Service) Embed(ctx context.Context, r Run, texts []string) (_ [][]float
 	if s.Disabled {
 		return nil, ErrNotConfigured
 	}
-	if err := s.CheckBudget(ctx, ""); err != nil {
+	if err := s.CheckBudget(ctx, "", r.RepoID); err != nil {
 		return nil, err
 	}
 	st, err := s.Settings(ctx)

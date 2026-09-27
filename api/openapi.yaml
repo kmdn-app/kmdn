@@ -2661,6 +2661,26 @@ paths:
                   month_tokens: { type: integer }
                   by_user: { type: array, items: { $ref: "#/components/schemas/AIUsageRow" } }
                   by_task: { type: array, items: { $ref: "#/components/schemas/AIUsageRow" } }
+  /orgs/{org}/admin/ai/usage:
+    get:
+      tags: [orgs]
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      operationId: getAIUsageOrg
+      responses:
+        "200":
+          description: Tokens today and this month, by user and by task
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [today_tokens, month_tokens, by_user, by_task]
+                properties:
+                  today_tokens: { type: integer }
+                  month_tokens: { type: integer }
+                  monthly_budget: { type: integer, description: "The org's monthly token budget (0: none)" }
+                  by_user: { type: array, items: { $ref: "#/components/schemas/AIUsageRow" } }
+                  by_task: { type: array, items: { $ref: "#/components/schemas/AIUsageRow" } }
   /notifications:
     get:
       tags: [notifications]
@@ -3889,6 +3909,7 @@ components:
       type: object
       properties:
         assistant: { type: boolean, description: "AI features for the org's repositories" }
+        monthly_tokens: { type: integer, description: "The org's AI budget per calendar month (UTC); 0: none of its own" }
     OrgSettingsView:
       type: object
       required: [settings, locked]
