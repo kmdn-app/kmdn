@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { api, useMe } from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, meQuery } from "@/lib/api";
 import { applyAppearance, DEFAULT_APPEARANCE, normalizeAppearance, resolveTheme, storedAppearance, type Appearance, type Palette, type ThemeChoice, type UIScale } from "@/theme";
 
 const sameAppearance = (a: Appearance, b: Appearance) => a.mode === b.mode && a.palette === b.palette && a.scale === b.scale;
@@ -29,7 +29,10 @@ function prefersDark() {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [appearance, setAppearance] = useState<Appearance>(storedAppearance);
   const [dark, setDark] = useState(prefersDark);
-  const { data: me } = useMe();
+  // Reads the account from the cache without fetching it: fetching here
+  // (on the sign-in page too) would cache "signed out" and send someone who
+  // just signed in back to the sign-in page. Pages that need the account fetch it.
+  const { data: me } = useQuery({ ...meQuery, enabled: false });
   const qc = useQueryClient();
   // The account's appearance wins once per signed-in user.
   const adopted = useRef<string | null>(null);
