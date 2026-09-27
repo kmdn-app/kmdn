@@ -38,8 +38,8 @@ Attributes record the source *style* (e.g. `*` vs `_`, `-` vs `*` bullets, fence
 Approach:
 
 1. **Parser**: `micromark` + `mdast-util-from-markdown` with GFM, frontmatter, math, footnotes extensions, producing mdast with positions. mdast → ProseMirror JSON with each top-level block carrying `src: {start, end}` into the original text and a content hash.
-2. **Source map kept outside the CRDT**: the original markdown bytes and per-block hashes live with the revision file state (server) and the client session. They are not collaborative data.
-3. **Block-level reuse serializer**: for each top-level block, if its ProseMirror content hash equals the hash computed at parse time, emit the original bytes verbatim (including its trailing blank lines). Otherwise serialize that block with style-preserving rules (use the recorded markers, the file's dominant list marker, indentation and line width conventions detected at parse time). Inter-block whitespace is preserved from the original where blocks are unchanged.
+2. **Authored source is collaborative data**: shared Yjs text holds authored Markdown alongside the semantic tree, with stable references to each block's Yjs element. Each block can merge formatting changes independently. Browser and server derive source maps by parsing those bytes; client-supplied offsets and hashes are not trusted. Documents without shared source retain their existing source-map fallback. See [ADR 0001](../adr/0001-shared-markdown-source.md).
+3. **Block-level reuse serializer**: reuse source bytes only when their independently parsed semantics match the current block at its stable identity. Preserve trailing blank lines and unchanged inter-block whitespace. Otherwise serialize the block with style-preserving rules (recorded markers and the file's detected conventions). Deleted blocks and stale source metadata must never replace current semantic content.
 4. **Nested granularity** (planned): for long lists and tables, reuse at list-item / table-row level so editing one item doesn't reflow the list. v1 of the engine reuses at top-level block granularity; ::: containers and GitHub alerts are kept as raw blocks.
 5. **Normalization only on changed content**: e.g. a changed table re-pads columns only if the original table was padded.
 6. **Line endings, final newline, BOM, trailing whitespace** of the file are detected and preserved.
@@ -71,10 +71,10 @@ YAML frontmatter (`---` fenced, first line) is a `frontmatter` node rendered as 
 
 ## Source mode (live, bidirectional)
 
-The Yjs document is the ProseMirror tree (`Y.XmlFragment`). Source mode is a per-user *view*:
+The Yjs document holds the ProseMirror tree (`Y.XmlFragment`) and bounded authored-source text. The tree remains authoritative for semantic content. Source mode is a per-user *view*:
 
 1. On entering source mode, the client serializes the current doc to markdown and loads it into CodeMirror 6.
-2. **Local edits**: debounced (300 ms idle, 1 s max). The client runs `parse` on the new text, computes a minimal tree diff against the current ProseMirror doc (block-level first, then within changed blocks via `prosemirror-changeset`-style text diff), and applies it as a ProseMirror transaction through `y-prosemirror`. Blocks that don't parse to a stable structure (half-typed table, unclosed fence) are applied as a temporary `rawBlock` and promoted once they parse.
+2. **Local edits**: debounced (300 ms idle, 1 s max). The client parses the new text and applies minimal changes to the semantic tree and the authored-source text in one Yjs transaction. Formatting-only changes emit a collaborative update even when the tree stays unchanged. Blocks that don't parse to a stable structure (half-typed table, unclosed fence) are applied as a temporary `rawBlock` and promoted once they parse.
 3. **Remote edits**: on Yjs updates, the client re-serializes (only changed blocks, using the reuse serializer) and applies a text diff to CodeMirror, mapping the local selection through it.
 4. **Presence**: remote cursors in source mode are mapped from ProseMirror positions to markdown offsets via the block source map; approximate inside re-serialized blocks.
 5. **Suggesting in source mode**: edits made while Suggesting is on are converted to insertion/deletion marks on the resulting tree diff.
@@ -87,6 +87,7 @@ Risk: cursor jumps under heavy concurrent edits in the same block. Mitigation: n
 - Yjs binary state passes as `Uint8Array` (goja `ArrayBuffer` / wasm memory copy).
 - Runtimes are created from a precompiled bundle (goja `Program` / QuickJS bytecode) for fast startup.
 - Every call has a CPU budget and memory cap; exceeding them returns an error and marks the input for inspection.
+- Shared source metadata is untrusted input. Both hosts bound its aggregate size before parsing; the Go host applies its configured Markdown input limit as well as the encoded-state and execution limits. Invalid metadata cannot overwrite semantic content.
 - The bundle version is stamped; Y.Doc snapshots record the engine version that wrote them for future migrations.
 
 ## Link index and graph

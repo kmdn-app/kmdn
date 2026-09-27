@@ -11,10 +11,9 @@ stateDiagram-v2
     Approved --> InReview: Content changed (approvals reset)
     InReview --> Editing: Applied updates brought conflicts
     Approved --> Editing: Applied updates brought conflicts
-    Approved --> Publishing: Publish (required checks still running → auto-merge)
-    Approved --> Published: Publish (PR/MR merged)
+    Approved --> Publishing: Claim approved saved commit
     Publishing --> Published: Forge merged
-    Publishing --> Approved: PR/MR closed unmerged
+    Publishing --> Approved: Matching claim released after confirmed non-merge
     Editing --> Closed
     InReview --> Closed
     Approved --> Closed
@@ -45,6 +44,7 @@ Rules:
 - **Conflicts go back to editing.** If applied updates bring conflicts into an In review or Approved revision, it returns to **Editing** with `has_conflicts`, approvals are dismissed, editors and reviewers are notified. The original editors resolve the conflicts together in the editor, then resubmit to the same reviewers.
 - **Pending suggestions block approval.** A reviewer can't approve while any suggestion in the revision is still to accept or reject ("Accept or reject the 2 pending suggestions before approving"). The revision overview lists them under **Suggestions to address**, with the page, author, what each changes and Accept/Reject for people who can resolve them.
 - **Publish** is a separate click by any Maintainer/Admin once Approved, blocked while suggestions or updates from Published are pending.
+- **Publishing is read-only** for content, files, assets and review eligibility. The publish claim checks the saved snapshot while holding the same gate as mutations. An edit accepted before the claim is saved and checked; one arriving after the claim is refused before it changes shared content. Interrupted attempts resume or release the same claim after reconciling the merge outcome ([ADR 0003](../adr/0003-publish-claims.md)).
 - **Close**: editors or maintainers. Closed revisions are read-only, reopenable for 90 days, then archived (Y.Docs compacted to a final snapshot).
 - **Stale** badge after 30 days without activity. No auto-close in v1.
 

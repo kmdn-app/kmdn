@@ -15,6 +15,8 @@ Y.Doc
 └─ "meta"       Y.Map           { baseSha, engineVersion }
 ```
 
+The document also carries bounded authored-source text associated with stable top-level element identities, plus leading source text. Source maps are independently derived from it, not accepted from clients. Separate block text preserves concurrent formatting edits to different blocks. Old documents without this data remain readable. See [ADR 0001](../adr/0001-shared-markdown-source.md).
+
 Comment bodies, authors and resolution live in the DB (queryable, notifiable). Only the anchor positions live in the CRDT so they move with the text.
 
 ## WebSocket protocol
@@ -44,7 +46,7 @@ Rooms live in Go (`internal/collab`) and hold the document as encoded Yjs update
 2. Opening a page doesn't add it to the revision. The **first update** does (manifest entry `modify`).
 3. On client update: reject when read-only or over 1 MB, validate it and read its Yjs client ids (`yClients`, which also maps client ids to users in `ydoc_clients` and refuses ids owned by someone else), append to the log (batched every 50 ms), broadcast to the other peers.
 4. **Snapshot compaction**: every 500 updates, write a merged snapshot and delete the updates it covers (older snapshots are kept only when a checkpoint references them).
-5. **Materialization**: after 2 s without updates (and when the last peer leaves), serialize to markdown with the source map and store `revision_files.content_md`, its hash and +/− counts. This feeds diffs, the link checker, search, the assistant, and publish without touching the live room.
+5. **Materialization**: after 2 s without updates (and when the last peer leaves), serialize to markdown using validated shared source, or the persisted source map for legacy blocks, and store `revision_files.content_md`, its hash and +/− counts. This feeds diffs, the link checker, search, the assistant, and publish without touching the live room.
 6. Eviction from memory after 5 min with no subscribers.
 7. Edits made outside an editor (assistant, updates from Published, checkpoint restore) go through `yApplyMarkdown`: a block-level diff by content hash that leaves unchanged blocks alone and patches same-shaped text blocks in place, so concurrent edits and comment anchors elsewhere survive.
 
@@ -78,11 +80,14 @@ The materialized markdown used for diff and publish treats pending suggestions a
 Live edits sync continuously (the editor shows "Synced"), but a revision's history is its commits ([D59](decisions.md)):
 
 - **Save all** (editor top bar, where Done was) flushes the live rooms and writes **one commit** on the revision's branch with the revision's current content, then pushes it to the pull request ([06](06-git-and-forges.md#revision-branches)). The commit is authored by the person who clicked (their commit email), committed by kmdn, and titled after the changed pages ("Update onboarding.md and faq.md") unless they typed a message in the Checkpoints panel. When a second person clicks Save all, that's another commit, authored by them. Nothing changed since the last save → "All changes saved", no commit.
-- **Checkpoints are those commits**: each save records a checkpoint with its commit SHA and the content it saved (per file: Yjs snapshot reference and materialized markdown), listed in the Checkpoints panel with a link to the commit on the forge. There are no automatic checkpoints.
+- **Checkpoints are those commits**: each save records a checkpoint with its commit SHA and immutable content (per file: Yjs state and materialized markdown), listed in the Checkpoints panel with a link to the commit on the forge. Existing snapshot references remain readable. There are no automatic checkpoints.
+- **Interrupted saves recover the same commit** ([ADR 0002](../adr/0002-journaled-revision-saves.md)): before pushing, record a durable intent containing the exact commit, previous tip, author, base, file and asset manifest, content hash and checkpoint state. A private Git ref retains the prepared commit. After push, one database transaction records the checkpoint and branch metadata and removes the intent. Retry finalizes only when the remote tip equals the intended commit, or retries that same push when it equals the previous tip. Any other remote tip remains an external-change conflict. Recovery uses the captured content; newer edits remain unsaved for a separate save. Backups retain unfinished intents.
 - Actions that would otherwise lose track of unsaved work save first, as a commit by the person acting: **Submit for review**, **applying updates from Published**, **restoring a checkpoint** and **publishing**.
 - Before Save all or these actions, the client flushes pending Source edits and waits for receipt of all pending document updates with a matching ping/pong, including edits flushed when leaving the editor. Rejected updates and edits that could not be sent after the document became read-only block saving that revision until recovery; a later pong cannot clear the refusal. After disconnecting, an open document must resend its pending edits before a new connection can acknowledge them. If the local document has closed and receipt is uncertain, Save fails with instructions to copy remaining local text before reloading and restoring it.
 - The revision shows **Unsaved changes** when its content differs from the last commit (the content hash of manifest, materialized pages and assets), or when updates from Published were applied since then. The second case holds even if the pages end up as saved (a conflict resolved by keeping the revision's text): only a commit that merges the new base lets the pull request merge ([06](06-git-and-forges.md#revision-branches)). Its default title is "Merge updates from Published". A base that fast-forwards past pages the revision doesn't touch leaves nothing to save.
 - **Restore** brings back a checkpoint's content as new changes (never rewinds the CRDT or git), which the next Save all commits.
+
+All content and manifest mutations share a per-revision gate with publishing, including live updates, file and asset operations, suggestion resolution, updates from Published, checkpoint restore and assistant changes. Each operation checks current permissions and revision state while holding the gate, before mutation. Publishing claims a saved and approved snapshot under that same gate. Edits arriving after the claim receive an explicit refusal and cannot enter the shared document. See [ADR 0003](../adr/0003-publish-claims.md).
 
 ## Contribution tracking (for attribution)
 
