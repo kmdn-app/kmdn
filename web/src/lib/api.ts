@@ -1,7 +1,9 @@
 import { queryOptions, useQuery, type QueryClient } from "@tanstack/react-query";
 import { ApiError, createApi, unwrap, type Me, type SetupStatus } from "@kmdn/api-client";
+import { sourceBufferMiddleware } from "./source-buffers";
 
 export const api = createApi();
+api.use(sourceBufferMiddleware);
 export { ApiError, unwrap };
 
 export const meQuery = queryOptions({

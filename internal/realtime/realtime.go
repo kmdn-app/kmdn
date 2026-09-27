@@ -323,10 +323,11 @@ func (c *Conn) authorizedFrame(msg []byte) bool {
 }
 
 type controlMsg struct {
-	Op      string   `json:"op"`
-	Channel uint32   `json:"channel"`
-	Room    *RoomRef `json:"room"`
-	Scope   string   `json:"scope"`
+	Op        string   `json:"op"`
+	RequestID string   `json:"request_id,omitempty"`
+	Channel   uint32   `json:"channel"`
+	Room      *RoomRef `json:"room"`
+	Scope     string   `json:"scope"`
 }
 
 func (c *Conn) control(b []byte) {
@@ -337,7 +338,11 @@ func (c *Conn) control(b []byte) {
 	}
 	switch m.Op {
 	case "ping":
-		c.Control(map[string]any{"op": "pong"})
+		pong := map[string]any{"op": "pong"}
+		if m.RequestID != "" {
+			pong["request_id"] = m.RequestID
+		}
+		c.Control(pong)
 	case "subscribe":
 		c.subscribe(m)
 	case "unsubscribe":
