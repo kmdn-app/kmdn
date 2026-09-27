@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"net/http"
 	"strings"
 	"time"
 
@@ -13,8 +14,10 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/config"
+	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/jobs"
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/server"
 	"github.com/kmdn-app/kmdn/internal/setup"
@@ -33,6 +36,7 @@ type App struct {
 	Auth    *auth.Service
 	AuthH   *auth.HTTP
 	Setup   *setup.Service
+	Repos   *repos.Service
 }
 
 // New opens the database, applies migrations and builds the services.
@@ -84,6 +88,19 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.AuthH.Routes(r)
 	a.Setup.Routes(r)
 	(&admin.SMTP{DB: db, Mail: a.Mail, Secrets: sec, Log: log}).Routes(r)
+
+	a.Repos = &repos.Service{
+		DB: db, Secrets: sec, Jobs: a.Jobs, Git: &gitmirror.Git{}, DataDir: cfg.DataDir, BaseURL: strings.TrimRight(cfg.Server.BaseURL, "/"), Log: log,
+		Adapters: &repos.Adapters{DB: db, Secrets: sec, HTTP: &http.Client{Timeout: 30 * time.Second}},
+	}
+	a.Repos.Register()
+	a.Repos.Routes(r)
+	a.Repos.ForgeRoutes(r)
+	a.Server.Mount("/hooks", a.Repos.WebhookHandler())
+	if _, err := repos.EnsureGitHost(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 
 	a.Jobs.Register("auth.purge", func(ctx context.Context, _ jobs.Job) (any, error) { return nil, a.Auth.PurgeExpired(ctx) })
 	return a, nil

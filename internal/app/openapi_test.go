@@ -18,6 +18,7 @@ func TestRoutesMatchOpenAPI(t *testing.T) {
 	served := map[string]bool{}
 	err := chi.Walk(a.Server.API(), func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		route = strings.TrimSuffix(route, "/")
+		route = strings.Replace(route, "/*", "/{path}", 1)
 		if route == "" || route == "/*" {
 			return nil
 		}
