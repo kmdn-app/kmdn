@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { ChevronRight, History as HistoryIcon, Loader2, Pencil, ScanText, X } from "lucide-react";
+import { ChevronRight, History as HistoryIcon, Loader2, MessageSquarePlus, Pencil, ScanText, X } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { Avatar } from "@/components/avatar";
@@ -11,7 +12,10 @@ import { DocView, type BlockLines } from "@/components/doc/doc-view";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ApiError, errorMessage } from "@/lib/api";
+import { ApiError, api, errorMessage, unwrap } from "@/lib/api";
+import { CommentsPanel, type PendingComment } from "@/components/revision/comments-panel";
+import { selectionQuote, useQuoteHighlights, type QuoteAnchor } from "@/components/doc/quote-anchors";
+import { useDiscussions, type Thread } from "@/lib/threads";
 import { pageTitle, useCreateRevision } from "@/lib/revisions";
 import { RevisionPage } from "@/components/editor/revision-page";
 import { LinksPanel } from "@/components/links-panel";
@@ -57,11 +61,43 @@ function PublishedPage() {
     [repo, path, sha],
   );
   const aside = useMemo(() => (blame.data ? blameAside(blame.data) : undefined), [blame.data]);
+  // Discussions on the published version (not old ones).
+  const discussable = !sha && !!file.data?.markdown;
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  const [pending, setPending] = useState<PendingComment | null>(null);
+  const [active, setActive] = useState<string | null>(null);
+  const discussions = useDiscussions(discussable ? repo.id : undefined, path, "hot");
+  const anchors = useMemo(
+    () => (discussions.data ?? []).filter((d) => d.state === "open" && !d.outdated).map((d) => ({ id: d.id, anchor: d.anchor as QuoteAnchor })),
+    [discussions.data],
+  );
+  const onAnchorClick = useCallback((id: string) => setActive(id), []);
+  useQuoteHighlights(root, anchors, active, onAnchorClick, file.data?.content);
+  const fix = useMutation({
+    mutationFn: (th: Thread) => unwrap(api.POST("/threads/{thread}/fix-this", { params: { path: { thread: th.id } } })),
+    onSuccess: ({ revision }) => {
+      toast.success(t("comments.fixStarted", { title: revision.title }));
+      void navigate({ search: { revision: revision.number } });
+    },
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
 
   const panel = {
-    initial: "history" as const,
+    initial: pending || active ? ("comments" as const) : ("history" as const),
     history: <HistoryPanel repo={repo} path={path} commits={history.data} current={sha} />,
     links: file.data?.markdown ? <LinksPanel repo={repo} path={path} /> : undefined,
+    comments: discussable ? (
+      <CommentsPanel
+        repoID={repo.id}
+        path={path}
+        pending={pending}
+        onPendingDone={() => setPending(null)}
+        active={active}
+        onActive={setActive}
+        canComment
+        onFix={canEdit ? (th) => fix.mutate(th) : undefined}
+      />
+    ) : undefined,
   };
 
   return (
@@ -87,6 +123,21 @@ function PublishedPage() {
                   <span className={cn("size-1.5 rounded-full", sha ? "bg-warning" : "bg-success")} />
                   {sha ? t("file.oldVersion") : t("shell.published")}
                 </span>
+                {discussable && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title={t("comments.commentOnPage")}
+                    onClick={() => {
+                      const q = selectionQuote(root);
+                      setPending({ quote: q?.quote ?? "", prefix: q?.prefix, suffix: q?.suffix, position: null });
+                      if (!controls.panelOpen) controls.togglePanel();
+                    }}
+                  >
+                    <MessageSquarePlus />
+                    <span className="max-md:hidden">{t("comments.comment")}</span>
+                  </Button>
+                )}
                 {!sha && file.data?.markdown && (
                   <Button
                     variant={view === "blame" ? "secondary" : "ghost"}
@@ -178,7 +229,9 @@ function PublishedPage() {
             {file.data?.markdown && (
               <>
                 {!sha && latest && view !== "blame" && <Byline commit={latest} onHistory={controls.togglePanel} />}
-                <DocView markdown={file.data.content} ctx={ctx} aside={view === "blame" ? aside : undefined} className={cn(!sha && latest && view !== "blame" && "pt-0")} />
+                <div ref={setRoot}>
+                  <DocView markdown={file.data.content} ctx={ctx} aside={view === "blame" ? aside : undefined} className={cn(!sha && latest && view !== "blame" && "pt-0")} />
+                </div>
               </>
             )}
           </div>

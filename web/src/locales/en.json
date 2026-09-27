@@ -151,7 +151,8 @@
     "degraded": "The last sync failed",
     "retry": "Retry sync",
     "recent": "Recently published",
-    "noActivity": "No published changes to pages yet."
+    "noActivity": "No published changes to pages yet.",
+    "feedback": "Open feedback"
   },
   "file": {
     "oldVersion": "Older version",
@@ -700,7 +701,13 @@
     "empty": "No comments on this page.",
     "showResolved_one": "Show {{count}} resolved thread",
     "showResolved_other": "Show {{count}} resolved threads",
-    "hideResolved": "Hide resolved"
+    "hideResolved": "Hide resolved",
+    "outdated": "Outdated: Published changed this passage",
+    "fixThis": "Fix this",
+    "fixedIn": "Fixed in #{{number}}",
+    "fixingIn": "Being fixed in #{{number}}",
+    "commentOnPage": "Comment on the selected text",
+    "fixStarted": "Started {{title}}"
   },
   "suggestions": {
     "title": "Suggestions",

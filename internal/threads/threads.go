@@ -57,6 +57,7 @@ type Comment struct {
 // Thread is a conversation anchored to a passage.
 type Thread struct {
 	ID          string          `json:"id"`
+	RepoID      string          `json:"repo_id"`
 	RevisionID  string          `json:"revision_id,omitempty"`
 	Path        string          `json:"path"`
 	Kind        string          `json:"kind"`
@@ -69,8 +70,19 @@ type Thread struct {
 	ResolvedBy  string          `json:"resolved_by,omitempty"`
 	ResolvedAt  *time.Time      `json:"resolved_at,omitempty"`
 	Comments    []Comment       `json:"comments"`
+	// Outdated: a discussion whose quote Published no longer has.
+	Outdated bool `json:"outdated,omitempty"`
+	// FixRevision is the revision "Fix this" started for a discussion.
+	FixRevision *RevisionRef `json:"fix_revision,omitempty"`
 	// Hot is the recency-weighted activity score used by the Hot topics sort.
 	Hot float64 `json:"hot"`
+}
+
+// RevisionRef points at a revision from a discussion.
+type RevisionRef struct {
+	ID     string `json:"id"`
+	Number int    `json:"number"`
+	State  string `json:"state"`
 }
 
 // Anchor is what a thread points at. For revision threads the live position
@@ -107,13 +119,16 @@ func hot(t Thread, now time.Time) float64 {
 
 func scanThread(row interface{ Scan(...any) error }) (Thread, error) {
 	var t Thread
-	var rev, createdBy, resolvedBy sql.NullString
+	var rev, createdBy, resolvedBy, fix sql.NullString
 	var anchor string
 	var created, active int64
 	var resolved sql.NullInt64
-	err := row.Scan(&t.ID, &rev, &t.Path, &t.Kind, &t.ReviewRound, &anchor, &t.State, &createdBy, &created, &active, &resolvedBy, &resolved)
+	err := row.Scan(&t.ID, &t.RepoID, &rev, &t.Path, &t.Kind, &t.ReviewRound, &anchor, &t.State, &createdBy, &created, &active, &resolvedBy, &resolved, &t.Outdated, &fix)
 	if err != nil {
 		return t, store.NotFound(err)
+	}
+	if fix.Valid && fix.String != "" {
+		t.FixRevision = &RevisionRef{ID: fix.String}
 	}
 	t.RevisionID, t.CreatedBy, t.ResolvedBy = rev.String, createdBy.String, resolvedBy.String
 	t.Anchor = json.RawMessage(anchor)
@@ -121,7 +136,7 @@ func scanThread(row interface{ Scan(...any) error }) (Thread, error) {
 	return t, nil
 }
 
-const threadCols = `id, revision_id, path, kind, review_round, anchor, state, created_by, created_at, last_activity_at, resolved_by, resolved_at`
+const threadCols = `id, repo_id, revision_id, path, kind, review_round, anchor, state, created_by, created_at, last_activity_at, resolved_by, resolved_at, outdated, fix_revision_id`
 
 // Get loads a thread with its comments.
 func Get(ctx context.Context, q store.Querier, id string) (Thread, error) {
@@ -149,6 +164,7 @@ type Filter struct {
 	RepoID     string
 	Path       string
 	Kind       string
+	State      string // open | resolved (default: both)
 	Sort       string // hot (default) | updated
 }
 
@@ -166,6 +182,9 @@ func List(ctx context.Context, q store.Querier, f Filter) ([]Thread, error) {
 	}
 	if f.Kind != "" {
 		where, args = append(where, "kind = ?"), append(args, f.Kind)
+	}
+	if f.State != "" {
+		where, args = append(where, "state = ?"), append(args, f.State)
 	}
 	rows, err := store.Query(ctx, q, `SELECT `+threadCols+` FROM threads WHERE `+strings.Join(where, " AND ")+` ORDER BY last_activity_at DESC LIMIT 500`, args...)
 	if err != nil {
@@ -204,6 +223,11 @@ func List(ctx context.Context, q store.Querier, f Filter) ([]Thread, error) {
 func fill(ctx context.Context, q store.Querier, list []Thread) error {
 	if len(list) == 0 {
 		return nil
+	}
+	for i := range list {
+		if f := list[i].FixRevision; f != nil {
+			_ = store.QueryRow(ctx, q, `SELECT number, state FROM revisions WHERE id = ?`, f.ID).Scan(&f.Number, &f.State)
+		}
 	}
 	idx := map[string]int{}
 	ph := make([]string, len(list))
@@ -394,3 +418,10 @@ type bodyError struct{}
 func (bodyError) Error() string { return "threads: empty or too long comment" }
 
 var errBody error = bodyError{}
+
+func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }
+
+func jsonString(v any) string {
+	b, _ := json.Marshal(v)
+	return string(b)
+}

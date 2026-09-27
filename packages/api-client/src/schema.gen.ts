@@ -1694,6 +1694,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{repo}/discussions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** Discussions on published pages (one page with path) */
+        get: operations["listDiscussions"];
+        put?: never;
+        /** Comment on a published page (anyone who can read the repository), anchored by quote */
+        post: operations["createDiscussion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/threads/{thread}/fix-this": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a revision fixing a discussion (titled Fix: <page title>) and link them */
+        post: operations["fixDiscussion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/threads/{thread}": {
         parameters: {
             query?: never;
@@ -1822,6 +1861,14 @@ export interface components {
             resolved_at?: string;
             comments: components["schemas"]["Comment"][];
             hot: number;
+            repo_id: string;
+            /** @description A discussion whose quote Published no longer has */
+            outdated?: boolean;
+            fix_revision?: {
+                id: string;
+                number: number;
+                state: string;
+            };
         };
         DiffLine: {
             /** @enum {string} */
@@ -5280,6 +5327,87 @@ export interface operations {
             };
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    listDiscussions: {
+        parameters: {
+            query?: {
+                path?: string;
+                state?: "open" | "resolved";
+                sort?: "hot" | "updated";
+            };
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Discussions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Thread"][];
+                    };
+                };
+            };
+        };
+    };
+    createDiscussion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreate"];
+            };
+        };
+        responses: {
+            /** @description Thread */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+            422: components["responses"]["Problem"];
+        };
+    };
+    fixDiscussion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new revision */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        revision: components["schemas"]["Revision"];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     getThread: {

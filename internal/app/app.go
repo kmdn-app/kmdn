@@ -138,7 +138,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Publish = &publish.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Docs: collabDocs{a}, Engine: eng, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, DataDir: cfg.DataDir, Log: log}
 	a.Publish.Register()
 	a.Publish.Routes(r)
-	a.Threads = &threads.Service{DB: db, Publish: a.Realtime.Publish,
+	a.Threads = &threads.Service{DB: db, Publish: a.Realtime.Publish, Repos: a.Repos, Revisions: a.Revisions, Text: eng.PlainText,
 		PlaceAnchor: func(ctx context.Context, rev revisions.Revision, c revisions.Caller, p, threadID string, pos []byte) error {
 			repo, err := repos.Get(ctx, db, rev.RepoID)
 			if err != nil {
@@ -148,6 +148,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		},
 	}
 	a.Threads.Routes(r)
+	a.Repos.OnHeadChanged = append(a.Repos.OnHeadChanged, a.Threads.Reanchor)
 	a.Updates = &updates.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Engine: eng, Docs: collabDocs{a}, Jobs: a.Jobs, Publish: a.Realtime.Publish, Log: log}
 	a.Updates.Register()
 	a.Updates.Routes(r)
@@ -158,6 +159,12 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}))
 	a.Revisions.Changed = func(ctx context.Context, rev revisions.Revision, kind string) {
 		a.Collab.RevisionChanged(ctx, rev)
+		if kind == "published" {
+			// Discussions this revision fixed are resolved with it.
+			if _, err := a.Threads.RevisionPublished(ctx, rev); err != nil {
+				log.Error("resolve fixed discussions", "err", err, "revision", rev.ID)
+			}
+		}
 		ev := map[string]any{"type": "revision", "kind": kind, "revision": rev.ID, "number": rev.Number, "state": rev.State}
 		a.Realtime.Publish("revision:"+rev.ID, ev)
 		a.Realtime.Publish("repo:"+rev.RepoID, map[string]any{"type": "revision", "kind": kind, "revision": rev.ID, "number": rev.Number, "state": rev.State})

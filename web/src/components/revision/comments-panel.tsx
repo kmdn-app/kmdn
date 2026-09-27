@@ -2,17 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { CheckCheck, Eye, Loader2, MoreHorizontal, RotateCcw, ThumbsUp } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { CheckCheck, Eye, Loader2, MoreHorizontal, RotateCcw, ThumbsUp, Wrench } from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage, unwrap, useMe } from "@/lib/api";
-import { useThreads, type Thread } from "@/lib/threads";
+import { useDiscussions, useThreads, type Thread } from "@/lib/threads";
+import { useRepo } from "@/lib/use-repo";
 import { cn } from "@/lib/utils";
 
-export type PendingComment = { quote: string; position: { start: unknown; end: unknown } | null };
+export type PendingComment = { quote: string; position: { start: unknown; end: unknown } | null; prefix?: string; suffix?: string };
 
 const REACTIONS: { kind: "+1" | "check" | "eyes"; icon: typeof ThumbsUp }[] = [
   { kind: "+1", icon: ThumbsUp },
@@ -25,13 +27,14 @@ function Body({ text }: { text: string }) {
   return <p className="text-[13.5px] break-words whitespace-pre-wrap">{text}</p>;
 }
 
-function ThreadCard({ t, active, onFocus }: { t: Thread; active: boolean; onFocus: () => void }) {
+function ThreadCard({ t, active, onFocus, onFix }: { t: Thread; active: boolean; onFocus: () => void; onFix?: () => void }) {
   const { t: tr } = useTranslation();
   const { data: me } = useMe();
+  const repo = useRepo();
   const qc = useQueryClient();
   const [reply, setReply] = useState("");
   const ref = useRef<HTMLDivElement>(null);
-  const refresh = () => void qc.invalidateQueries({ queryKey: ["threads", t.revision_id] });
+  const refresh = () => void qc.invalidateQueries({ queryKey: t.kind === "discussion" ? ["discussions", t.repo_id] : ["threads", t.revision_id] });
   const onError = (e: unknown) => toast.error(errorMessage(e, tr("errors.generic")));
   const send = useMutation({
     mutationFn: () => unwrap(api.POST("/threads/{thread}/comments", { params: { path: { thread: t.id } }, body: { body: reply } })),
@@ -70,7 +73,8 @@ function ThreadCard({ t, active, onFocus }: { t: Thread; active: boolean; onFocu
       onClick={onFocus}
       className={cn("rounded-lg border bg-card p-3", active && "ring-2 ring-ring/40", t.state === "resolved" && "opacity-70")}
     >
-      {quote && <blockquote className="mb-2 line-clamp-2 border-l-2 border-warning pl-2 text-[12.5px] text-muted-foreground">{quote}</blockquote>}
+      {quote && <blockquote className={cn("mb-2 line-clamp-2 border-l-2 border-warning pl-2 text-[12.5px] text-muted-foreground", t.outdated && "border-muted-foreground/40 line-through decoration-muted-foreground/40")}>{quote}</blockquote>}
+      {t.outdated && <p className="mb-2 text-[11.5px] font-medium tracking-wide text-muted-foreground uppercase">{tr("comments.outdated")}</p>}
       <div className="grid gap-3">
         {t.comments.map((c) => (
           <div key={c.id} className="grid gap-1">
@@ -124,10 +128,31 @@ function ThreadCard({ t, active, onFocus }: { t: Thread; active: boolean; onFocu
           </div>
         ))}
       </div>
-      <div className="mt-2 flex items-center justify-between text-[11.5px] text-muted-foreground">
-        <span>
+      {t.fix_revision && (
+        <p className="mt-2 text-[12px]">
+          <Link to="/$owner/$repo/revisions/$number" params={{ owner: repo.owner, repo: repo.name, number: String(t.fix_revision.number) }} className="font-medium text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+            {t.fix_revision.state === "published" ? tr("comments.fixedIn", { number: t.fix_revision.number }) : tr("comments.fixingIn", { number: t.fix_revision.number })}
+          </Link>
+        </p>
+      )}
+      <div className="mt-2 flex items-center justify-between gap-1 text-[11.5px] text-muted-foreground">
+        <span className="mr-auto">
           {tr("comments.activity", { count: replies })} · <Time iso={t.last_activity_at} />
         </span>
+        {onFix && t.state === "open" && (!t.fix_revision || t.fix_revision.state === "closed") && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[12px]"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFix();
+            }}
+          >
+            <Wrench />
+            {tr("comments.fixThis")}
+          </Button>
+        )}
         <Button variant="ghost" size="sm" className="h-6 px-2 text-[12px]" onClick={() => setState.mutate(t.state === "open" ? "resolved" : "open")}>
           {t.state === "open" ? <CheckCheck /> : <RotateCcw />}
           {t.state === "open" ? tr("comments.resolve") : tr("comments.reopen")}
@@ -158,6 +183,8 @@ function ThreadCard({ t, active, onFocus }: { t: Thread; active: boolean; onFocu
  */
 export function CommentsPanel({
   revisionID,
+  repoID,
+  onFix,
   path,
   pending,
   onPendingDone,
@@ -168,7 +195,11 @@ export function CommentsPanel({
 }: {
   /** Shown above the threads (suggestion cards). */
   before?: React.ReactNode;
-  revisionID: string;
+  /** A revision's threads, or (with repoID) discussions on a published page. */
+  revisionID?: string;
+  repoID?: string;
+  /** Discussions: start a revision fixing one. */
+  onFix?: (t: Thread) => void;
   path: string;
   pending: PendingComment | null;
   onPendingDone: () => void;
@@ -181,20 +212,25 @@ export function CommentsPanel({
   const [sort, setSort] = useState<"hot" | "updated">("hot");
   const [showResolved, setShowResolved] = useState(false);
   const [body, setBody] = useState("");
-  const threads = useThreads(revisionID, path, sort);
+  const revThreads = useThreads(repoID ? undefined : revisionID, path, sort);
+  const discussions = useDiscussions(repoID, path, sort);
+  const threads = repoID ? discussions : revThreads;
   const create = useMutation({
-    mutationFn: () =>
-      unwrap(
+    mutationFn: () => {
+      const anchor = { quote: pending?.quote ?? "", ...(pending?.prefix ? { prefix: pending.prefix } : {}), ...(pending?.suffix ? { suffix: pending.suffix } : {}) };
+      if (repoID) return unwrap(api.POST("/repos/{repo}/discussions", { params: { path: { repo: repoID } }, body: { path, body, anchor } }));
+      return unwrap(
         api.POST("/revisions/{revision}/threads", {
-          params: { path: { revision: revisionID } },
-          body: { path, body, anchor: { quote: pending?.quote ?? "" }, ...(pending?.position ? { position: pending.position as Record<string, unknown> } : {}) },
+          params: { path: { revision: revisionID! } },
+          body: { path, body, anchor, ...(pending?.position ? { position: pending.position as Record<string, unknown> } : {}) },
         }),
-      ),
+      );
+    },
     onSuccess: (th) => {
       setBody("");
       onPendingDone();
       onActive(th.id);
-      void qc.invalidateQueries({ queryKey: ["threads", revisionID] });
+      void qc.invalidateQueries({ queryKey: repoID ? ["discussions", repoID] : ["threads", revisionID] });
     },
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
   });
@@ -243,7 +279,7 @@ export function CommentsPanel({
       {before}
       {!pending && list.length === 0 && !before && <p className="px-1 text-[13px] text-muted-foreground">{canComment ? t("comments.emptyHint") : t("comments.empty")}</p>}
       {open.map((th) => (
-        <ThreadCard key={th.id} t={th} active={active === th.id} onFocus={() => onActive(th.id)} />
+        <ThreadCard key={th.id} t={th} active={active === th.id} onFocus={() => onActive(th.id)} onFix={onFix && (() => onFix(th))} />
       ))}
       {resolved.length > 0 && (
         <button type="button" className="justify-self-start text-[12px] text-muted-foreground hover:text-foreground" onClick={() => setShowResolved((v) => !v)}>
