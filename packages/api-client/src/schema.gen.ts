@@ -1711,6 +1711,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{repo}/assistant/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        /** The caller's private Q&A conversations in this repository */
+        get: operations["listAssistantThreads"];
+        put?: never;
+        /** Ask a question in a new private conversation (the answer streams on the assistant:<thread> scope) */
+        post: operations["createAssistantThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/threads/{thread}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAssistantThread"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteAssistantThread"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/threads/{thread}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["postAssistantMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/threads/{thread}/proposals/{call}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+                call: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start the revision the assistant proposed and move the conversation into it */
+        post: operations["acceptAssistantProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/ai": {
         parameters: {
             query?: never;
@@ -2166,6 +2242,49 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AssistantThread: {
+            id: string;
+            repo_id: string;
+            revision_id?: string;
+            owner_id?: string;
+            title: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AssistantContext: {
+            path?: string;
+            selection?: string;
+        };
+        AssistantPost: {
+            text: string;
+            context?: components["schemas"]["AssistantContext"];
+        };
+        AssistantMessage: {
+            id: string;
+            /** @enum {string} */
+            role: "user" | "assistant";
+            author_id?: string;
+            author_name?: string;
+            parts: {
+                /** @enum {string} */
+                type: "text" | "tool" | "proposal";
+                text?: string;
+                tool?: string;
+                label?: string;
+                call_id?: string;
+                proposal?: {
+                    title: string;
+                    description: string;
+                    files: string[];
+                };
+            }[];
+            context: components["schemas"]["AssistantContext"];
+            run_id?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
         AISettings: {
             provider: string;
             base_url?: string;
@@ -5871,6 +5990,169 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    listAssistantThreads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Threads, most recent first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AssistantThread"][];
+                    };
+                };
+            };
+        };
+    };
+    createAssistantThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repo: components["parameters"]["RepoID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantPost"];
+            };
+        };
+        responses: {
+            /** @description The thread and the question */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        thread: components["schemas"]["AssistantThread"];
+                        message: components["schemas"]["AssistantMessage"];
+                    };
+                };
+            };
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssistantThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The thread, its messages, and whether a run is in progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        thread: components["schemas"]["AssistantThread"];
+                        messages: components["schemas"]["AssistantMessage"][];
+                        running: boolean;
+                    };
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteAssistantThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    postAssistantMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantPost"];
+            };
+        };
+        responses: {
+            /** @description Posted; a run starts (or is queued behind the current one) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message: components["schemas"]["AssistantMessage"];
+                        queued: boolean;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    acceptAssistantProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread: string;
+                call: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The revision and its shared thread */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        revision: components["schemas"]["Revision"];
+                        thread: components["schemas"]["AssistantThread"];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getAISettings: {

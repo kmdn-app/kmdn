@@ -19,7 +19,7 @@ When a Q&A turn asks for a change, the model calls the `propose_revision` tool i
 
 - Every message shows the human who wrote it. Anyone who can edit the revision can prompt the assistant; Viewers of the revision can read the thread but not prompt.
 - One run at a time per revision thread. A second prompt while a run is in progress is queued (shown as "Queued").
-- Assistant replies stream over the WebSocket `agent-stream` channel to all subscribers.
+- Assistant replies stream to all subscribers as events on the thread's `assistant:<thread>` scope over the multiplexed WebSocket (text deltas, tool activity, run state).
 - Suggestions made in a run are grouped: "Added 4 suggestions in 2 files" with file chips; each suggestion links back to the message.
 
 ## Agent loop
@@ -41,7 +41,7 @@ Read tools (all contexts):
 | `read_file(path, from_heading?, max_chars?)` | Markdown of a file (checkpoint if in revision context) with heading outline |
 | `get_history(path, limit?)` | Recent published versions of a file with authors and messages |
 | `get_links(path)` | Inbound/outbound links |
-| `find_related(path, heading?)` | Similar passages elsewhere in the repo (passage index), with similarity scores |
+| `find_related(path, heading?)` | Similar passages elsewhere in the repo (passage index), with similarity scores. Arrives with the passage index (#60) |
 | `read_comments(path?)` | Comment threads in the revision or discussions on a published doc |
 
 Q&A-only tool: `propose_revision(title, description, files[])`.
