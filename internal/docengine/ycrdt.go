@@ -259,3 +259,75 @@ func (e *Engine) YSetMapEntry(ctx context.Context, state []byte, clientID uint32
 		return []goja.Value{bin(v, state), v.rt.ToValue(clientID), v.rt.ToValue(name), v.rt.ToValue(key), v.rt.ToValue(valueJSON)}
 	})
 }
+
+// Suggestion is a pending tracked change in a page
+// (docs/specs/05-collaboration.md#suggestions-tracked-changes).
+type Suggestion struct {
+	ID       string   `json:"id"`
+	Author   string   `json:"author"`
+	At       int64    `json:"at,omitempty"`
+	Inserted string   `json:"inserted"`
+	Deleted  string   `json:"deleted"`
+	Kinds    []string `json:"kinds"`
+	Change   *struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"change,omitempty"`
+}
+
+// YSuggestions lists a page's pending suggestions in document order.
+func (e *Engine) YSuggestions(ctx context.Context, state []byte) ([]Suggestion, error) {
+	s, err := e.jsonCall(ctx, "ySuggestions", state)
+	if err != nil {
+		return nil, err
+	}
+	var out []Suggestion
+	if err := json.Unmarshal([]byte(s), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// YResolveSuggestions returns the update accepting (or rejecting) the
+// suggestions with these ids, written by clientID.
+func (e *Engine) YResolveSuggestions(ctx context.Context, state []byte, clientID uint32, ids []string, accept bool) ([]byte, error) {
+	idsJSON, _ := json.Marshal(ids)
+	action := "reject"
+	if accept {
+		action = "accept"
+	}
+	return e.binCall(ctx, "yResolveSuggestions", len(state), func(v *vm) []goja.Value {
+		return []goja.Value{bin(v, state), v.rt.ToValue(clientID), v.rt.ToValue(string(idsJSON)), v.rt.ToValue(action)}
+	})
+}
+
+// YReadDoc returns the document as JSON, suggestions included.
+func (e *Engine) YReadDoc(ctx context.Context, state []byte) (json.RawMessage, error) {
+	s, err := e.jsonCall(ctx, "yReadDoc", state)
+	return json.RawMessage(s), err
+}
+
+// YApplyDoc returns the update turning state into the JSON document, written by clientID.
+func (e *Engine) YApplyDoc(ctx context.Context, state []byte, doc json.RawMessage, clientID uint32) ([]byte, error) {
+	return e.binCall(ctx, "yApplyDoc", len(state)+len(doc), func(v *vm) []goja.Value {
+		return []goja.Value{bin(v, state), v.rt.ToValue(string(doc)), v.rt.ToValue(clientID)}
+	})
+}
+
+// jsonCall runs a function taking a state and returning a string.
+func (e *Engine) jsonCall(ctx context.Context, name string, state []byte) (string, error) {
+	if len(state) > MaxUpdateBytes {
+		return "", ErrTooLarge
+	}
+	return run(ctx, e, func(v *vm) (string, error) {
+		f, err := v.fn(name)
+		if err != nil {
+			return "", err
+		}
+		out, err := f(goja.Undefined(), bin(v, state))
+		if err != nil {
+			return "", err
+		}
+		return out.String(), nil
+	})
+}

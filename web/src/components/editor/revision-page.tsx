@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
-import { Check, ChevronRight, CloudOff, FilePen, Loader2, Lock, MessageSquarePlus } from "lucide-react";
+import { Check, ChevronRight, CloudOff, FilePen, Loader2, Lock, MessageSquarePlus, PenLine } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { DocView } from "@/components/doc/doc-view";
@@ -15,7 +15,7 @@ import { ApiError, errorMessage, useMe } from "@/lib/api";
 import { RoomProvider } from "@/lib/realtime";
 import { fileHref, type RepoView } from "@/lib/repos";
 import { revisionRawUrl, uploadAsset, useRevision, useRevisionContent, useRevisionDiff, useRevisionEvents, useRevisionFiles, type RevisionView } from "@/lib/revisions";
-import { parse } from "@kmdn/doc-engine";
+import { CONTENT, listSuggestions, parse, readDoc } from "@kmdn/doc-engine";
 import { ChangesView, SourceDiff } from "@/components/revision/diff-views";
 import { cn } from "@/lib/utils";
 import { EditorToolbar, PageEditor, useRoomStatus, type ImageUploader } from "./page-editor";
@@ -23,6 +23,7 @@ import { SourceEditor } from "./source-editor";
 import { selectionAnchor } from "./comment-anchors";
 import { CommentsPanel, type PendingComment } from "@/components/revision/comments-panel";
 import { useThreads } from "@/lib/threads";
+import { SuggestionList } from "@/components/revision/suggestions-panel";
 
 /** Opens the page's room for as long as the view shows it. */
 function useRoom(revisionID: string | undefined, path: string) {
@@ -49,6 +50,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
   const [editor, setEditor] = useState<Editor | null>(null);
   const [mode, setMode] = useEditorMode();
   const [view, setView] = useState<ReviewView>("result");
+  const [suggesting, setSuggesting] = useSuggesting();
   const [pending, setPending] = useState<PendingComment | null>(null);
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const threadsQ = useThreads(rev.data?.id, path, "hot");
@@ -102,6 +104,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
                   active={activeThread}
                   onActive={setActiveThread}
                   canComment={rev.data.state !== "published" && rev.data.state !== "closed"}
+                  before={mode === "visual" ? <SuggestionList editor={editor} rev={rev.data} path={path} /> : undefined}
                 />
               ),
             }
@@ -115,7 +118,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
             title={
               <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
                 {crumbs.slice(0, -1).map((c, i) => (
-                  <span key={i} className="flex min-w-0 shrink-[2] items-center gap-1.5 max-md:hidden">
+                  <span key={i} className="flex min-w-0 shrink-[2] items-center gap-1.5 @max-3xl:hidden">
                     <span className="truncate">{c}</span>
                     <ChevronRight className="size-3 shrink-0 opacity-60" />
                   </span>
@@ -138,7 +141,20 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
                     title={t("comments.commentOnSelection")}
                   >
                     <MessageSquarePlus />
-                    <span className="max-lg:hidden">{t("comments.comment")}</span>
+                    <span className="@max-5xl:hidden">{t("comments.comment")}</span>
+                  </Button>
+                )}
+                {editor && status?.mode === "rw" && view === "result" && mode === "visual" && (
+                  <Button
+                    size="sm"
+                    variant={suggesting ? "secondary" : "ghost"}
+                    aria-pressed={suggesting}
+                    onClick={() => setSuggesting(!suggesting)}
+                    title={t("suggestions.toggleHint")}
+                    className={cn(suggesting && "text-success")}
+                  >
+                    <PenLine />
+                    <span className="@max-5xl:hidden">{t("suggestions.toggle")}</span>
                   </Button>
                 )}
                 {inRevision && <ViewToggle view={view} onChange={setView} />}
@@ -160,7 +176,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-auto">
-            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} view={inRevision ? view : "result"} comments={comments} /> : <Loading />}
+            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} view={inRevision ? view : "result"} comments={comments} suggesting={suggesting && status.mode === "rw"} /> : <Loading />}
           </div>
         </>
       )}
@@ -175,7 +191,7 @@ type ReviewView = "result" | "changes" | "source";
 function ViewToggle({ view, onChange }: { view: ReviewView; onChange: (v: ReviewView) => void }) {
   const { t } = useTranslation();
   return (
-    <div role="radiogroup" aria-label={t("diff.view")} className="inline-flex shrink-0 gap-0.5 rounded-md bg-muted p-0.5 max-sm:hidden">
+    <div role="radiogroup" aria-label={t("diff.view")} className="inline-flex shrink-0 gap-0.5 rounded-md bg-muted p-0.5 @max-xl:hidden">
       {(["result", "changes", "source"] as const).map((v) => (
         <button
           key={v}
@@ -192,6 +208,49 @@ function ViewToggle({ view, onChange }: { view: ReviewView; onChange: (v: Review
   );
 }
 const MODE_KEY = "kmdn-editor-mode";
+const SUGGESTING_KEY = "kmdn-suggesting";
+
+/** The Suggesting toggle, remembered per browser. */
+function useSuggesting(): [boolean, (v: boolean) => void] {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(SUGGESTING_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const set = (v: boolean) => {
+    setOn(v);
+    try {
+      localStorage.setItem(SUGGESTING_KEY, v ? "1" : "0");
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  return [on, set];
+}
+
+/** How many suggestions the room's document holds (source mode, where there's no editor to ask). */
+function usePendingSuggestions(provider: RoomProvider | null): number {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!provider) return;
+    const frag = provider.doc.getXmlFragment(CONTENT);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const count = () => setN(listSuggestions(readDoc(frag)).length);
+    const later = () => {
+      clearTimeout(timer);
+      timer = setTimeout(count, 250);
+    };
+    count();
+    frag.observeDeep(later);
+    return () => {
+      clearTimeout(timer);
+      frag.unobserveDeep(later);
+    };
+  }, [provider]);
+  return provider ? n : 0;
+}
 
 /** Visual or source editing, remembered per browser. */
 function useEditorMode(): [EditorMode, (m: EditorMode) => void] {
@@ -216,7 +275,7 @@ function useEditorMode(): [EditorMode, (m: EditorMode) => void] {
 function ModeToggle({ mode, onChange }: { mode: EditorMode; onChange: (m: EditorMode) => void }) {
   const { t } = useTranslation();
   return (
-    <div role="radiogroup" aria-label={t("editor.mode")} className="inline-flex shrink-0 gap-0.5 rounded-md bg-muted p-0.5 max-sm:hidden">
+    <div role="radiogroup" aria-label={t("editor.mode")} className="inline-flex shrink-0 gap-0.5 rounded-md bg-muted p-0.5 @max-xl:hidden">
       {(["visual", "source"] as const).map((m) => (
         <button
           key={m}
@@ -253,6 +312,7 @@ function Body({
   mode,
   view,
   comments,
+  suggesting,
 }: {
   repo: RepoView;
   rev: RevisionView;
@@ -263,9 +323,12 @@ function Body({
   mode: EditorMode;
   view: ReviewView;
   comments: { active: string | null; hidden: Set<string>; onClick: (id: string) => void };
+  suggesting: boolean;
 }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
+  // Source mode can't record suggestions: it's read-only while some are pending.
+  const pendingSuggestions = usePendingSuggestions(mode === "source" ? provider : null);
   const status = useRoomStatus(provider);
   const noDoc = status?.error?.code === "no_document";
   // Read-only callers get no room until someone edits: show the page as it is in the revision.
@@ -308,12 +371,20 @@ function Body({
         me &&
         (mode === "source" ? (
           status?.synced ? (
-            <SourceEditor provider={provider} revisionID={rev.id} path={path} editable={status.mode === "rw"} />
+            <>
+              {pendingSuggestions > 0 && (
+                <div className="mx-auto mt-5 flex max-w-[720px] items-start gap-3 rounded-xl border bg-muted/40 px-4 py-3 text-[13.5px] max-md:mx-4">
+                  <Lock className="mt-0.5 size-4 text-muted-foreground" />
+                  <div>{t("suggestions.sourceLocked", { count: pendingSuggestions })}</div>
+                </div>
+              )}
+              <SourceEditor provider={provider} revisionID={rev.id} path={path} editable={status.mode === "rw" && pendingSuggestions === 0} />
+            </>
           ) : (
             <Loading />
           )
         ) : (
-          <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} base={baseDoc} comments={comments} />
+          <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} base={baseDoc} comments={comments} suggesting={suggesting} />
         ))
       )}
     </>
@@ -353,7 +424,7 @@ const STATE_DOT: Record<string, string> = {
 function RevisionPill({ rev }: { rev: RevisionView }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex h-7 max-w-[240px] shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium whitespace-nowrap max-sm:hidden" title={rev.title}>
+    <span className="inline-flex h-7 max-w-[240px] shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium whitespace-nowrap @max-4xl:hidden" title={rev.title}>
       <FilePen className="size-3.5 text-muted-foreground" />
       <span className={cn("size-1.5 shrink-0 rounded-full", STATE_DOT[rev.state])} />
       <span className="truncate">
@@ -380,7 +451,7 @@ function SaveState({ status }: { status: ReturnType<typeof useRoomStatus> }) {
     label = t("revision.viewOnly");
   }
   return (
-    <span role="status" className="inline-flex shrink-0 items-center gap-1 text-[12.5px] text-muted-foreground max-md:hidden">
+    <span role="status" className="inline-flex shrink-0 items-center gap-1 text-[12.5px] text-muted-foreground @max-3xl:hidden">
       {icon}
       {label}
     </span>

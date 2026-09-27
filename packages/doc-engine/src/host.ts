@@ -12,6 +12,7 @@ import { parse } from "./parse";
 import { serialize } from "./serialize";
 import { CONTENT, applyDoc, readDoc, writeDoc } from "./ydoc";
 import { nodeHash } from "./hash";
+import { listSuggestions, resolveSuggestions, settledHash } from "./suggestions";
 import { extractLinks, rewriteLinks } from "./links";
 import type { DocNode, SourceMap } from "./schema";
 
@@ -70,7 +71,44 @@ const api = {
     d.on("update", (u: Uint8Array) => {
       out = u;
     });
-    d.transact(() => applyDoc(d.getXmlFragment(CONTENT), parse(markdown).doc, nodeHash));
+    d.transact(() => applyDoc(d.getXmlFragment(CONTENT), parse(markdown).doc, settledHash));
+    return buf(out);
+  },
+  /** state → the document as JSON (suggestions included). */
+  yReadDoc: (update: ArrayBuffer): string => JSON.stringify(readDoc(load(update).getXmlFragment(CONTENT))),
+  /**
+   * The update that turns state into the JSON document, written by clientID
+   * (server-side edits that carry marks, like the assistant's suggestions).
+   */
+  yApplyDoc: (update: ArrayBuffer, docJSON: string, clientID: number): ArrayBuffer => {
+    const d = load(update);
+    d.clientID = clientID;
+    let out: Uint8Array = new Uint8Array([0, 0]);
+    d.on("update", (u: Uint8Array) => {
+      out = u;
+    });
+    d.transact(() => applyDoc(d.getXmlFragment(CONTENT), JSON.parse(docJSON) as DocNode, nodeHash));
+    return buf(out);
+  },
+  /** Pending suggestions in the page, as JSON [{id, author, inserted, deleted, kinds}]. */
+  ySuggestions: (update: ArrayBuffer): string => JSON.stringify(listSuggestions(readDoc(load(update).getXmlFragment(CONTENT)))),
+  /**
+   * The update accepting or rejecting the suggestions with these ids,
+   * written by clientID. Accepted text keeps its authorship (marks change in
+   * place), so it's credited to the suggestion's author.
+   */
+  yResolveSuggestions: (update: ArrayBuffer, clientID: number, idsJSON: string, action: string): ArrayBuffer => {
+    const d = load(update);
+    d.clientID = clientID;
+    const ids = new Set(JSON.parse(idsJSON) as string[]);
+    const decision = action === "accept" ? "accept" : "reject";
+    let out: Uint8Array = new Uint8Array([0, 0]);
+    d.on("update", (u: Uint8Array) => {
+      out = u;
+    });
+    const frag = d.getXmlFragment(CONTENT);
+    const next = resolveSuggestions(readDoc(frag), (s) => (ids.has(s.id) ? decision : null));
+    d.transact(() => applyDoc(frag, next, nodeHash));
     return buf(out);
   },
   /** markdown → JSON {links, headings} */

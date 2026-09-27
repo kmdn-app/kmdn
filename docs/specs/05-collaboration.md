@@ -58,18 +58,19 @@ Awareness state per client: `{user: {id, name, color, avatar}, cursor: {anchor, 
 
 ## Suggestions (tracked changes)
 
-Suggesting mode is a per-user toggle. When on, the editor wraps transactions:
+Suggesting mode is a per-user toggle. When on, the editor rewrites transactions before they apply:
 
-- Inserted text gets an `insertion` mark `{suggestionId, authorId, createdAt}`.
-- Deleted text is not removed; it gets a `deletion` mark and is rendered struck through.
-- Replacements produce an adjacent deletion + insertion with the same `suggestionId`.
-- Node-level changes (e.g. converting a paragraph to a heading, table structure) are captured as a `nodeSuggestion` attribute holding the previous node attrs/type.
+- Inserted text gets an `insertion` mark `{id, author, at}`; nodes that start inside an insertion (a split paragraph, a pasted block) get a `suggestion: {kind: "insert"}` attribute.
+- Deleted text is not removed; it gets a `deletion` mark and is rendered struck through. A deletion across a block boundary marks the next block `join`; blocks deleted whole are marked `delete`. Deleting your own pending insertion removes it for real.
+- Replacements produce a deletion and an insertion with the same id; typing next to your own suggestion extends it.
+- Node-level changes (paragraph → heading, a task checked, a math or front matter edit) are captured as `suggestion: {kind: "change", from: {type, attrs}}`. A pending join or deletion can carry a `from` too.
+- v1 refuses what it can't record yet: formatting-mark changes and structural steps (wrapping in a list or quote, table structure). The editor says so and suggests turning Suggesting off.
 
-Suggestion metadata (author, status, linked thread) is in the DB `suggestions` table keyed by `suggestionId`; the marks in the CRDT carry just the id.
+The marks and attributes are the whole record: author and time live in the CRDT with the suggestion, and the server lists pending suggestions from the document (`GET /revisions/{id}/suggestions`). There is no suggestions table in v1; accepting or rejecting records a `suggestions_accepted` / `suggestions_rejected` revision event. Threads on suggestions come later.
 
-**Accept** removes the marks (insertion kept, deletion text removed). **Reject** does the opposite. Accept/reject is allowed for the suggestion author, revision editors and assigned reviewers (and maintainers while Editing). While In review, editors can still accept or reject suggestions reviewers made. Bulk "Accept all from <author>" exists.
+**Accept** removes the marks (insertion kept, deletion text removed, joins joined). **Reject** does the opposite. Both run on the server (`POST /revisions/{id}/suggestions/resolve`, by id, by author, or all), so editors can resolve while they're read-only In review. Accepted text keeps its Yjs items (marks change in place), so it's still attributed to the suggestion's author. Accept/reject is allowed for revision editors and assigned reviewers (editors keep it while In review) and for a suggestion's own author. Bulk "Accept all from <author>" exists.
 
-The materialized markdown used for diff and publish treats pending suggestions as **not applied**: insertions excluded, deletions kept. Publishing is blocked while suggestions are pending ("3 suggestions pending · Review them").
+The materialized markdown used for diff and publish treats pending suggestions as **not applied**: the serializer rejects them all first (insertions excluded, deletions kept, splits joined back). Publishing is blocked while suggestions are pending. Source mode is read-only on a page with pending suggestions. Edits made outside the editor (link updates, the assistant) diff against the settled page, so blocks they don't touch keep their suggestions.
 
 ## Checkpoints (history inside a revision)
 

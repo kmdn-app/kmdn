@@ -81,7 +81,11 @@ function readChildren(parent: Y.XmlFragment | Y.XmlElement): AnyNode[] {
           marks.push((v && typeof v === "object" && Object.keys(v).length ? { type, attrs: v } : { type }) as Mark);
         }
         if (marks.length) t.marks = sortMarks(marks);
-        out.push(t);
+        // Yjs splits runs at formatting boundaries even when the marks end up
+        // the same: merge them, as ProseMirror does, so hashes stay stable.
+        const prev = out[out.length - 1];
+        if (prev && isText(prev) && canonicalMarks(prev.marks) === canonicalMarks(t.marks)) out[out.length - 1] = { ...prev, text: prev.text + t.text };
+        else out.push(t);
       }
     } else if (c instanceof Y.XmlElement) {
       // Always an attrs object: absent attributes were null (see canonical).
@@ -165,10 +169,29 @@ function patchText(t: Y.XmlText, from: Run[], to: Run[]): void {
   // Y.XmlText lengths count UTF-16 code units, runs count code points.
   const len = (rs: Run[]) => rs.reduce((s, r) => s + r.ch.length, 0);
   const at = len(from.slice(0, pre));
-  const del = len(from.slice(pre, from.length - suf));
+  const oldMid = from.slice(pre, from.length - suf);
+  const mid = to.slice(pre, to.length - suf);
+  // Same text, other marks (a suggestion accepted or rejected, formatting):
+  // reformat in place so the text keeps its authorship.
+  if (oldMid.length === mid.length && oldMid.every((r, i) => r.ch === mid[i]!.ch)) {
+    let pos = at;
+    for (let i = 0; i < mid.length; ) {
+      let j = i;
+      let n = 0;
+      while (j < mid.length && mid[j]!.key === mid[i]!.key && oldMid[j]!.key === oldMid[i]!.key) n += mid[j++]!.ch.length;
+      if (mid[i]!.key !== oldMid[i]!.key) {
+        const attrs: Attrs = { ...(mid[i]!.attrs ?? {}) };
+        for (const k of Object.keys(oldMid[i]!.attrs ?? {})) if (!(k in attrs)) attrs[k] = null;
+        t.format(pos, n, attrs);
+      }
+      pos += n;
+      i = j;
+    }
+    return;
+  }
+  const del = len(oldMid);
   if (del) t.delete(at, del);
   let pos = at;
-  const mid = to.slice(pre, to.length - suf);
   for (let i = 0; i < mid.length; ) {
     let j = i;
     let s = "";
@@ -180,10 +203,22 @@ function patchText(t: Y.XmlText, from: Run[], to: Run[]): void {
   }
 }
 
+/** Sets the element's attributes to attrs (the source id aside). */
+function syncAttrs(el: Y.XmlElement, attrs: Attrs | undefined): void {
+  const want = new Map(sortedAttrs(attrs));
+  for (const [k] of Object.entries(el.getAttributes())) if (k !== "sid" && !want.has(k)) el.removeAttribute(k);
+  const have = el.getAttributes() as Attrs;
+  for (const [k, v] of want) if (canonicalValue(have[k]) !== canonicalValue(v)) el.setAttribute(k, v as string);
+}
+
+function canonicalValue(v: unknown): string {
+  return JSON.stringify(v, (_k, x: unknown) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x as Attrs).sort(([a], [b]) => (a < b ? -1 : 1))) : x)) ?? "null";
+}
+
 /** Containers whose children are diffed recursively when their type and attrs match. */
 const CONTAINERS = new Set(["bulletList", "orderedList", "listItem", "blockquote", "footnoteDefinition", "table", "tableRow"]);
 /** Nodes holding only inline content, patched in place. */
-const INLINE_HOLDERS = new Set([...TEXTBLOCKS, "tableCell", "tableHeader"]);
+const INLINE_HOLDERS = new Set([...TEXTBLOCKS, "tableCell", "tableHeader", "codeBlock", "mathBlock"]);
 
 /**
  * Turns the fragment into `target` with a minimal set of operations:
@@ -216,11 +251,15 @@ function applyChildren(parent: Y.XmlFragment | Y.XmlElement, current: AnyNode[],
       const o = current[oldIdx + k] as ElementJSON;
       const n = repl[k] as ElementJSON;
       const el = parent.get(oldIdx + k);
-      if (!(el instanceof Y.XmlElement) || o.type !== n.type || JSON.stringify(sortedAttrs(o.attrs)) !== JSON.stringify(sortedAttrs(n.attrs))) break;
+      if (!(el instanceof Y.XmlElement) || o.type !== n.type) break;
+      // Same type, other attributes (a heading level, a suggestion resolved):
+      // updated in place when the children can be patched too.
+      const sameAttrs = JSON.stringify(sortedAttrs(o.attrs)) === JSON.stringify(sortedAttrs(n.attrs));
       if (INLINE_HOLDERS.has(o.type)) {
         const from = runs(o.content);
         const to = runs(n.content);
         if (!from || !to || el.length > 1 || (el.length === 1 && !(el.get(0) instanceof Y.XmlText))) break;
+        if (!sameAttrs) syncAttrs(el, n.attrs);
         let t = el.get(0) as Y.XmlText | undefined;
         if (!t) {
           t = new Y.XmlText();
@@ -228,7 +267,10 @@ function applyChildren(parent: Y.XmlFragment | Y.XmlElement, current: AnyNode[],
         }
         patchText(t, from, to);
       } else if (CONTAINERS.has(o.type)) {
+        if (!sameAttrs) syncAttrs(el, n.attrs);
         applyChildren(el, o.content ?? [], n.content ?? [], hash, false);
+      } else if (!sameAttrs && !o.content && !n.content) {
+        syncAttrs(el, n.attrs);
       } else {
         break;
       }

@@ -12,12 +12,15 @@ export type Mark =
   | { type: "italic" }
   | { type: "strike" }
   | { type: "code" }
-  | { type: "link"; attrs: { href: string; title: string | null; ref: string | null } };
+  | { type: "link"; attrs: { href: string; title: string | null; ref: string | null } }
+  // Suggestions (see suggestions.ts); never in parsed or serialized markdown.
+  | { type: "insertion"; attrs: { id: string; author: string; at?: number } }
+  | { type: "deletion"; attrs: { id: string; author: string; at?: number } };
 
 export type TextNode = { type: "text"; text: string; marks?: Mark[] };
 
 /** Canonical mark order: marks on a text node are always stored in this order. */
-export const MARK_ORDER: Mark["type"][] = ["link", "bold", "italic", "strike", "code"];
+export const MARK_ORDER: Mark["type"][] = ["link", "bold", "italic", "strike", "code", "insertion", "deletion"];
 
 export function sortMarks(marks: Mark[]): Mark[] {
   return [...marks].sort((a, b) => MARK_ORDER.indexOf(a.type) - MARK_ORDER.indexOf(b.type));

@@ -1362,6 +1362,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        /** Pending suggestions in the revision's pages (or one page) */
+        get: operations["listSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/suggestions/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept or reject suggestions in a page (by id, by author, or all) */
+        post: operations["resolveSuggestions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/revisions/{revision}/sourcemap/{path}": {
         parameters: {
             query?: never;
@@ -1903,8 +1941,28 @@ export interface components {
             can_review: boolean;
             can_withdraw: boolean;
             can_publish: boolean;
+            /** @description Accept or reject anyone's suggestions */
+            can_resolve: boolean;
             /** @description Why editing is off: viewer, not_member, or the revision state */
             reason?: string;
+        };
+        Suggestion: {
+            id: string;
+            /** @description User id */
+            author: string;
+            /**
+             * Format: int64
+             * @description Unix milliseconds
+             */
+            at?: number;
+            inserted: string;
+            deleted: string;
+            kinds: ("insert" | "join" | "delete" | "change")[];
+            change?: {
+                from: string;
+                to: string;
+            };
+            path: string;
         };
         RevisionMember: {
             user_id: string;
@@ -4606,6 +4664,69 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    listSuggestions: {
+        parameters: {
+            query?: {
+                path?: string;
+            };
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suggestions in manifest and document order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Suggestion"][];
+                    };
+                };
+            };
+        };
+    };
+    resolveSuggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    path: string;
+                    /** @enum {string} */
+                    action: "accept" | "reject";
+                    ids?: string[];
+                    /** @description Only this author's suggestions */
+                    author?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description How many were resolved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        resolved: number;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     getSourceMap: {

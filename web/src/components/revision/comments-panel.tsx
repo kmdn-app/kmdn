@@ -164,7 +164,10 @@ export function CommentsPanel({
   active,
   onActive,
   canComment,
+  before,
 }: {
+  /** Shown above the threads (suggestion cards). */
+  before?: React.ReactNode;
   revisionID: string;
   path: string;
   pending: PendingComment | null;
@@ -237,7 +240,8 @@ export function CommentsPanel({
           </div>
         </form>
       )}
-      {!pending && list.length === 0 && <p className="px-1 text-[13px] text-muted-foreground">{canComment ? t("comments.emptyHint") : t("comments.empty")}</p>}
+      {before}
+      {!pending && list.length === 0 && !before && <p className="px-1 text-[13px] text-muted-foreground">{canComment ? t("comments.emptyHint") : t("comments.empty")}</p>}
       {open.map((th) => (
         <ThreadCard key={th.id} t={th} active={active === th.id} onFocus={() => onActive(th.id)} />
       ))}
