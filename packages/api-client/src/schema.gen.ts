@@ -3641,12 +3641,24 @@ export interface components {
         };
         /** @enum {string} */
         Theme: "system" | "light" | "dark";
+        /**
+         * @description Color theme, shown in the user's light or dark mode
+         * @enum {string}
+         */
+        Palette: "default" | "catppuccin" | "gruvbox" | "base16" | "nord";
+        /**
+         * @description Interface size in percent
+         * @enum {integer}
+         */
+        UIScale: 100 | 110 | 120 | 135;
         User: {
             id: string;
             email: string;
             name: string;
             locale: string;
             theme: components["schemas"]["Theme"];
+            palette: components["schemas"]["Palette"];
+            ui_scale: components["schemas"]["UIScale"];
             /** @enum {string} */
             commit_email_mode: "forge_noreply" | "account" | "custom";
             is_instance_admin: boolean;
@@ -3899,6 +3911,8 @@ export interface operations {
                 "application/json": {
                     name?: string;
                     theme?: components["schemas"]["Theme"];
+                    palette?: components["schemas"]["Palette"];
+                    ui_scale?: components["schemas"]["UIScale"];
                 };
             };
         };

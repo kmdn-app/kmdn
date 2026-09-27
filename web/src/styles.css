@@ -6,7 +6,8 @@
 /* Tokens follow shadcn/ui naming; values match docs/mockups. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-:root {
+:root,
+[data-palette="default"] {
   --background: #ffffff;
   --foreground: #09090b;
   --card: #ffffff;
@@ -36,7 +37,8 @@
   color-scheme: light;
 }
 
-[data-theme="dark"] {
+[data-theme="dark"],
+[data-palette="default"][data-theme="dark"] {
   --background: #09090b;
   --foreground: #fafafa;
   --card: #0c0c0f;
@@ -62,6 +64,233 @@
   --success: #22c55e;
   --warning: #f59e0b;
   --info: #3b82f6;
+  color-scheme: dark;
+}
+
+/* Color palettes (per user, docs/specs/02-ux.md#visual-language). Each has a
+   light and a dark variant, picked by the mode (data-theme). */
+[data-palette="catppuccin"] {
+  --background: #eff1f5;
+  --foreground: #4c4f69;
+  --card: #eff1f5;
+  --card-foreground: #4c4f69;
+  --popover: #eff1f5;
+  --popover-foreground: #4c4f69;
+  --primary: #8839ef;
+  --primary-foreground: #eff1f5;
+  --secondary: #ccd0da;
+  --secondary-foreground: #4c4f69;
+  --muted: #e6e9ef;
+  --muted-foreground: #5c5f77;
+  --accent: #dce0e8;
+  --accent-foreground: #4c4f69;
+  --destructive: #d20f39;
+  --border: #ccd0da;
+  --input: #bcc0cc;
+  --ring: #8839ef;
+  --sidebar: #e6e9ef;
+  --sidebar-foreground: #4c4f69;
+  --sidebar-accent: #dce0e8;
+  --sidebar-border: #dce0e8;
+  --success: #40a02b;
+  --warning: #df8e1d;
+  --info: #1e66f5;
+  color-scheme: light;
+}
+[data-palette="catppuccin"][data-theme="dark"] {
+  --background: #1e1e2e;
+  --foreground: #cdd6f4;
+  --card: #1e1e2e;
+  --card-foreground: #cdd6f4;
+  --popover: #181825;
+  --popover-foreground: #cdd6f4;
+  --primary: #cba6f7;
+  --primary-foreground: #11111b;
+  --secondary: #313244;
+  --secondary-foreground: #cdd6f4;
+  --muted: #313244;
+  --muted-foreground: #a6adc8;
+  --accent: #313244;
+  --accent-foreground: #cdd6f4;
+  --destructive: #f38ba8;
+  --border: #313244;
+  --input: #45475a;
+  --ring: #b4befe;
+  --sidebar: #181825;
+  --sidebar-foreground: #bac2de;
+  --sidebar-accent: #313244;
+  --sidebar-border: #11111b;
+  --success: #a6e3a1;
+  --warning: #f9e2af;
+  --info: #89b4fa;
+  color-scheme: dark;
+}
+[data-palette="gruvbox"] {
+  --background: #fbf1c7;
+  --foreground: #3c3836;
+  --card: #f9f5d7;
+  --card-foreground: #3c3836;
+  --popover: #f9f5d7;
+  --popover-foreground: #3c3836;
+  --primary: #af3a03;
+  --primary-foreground: #fbf1c7;
+  --secondary: #ebdbb2;
+  --secondary-foreground: #3c3836;
+  --muted: #f2e5bc;
+  --muted-foreground: #665c54;
+  --accent: #ebdbb2;
+  --accent-foreground: #3c3836;
+  --destructive: #9d0006;
+  --border: #d5c4a1;
+  --input: #d5c4a1;
+  --ring: #af3a03;
+  --sidebar: #f2e5bc;
+  --sidebar-foreground: #3c3836;
+  --sidebar-accent: #ebdbb2;
+  --sidebar-border: #d5c4a1;
+  --success: #79740e;
+  --warning: #b57614;
+  --info: #076678;
+  color-scheme: light;
+}
+[data-palette="gruvbox"][data-theme="dark"] {
+  --background: #282828;
+  --foreground: #ebdbb2;
+  --card: #282828;
+  --card-foreground: #ebdbb2;
+  --popover: #32302f;
+  --popover-foreground: #ebdbb2;
+  --primary: #fe8019;
+  --primary-foreground: #282828;
+  --secondary: #3c3836;
+  --secondary-foreground: #ebdbb2;
+  --muted: #32302f;
+  --muted-foreground: #a89984;
+  --accent: #3c3836;
+  --accent-foreground: #ebdbb2;
+  --destructive: #fb4934;
+  --border: #3c3836;
+  --input: #504945;
+  --ring: #fe8019;
+  --sidebar: #1d2021;
+  --sidebar-foreground: #d5c4a1;
+  --sidebar-accent: #3c3836;
+  --sidebar-border: #32302f;
+  --success: #b8bb26;
+  --warning: #fabd2f;
+  --info: #83a598;
+  color-scheme: dark;
+}
+[data-palette="base16"] {
+  --background: #ffffff;
+  --foreground: #4d4d4c;
+  --card: #ffffff;
+  --card-foreground: #4d4d4c;
+  --popover: #ffffff;
+  --popover-foreground: #4d4d4c;
+  --primary: #4271ae;
+  --primary-foreground: #ffffff;
+  --secondary: #e0e0e0;
+  --secondary-foreground: #282a2e;
+  --muted: #f2f2f2;
+  --muted-foreground: #6c6e6a;
+  --accent: #e0e0e0;
+  --accent-foreground: #282a2e;
+  --destructive: #c82829;
+  --border: #d6d6d6;
+  --input: #d6d6d6;
+  --ring: #4271ae;
+  --sidebar: #f7f7f7;
+  --sidebar-foreground: #282a2e;
+  --sidebar-accent: #e0e0e0;
+  --sidebar-border: #e0e0e0;
+  --success: #718c00;
+  --warning: #c26b00;
+  --info: #4271ae;
+  color-scheme: light;
+}
+[data-palette="base16"][data-theme="dark"] {
+  --background: #1d1f21;
+  --foreground: #c5c8c6;
+  --card: #1d1f21;
+  --card-foreground: #c5c8c6;
+  --popover: #282a2e;
+  --popover-foreground: #c5c8c6;
+  --primary: #81a2be;
+  --primary-foreground: #1d1f21;
+  --secondary: #373b41;
+  --secondary-foreground: #e0e0e0;
+  --muted: #282a2e;
+  --muted-foreground: #969896;
+  --accent: #373b41;
+  --accent-foreground: #e0e0e0;
+  --destructive: #cc6666;
+  --border: #373b41;
+  --input: #373b41;
+  --ring: #81a2be;
+  --sidebar: #282a2e;
+  --sidebar-foreground: #b4b7b4;
+  --sidebar-accent: #373b41;
+  --sidebar-border: #373b41;
+  --success: #b5bd68;
+  --warning: #f0c674;
+  --info: #81a2be;
+  color-scheme: dark;
+}
+[data-palette="nord"] {
+  --background: #eceff4;
+  --foreground: #2e3440;
+  --card: #f8f9fb;
+  --card-foreground: #2e3440;
+  --popover: #f8f9fb;
+  --popover-foreground: #2e3440;
+  --primary: #5e81ac;
+  --primary-foreground: #eceff4;
+  --secondary: #e5e9f0;
+  --secondary-foreground: #2e3440;
+  --muted: #e5e9f0;
+  --muted-foreground: #4c566a;
+  --accent: #d8dee9;
+  --accent-foreground: #2e3440;
+  --destructive: #bf616a;
+  --border: #d8dee9;
+  --input: #d8dee9;
+  --ring: #5e81ac;
+  --sidebar: #e5e9f0;
+  --sidebar-foreground: #3b4252;
+  --sidebar-accent: #d8dee9;
+  --sidebar-border: #d8dee9;
+  --success: #5f8a4a;
+  --warning: #b0763a;
+  --info: #5e81ac;
+  color-scheme: light;
+}
+[data-palette="nord"][data-theme="dark"] {
+  --background: #2e3440;
+  --foreground: #e5e9f0;
+  --card: #2e3440;
+  --card-foreground: #e5e9f0;
+  --popover: #3b4252;
+  --popover-foreground: #e5e9f0;
+  --primary: #88c0d0;
+  --primary-foreground: #2e3440;
+  --secondary: #3b4252;
+  --secondary-foreground: #eceff4;
+  --muted: #3b4252;
+  --muted-foreground: #a3adbf;
+  --accent: #434c5e;
+  --accent-foreground: #eceff4;
+  --destructive: #bf616a;
+  --border: #3b4252;
+  --input: #434c5e;
+  --ring: #88c0d0;
+  --sidebar: #292e39;
+  --sidebar-foreground: #d8dee9;
+  --sidebar-accent: #3b4252;
+  --sidebar-border: #3b4252;
+  --success: #a3be8c;
+  --warning: #ebcb8b;
+  --info: #81a1c1;
   color-scheme: dark;
 }
 

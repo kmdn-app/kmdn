@@ -22,7 +22,7 @@ type NotificationPref = components["schemas"]["NotificationPref"];
 import { cancelled, createPasskey, passkeysSupported } from "@/lib/passkeys";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-import type { ThemeChoice } from "@/theme";
+import { PALETTES, UI_SCALES, type ThemeChoice } from "@/theme";
 
 export const Route = createFileRoute("/_app/settings/profile")({
   validateSearch: (s: Record<string, unknown>): { link_error?: string } => (typeof s.link_error === "string" ? { link_error: s.link_error } : {}),
@@ -246,29 +246,74 @@ function Notifications() {
 
 function Appearance() {
   const { t } = useTranslation();
-  const { choice, setChoice } = useTheme();
+  const { choice, setChoice, palette, setPalette, scale, setScale, resolved } = useTheme();
   const opts: { v: ThemeChoice; label: string; icon: typeof Sun }[] = [
     { v: "system", label: t("shell.themeSystem"), icon: Monitor },
     { v: "light", label: t("shell.themeLight"), icon: Sun },
     { v: "dark", label: t("shell.themeDark"), icon: Moon },
   ];
+  const seg = (on: boolean) => cn("flex h-8 items-center gap-1.5 rounded-md px-3 text-[0.84375rem] font-medium text-muted-foreground", on && "bg-background text-foreground shadow-xs");
   return (
-    <Panel title={t("profile.appearance")}>
-      <div role="radiogroup" aria-label={t("shell.theme")} className="inline-flex w-fit gap-0.5 rounded-lg bg-muted p-1">
-        {opts.map((o) => (
-          <button
-            key={o.v}
-            type="button"
-            role="radio"
-            aria-checked={choice === o.v}
-            onClick={() => setChoice(o.v)}
-            className={cn("flex h-8 items-center gap-1.5 rounded-md px-3 text-[0.84375rem] font-medium text-muted-foreground", choice === o.v && "bg-background text-foreground shadow-xs")}
-          >
-            <o.icon className="size-3.5" />
-            {o.label}
-          </button>
-        ))}
-      </div>
+    <Panel title={t("profile.appearance")} desc={t("profile.appearanceDesc")}>
+      <Card>
+        <div className="grid gap-5">
+          <div className="grid gap-2">
+            <Label>{t("profile.palette")}</Label>
+            <div role="radiogroup" aria-label={t("profile.palette")} className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2.5">
+              {PALETTES.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  role="radio"
+                  aria-checked={palette === p}
+                  onClick={() => setPalette(p)}
+                  className={cn("grid gap-2 rounded-xl border p-2 text-left outline-offset-2", palette === p ? "border-foreground ring-1 ring-foreground" : "hover:bg-accent")}
+                >
+                  {/* The palette's own tokens, in the current mode. */}
+                  <div data-palette={p} data-theme={resolved} className="grid gap-1.5 rounded-lg border bg-background p-2 text-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <span className="size-2.5 rounded-full bg-primary" />
+                      <span className="h-1.5 flex-1 rounded-full bg-muted" />
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[1rem] font-semibold">Aa</span>
+                      <span className="flex gap-1">
+                        <span className="size-2 rounded-full bg-success" />
+                        <span className="size-2 rounded-full bg-warning" />
+                        <span className="size-2 rounded-full bg-info" />
+                        <span className="size-2 rounded-full bg-destructive" />
+                      </span>
+                    </div>
+                    <span className="h-1.5 w-2/3 rounded-full bg-muted-foreground/40" />
+                  </div>
+                  <span className="px-0.5 text-[0.84375rem] font-medium">{t(`profile.palettes.${p}`)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label>{t("shell.theme")}</Label>
+            <div role="radiogroup" aria-label={t("shell.theme")} className="inline-flex w-fit gap-0.5 rounded-lg bg-muted p-1">
+              {opts.map((o) => (
+                <button key={o.v} type="button" role="radio" aria-checked={choice === o.v} onClick={() => setChoice(o.v)} className={seg(choice === o.v)}>
+                  <o.icon className="size-3.5" />
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label>{t("profile.uiScale")}</Label>
+            <div role="radiogroup" aria-label={t("profile.uiScale")} className="inline-flex w-fit gap-0.5 rounded-lg bg-muted p-1">
+              {UI_SCALES.map((s) => (
+                <button key={s} type="button" role="radio" aria-checked={scale === s} onClick={() => setScale(s)} className={seg(scale === s)}>
+                  {s}%{s === 120 && <span className="text-muted-foreground">· {t("profile.default")}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
     </Panel>
   );
 }
