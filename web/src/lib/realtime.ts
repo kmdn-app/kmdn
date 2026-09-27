@@ -18,17 +18,23 @@ export type RealtimeEvent = { scope: string; type: string; [k: string]: unknown 
 type Listener = (ev: RealtimeEvent) => void;
 export type ConnectionState = "connecting" | "open" | "offline";
 
-type Control = { op: string; channel?: number; scope?: string; mode?: "rw" | "ro"; reason?: string; code?: string; message?: string };
+type Control = { op: string; channel?: number; scope?: string; mode?: "rw" | "ro"; reason?: string; code?: string; message?: string; request_id?: string };
+type ChannelOwner = { revision: string; path: string; lastWrite: number; receivedWrite: number; needsResync: boolean };
 
 class Connection {
   private ws: WebSocket | null = null;
   private nextChannel = 1;
   private rooms = new Map<number, RoomProvider>();
+  private channelOwners = new Map<number, ChannelOwner>();
+  private writeSequence = 0;
+  private rejectedUpdates = new Map<string, Map<number, string>>();
   private scopes = new Map<string, Set<Listener>>();
   private stateListeners = new Set<(s: ConnectionState) => void>();
   private retry = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private nextBarrier = 1;
+  private barriers = new Map<string, { revision?: string; writes: number; resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   state: ConnectionState = "offline";
 
   private setState(s: ConnectionState) {
@@ -62,6 +68,14 @@ class Connection {
       if (this.pingTimer) clearInterval(this.pingTimer);
       this.pingTimer = null;
       this.ws = null;
+      this.failBarriers("The connection closed before edits were received.");
+      for (const [channel, owner] of this.channelOwners) {
+        if (owner.lastWrite > owner.receivedWrite) {
+          owner.needsResync = true;
+          if (!this.rooms.has(channel)) this.rejectLostEdits(channel, owner);
+        }
+      }
+      this.pruneChannels();
       for (const room of this.rooms.values()) room.disconnected();
       if (!this.rooms.size && !this.scopes.size) {
         this.setState("offline");
@@ -87,17 +101,84 @@ class Connection {
 
   send(kind: number, channel: number, payload: Uint8Array) {
     const ws = this.ws;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    const owner = this.channelOwners.get(channel);
+    const update = kind === SYNC && payload[0] === syncProtocol.messageYjsUpdate;
+    const resync = kind === SYNC && payload[0] === syncProtocol.messageYjsSyncStep2 && owner?.needsResync;
+    if (owner && (update || resync)) owner.lastWrite = ++this.writeSequence;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      if (owner && (update || resync)) owner.needsResync = true;
+      return false;
+    }
     const msg = new Uint8Array(5 + payload.length);
     msg[0] = kind;
     new DataView(msg.buffer).setUint32(1, channel);
     msg.set(payload, 5);
     ws.send(msg);
+    if (owner && resync) owner.needsResync = false;
     return true;
   }
 
   control(v: object) {
     return this.send(CONTROL, 0, new TextEncoder().encode(JSON.stringify(v)));
+  }
+
+  hasPendingUpdates(revision: string): boolean {
+    return this.rejectedUpdates.has(revision) || [...this.channelOwners.values()].some((owner) => owner.revision === revision && (owner.needsResync || owner.lastWrite > owner.receivedWrite));
+  }
+
+  /** @internal A source debounce can finish after editing becomes read-only. */
+  rejectReadonlyUpdate(channel: number) {
+    const owner = this.channelOwners.get(channel);
+    if (owner) this.rejectUpdate(channel, owner, `Changes to ${owner.path} were not sent because the document became read-only. Copy your edits before reloading, then restore and save them when editing is allowed.`);
+  }
+
+  /** A matching pong follows all earlier updates through the server's receive loop. */
+  waitForUpdates(revision?: string): Promise<void> {
+    const refused = revision ? this.rejectedUpdates.get(revision)?.values().next().value : undefined;
+    if (refused) return Promise.reject(new Error(refused));
+    if ([...this.channelOwners.values()].some((owner) => owner.needsResync && (!revision || owner.revision === revision))) {
+      return Promise.reject(new Error("Edits are still synchronizing. Reconnect and wait before saving."));
+    }
+    return new Promise((resolve, reject) => {
+      const id = `flush-${this.nextBarrier++}`;
+      const timer = setTimeout(() => {
+        this.barriers.delete(id);
+        reject(new Error("Timed out waiting for edits to reach the server."));
+      }, 10_000);
+      this.barriers.set(id, { revision, writes: this.writeSequence, resolve, reject, timer });
+      if (!this.control({ op: "ping", request_id: id })) {
+        clearTimeout(timer);
+        this.barriers.delete(id);
+        reject(new Error("Reconnect before saving these edits."));
+      }
+    });
+  }
+
+  private failBarriers(message: string, revision?: string) {
+    for (const [id, barrier] of this.barriers) {
+      if (revision && barrier.revision && barrier.revision !== revision) continue;
+      clearTimeout(barrier.timer);
+      barrier.reject(new Error(message));
+      this.barriers.delete(id);
+    }
+  }
+
+  private rejectUpdate(channel: number, owner: ChannelOwner, message: string) {
+    let errors = this.rejectedUpdates.get(owner.revision);
+    if (!errors) this.rejectedUpdates.set(owner.revision, (errors = new Map()));
+    // A later pong proves receipt, not recovery of an earlier rejected update.
+    errors.set(channel, message);
+    this.failBarriers(message, owner.revision);
+  }
+
+  private rejectLostEdits(channel: number, owner: ChannelOwner) {
+    this.rejectUpdate(channel, owner, `Some edits to ${owner.path} could not be confirmed after the document closed. Copy any remaining local text before reloading, then restore and save it.`);
+  }
+
+  private pruneChannels() {
+    for (const [channel, owner] of this.channelOwners) {
+      if (!this.rooms.has(channel) && (owner.lastWrite <= owner.receivedWrite || this.rejectedUpdates.get(owner.revision)?.has(channel))) this.channelOwners.delete(channel);
+    }
   }
 
   private receive(msg: Uint8Array) {
@@ -107,7 +188,32 @@ class Connection {
     const payload = msg.subarray(5);
     if (kind === CONTROL) {
       const c = JSON.parse(new TextDecoder().decode(payload)) as Control;
-      if (c.channel) this.rooms.get(c.channel)?.control(c);
+      if (c.op === "pong" && c.request_id) {
+        const barrier = this.barriers.get(c.request_id);
+        if (barrier) {
+          clearTimeout(barrier.timer);
+          this.barriers.delete(c.request_id);
+          const refused = barrier.revision ? this.rejectedUpdates.get(barrier.revision)?.values().next().value : undefined;
+          if (refused) barrier.reject(new Error(refused));
+          else barrier.resolve();
+          for (const owner of this.channelOwners.values()) {
+            if (!owner.needsResync && owner.lastWrite <= barrier.writes) owner.receivedWrite = owner.lastWrite;
+          }
+          this.pruneChannels();
+        }
+      } else if (c.channel) {
+        this.rooms.get(c.channel)?.control(c);
+        if (c.op === "error") {
+          const owner = this.channelOwners.get(c.channel);
+          let message = c.message ?? "The server refused an edit.";
+          if (owner?.lastWrite) {
+            message = `Changes to ${owner.path} were not saved. ${message} Copy your edits before reloading, then restore and save them.`;
+            this.rejectUpdate(c.channel, owner, message);
+          } else {
+            this.failBarriers(message, owner?.revision);
+          }
+        }
+      }
       else if (c.op === "error" && c.scope) console.warn("realtime:", c.message);
     } else if (kind === EVENT) {
       const ev = JSON.parse(new TextDecoder().decode(payload)) as RealtimeEvent;
@@ -140,6 +246,7 @@ class Connection {
   open(room: RoomProvider): number {
     const ch = this.nextChannel++;
     this.rooms.set(ch, room);
+    this.channelOwners.set(ch, { revision: room.revision, path: room.path, lastWrite: 0, receivedWrite: 0, needsResync: false });
     this.ensure();
     room.resubscribe(ch);
     return ch;
@@ -147,7 +254,10 @@ class Connection {
 
   leave(ch: number) {
     if (this.rooms.delete(ch)) {
+      const owner = this.channelOwners.get(ch);
+      if (owner?.needsResync) this.rejectLostEdits(ch, owner);
       this.control({ op: "unsubscribe", channel: ch });
+      this.pruneChannels();
       this.maybeClose();
     }
   }
@@ -181,7 +291,11 @@ export class RoomProvider {
 
   constructor(readonly revision: string, readonly path: string) {
     this.doc.on("update", (update: Uint8Array, origin: unknown) => {
-      if (origin === this || this.status.mode !== "rw") return;
+      if (origin === this) return;
+      if (this.status.mode !== "rw") {
+        realtime.rejectReadonlyUpdate(this.channel);
+        return;
+      }
       const e = encoding.createEncoder();
       syncProtocol.writeUpdate(e, update);
       realtime.send(SYNC, this.channel, encoding.toUint8Array(e));

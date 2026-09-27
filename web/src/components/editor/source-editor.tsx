@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Annotation, ChangeSet, Compartment, EditorState } from "@codemirror/state";
 import { EditorView, drawSelection, highlightActiveLine, keymap, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
@@ -7,6 +7,7 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { SourceSync, textChange, type SourceMap } from "@kmdn/doc-engine";
 import type { RoomProvider } from "@/lib/realtime";
+import { markSourceUpdate, registerSourceBuffer } from "@/lib/source-buffers";
 
 const remote = Annotation.define<boolean>();
 
@@ -50,7 +51,9 @@ export function SourceEditor({ provider, revisionID, path, editable }: { provide
   const readOnly = useRef(new Compartment());
   const editableRef = useRef(editable);
 
-  useEffect(() => {
+  // Flush during layout cleanup, before the parent's passive room cleanup
+  // unsubscribes and destroys the document.
+  useLayoutEffect(() => {
     let cancelled = false;
     let cleanup: (() => void) | undefined;
     void loadSourceMap(revisionID, path).then((sm) => {
@@ -65,6 +68,7 @@ export function SourceEditor({ provider, revisionID, path, editable }: { provide
         if (pending.empty) return;
         const text = v.state.doc.toString();
         sync.apply(text);
+        markSourceUpdate(revisionID);
         base = text;
         pending = ChangeSet.empty(text.length);
       };
@@ -84,6 +88,7 @@ export function SourceEditor({ provider, revisionID, path, editable }: { provide
             theme,
             readOnly.current.of(EditorState.readOnly.of(!editableRef.current)),
             EditorView.contentAttributes.of({ "aria-label": "Markdown source", spellcheck: "true" }),
+            EditorView.domEventHandlers({ blur: () => flush() }),
             EditorView.updateListener.of((u) => {
               if (!u.docChanged || u.transactions.some((t) => t.annotation(remote))) return;
               for (const t of u.transactions) pending = pending.compose(t.changes);
@@ -94,6 +99,7 @@ export function SourceEditor({ provider, revisionID, path, editable }: { provide
         }),
       });
       view.current = v;
+      const unregister = registerSourceBuffer(revisionID, flush);
       const onUpdate = (_u: Uint8Array, origin: unknown) => {
         if (origin === sync.origin) return;
         const next = sync.text();
@@ -109,6 +115,7 @@ export function SourceEditor({ provider, revisionID, path, editable }: { provide
       provider.doc.on("update", onUpdate);
       provider.awareness.setLocalStateField("mode", "source");
       cleanup = () => {
+        unregister();
         provider.doc.off("update", onUpdate);
         flush();
         v.destroy();
