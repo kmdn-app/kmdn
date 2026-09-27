@@ -11,7 +11,7 @@
 | S5 | **GitHub signed commits** | Confirm App installation-token commits via Git Data API are signed and show Verified, including on GHES | Verified badge on github.com and GHES 3.x test instance |
 | S6 | **GitLab token automation** | Create + self-rotate project/group access tokens via API from an admin's OAuth token, gitlab.com and self-managed | Scripted create/rotate works on gitlab.com and a GitLab CE container |
 | S7 | **Codegen** | `@hey-api/openapi-ts` vs `orval` for TanStack Query hooks + discriminated event types | **Done:** `openapi-typescript` types + `openapi-fetch`, hooks written by hand over TanStack Query; server stays hand-written with a route/spec drift test |
-| S8 | **Consistency quality** | Can embeddings + LLM judgment find real contradictions/duplicates without flooding maintainers? | On a seeded 300-page corpus with 20 planted contradictions: ≥ 80% found, ≤ 1 false positive per 50 pages |
+| S8 | **Consistency quality** | Can embeddings + LLM judgment find real contradictions/duplicates without flooding maintainers? | On a seeded 300-page corpus with 20 planted contradictions: ≥ 80% found, ≤ 1 false positive per 50 pages. Harness: `internal/consistency/evalcorpus` (corpus with plants, duplicates and scoped-rule traps) and `TestConsistencyQuality` (runs with real provider keys, see the test's comment) |
 
 ## Milestones
 
