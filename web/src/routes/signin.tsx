@@ -13,7 +13,8 @@ import { cancelled, getPasskey, passkeysSupported } from "@/lib/passkeys";
 
 export const Route = createFileRoute("/signin")({
   validateSearch: (s: Record<string, unknown>): { redirect?: string; oauth_error?: string } => ({
-    ...(typeof s.redirect === "string" && s.redirect.startsWith("/") && !s.redirect.startsWith("//") ? { redirect: s.redirect } : {}),
+    // Same-origin paths only ("//host" and "/\\host" are other sites to browsers).
+    ...(typeof s.redirect === "string" && s.redirect.startsWith("/") && !s.redirect.startsWith("//") && !s.redirect.includes("\\") ? { redirect: s.redirect } : {}),
     ...(typeof s.oauth_error === "string" ? { oauth_error: s.oauth_error } : {}),
   }),
   component: SignIn,

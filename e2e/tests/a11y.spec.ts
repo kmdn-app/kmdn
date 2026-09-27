@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { ADMIN, REVIEWER } from "../env";
-import { signIn, state } from "./helpers";
+import { ADMIN, REVIEWER } from "../env.ts";
+import { signIn, state } from "./helpers.ts";
 
 // WCAG 2.2 AA checks with axe on the main screens (docs/specs/02-ux.md#accessibility).
 // Runs after the flows, so revisions and history exist.

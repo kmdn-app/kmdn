@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { ADMIN } from "../env";
-import { signIn, state } from "./helpers";
+import { ADMIN } from "../env.ts";
+import { signIn, state } from "./helpers.ts";
 
 // Phones read, comment and review; they don't edit (docs/specs/02-ux.md#mobile).
 const { owner, name } = state();

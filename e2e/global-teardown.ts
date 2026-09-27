@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { STATE_FILE, type State } from "./env";
+import { STATE_FILE, type State } from "./env.ts";
 
 export default async function teardown() {
   if (!existsSync(STATE_FILE)) return;

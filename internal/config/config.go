@@ -76,7 +76,9 @@ type Limits struct {
 }
 
 type Telemetry struct {
-	Metrics      bool   `yaml:"metrics"`
+	Metrics bool `yaml:"metrics"`
+	// MetricsToken, when set, is required as "Authorization: Bearer <token>" on /metrics.
+	MetricsToken string `yaml:"metrics_token"`
 	OTLPEndpoint string `yaml:"otlp_endpoint"`
 	LogFormat    string `yaml:"log_format"`
 	LogLevel     string `yaml:"log_level"`

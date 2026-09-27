@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { KMDN_URL } from "./env";
+import { KMDN_URL } from "./env.ts";
 
 // End-to-end tests against the built binary (bin/kmdn, or KMDN_BIN) and a
 // fake GitLab (e2e/fakeforge). See docs/specs/13-operations.md#ci.

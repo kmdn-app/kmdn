@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -73,7 +74,7 @@ func (s *Server) routes() chi.Router {
 	})
 	r.Get("/readyz", s.readyz)
 	if s.cfg.Telemetry.Metrics {
-		r.Handle("/metrics", telemetry.MetricsHandler())
+		r.Handle("/metrics", metricsAuth(s.cfg.Telemetry.MetricsToken, telemetry.MetricsHandler()))
 	}
 	r.Get("/version", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, version.Get())
@@ -103,6 +104,22 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// metricsAuth requires the bearer token when one is configured.
+func metricsAuth(token string, next http.Handler) http.Handler {
+	if token == "" {
+		return next
+	}
+	want := []byte("Bearer " + token)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), want) != 1 {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="metrics"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Handler returns the root handler (useful for tests).
