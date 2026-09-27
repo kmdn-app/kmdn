@@ -766,7 +766,7 @@ function Checks({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
               <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: f.path }} search={{ revision: rev.number }} className="font-medium hover:underline">
                 {f.path}
               </Link>{" "}
-              {f.conflict === "deleted_upstream" ? t("updates.conflict.pageDeleted") : t("revision.hasConflicts")}
+              {f.conflict === "deleted_upstream" ? (f.op === "delete" ? t("updates.conflict.deletedLocally") : t("updates.conflict.pageDeleted")) : t("revision.hasConflicts")}
             </span>
           </p>
         ))}

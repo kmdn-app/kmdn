@@ -220,6 +220,12 @@ export class RoomProvider {
     this.set({ online: false, synced: false });
   }
 
+  /** Reopen a subscription after restoring a previously deleted page. */
+  retry() {
+    if (this.destroyed) return;
+    this.resubscribe(this.channel);
+  }
+
   /** @internal */
   control(c: Control) {
     switch (c.op) {

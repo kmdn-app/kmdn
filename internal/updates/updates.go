@@ -350,7 +350,7 @@ func (s *Service) Apply(ctx context.Context, rev revisions.Revision, c revisions
 			}
 		case KindDeletedUpstream:
 			res.Conflicts++
-			if _, err := store.Exec(ctx, s.DB, `UPDATE revision_files SET has_conflicts = TRUE, conflict = ?, base_md = '' WHERE revision_id = ? AND path = ?`, KindDeletedUpstream, rev.ID, uf.Path); err != nil {
+			if _, err := store.Exec(ctx, s.DB, `UPDATE revision_files SET has_conflicts = TRUE, conflict = ?, base_md = ? WHERE revision_id = ? AND path = ?`, KindDeletedUpstream, uf.TheirsMD, rev.ID, uf.Path); err != nil {
 				return res, err
 			}
 		default:
@@ -421,14 +421,20 @@ func (s *Service) ResolvePage(ctx context.Context, rev revisions.Revision, c rev
 	case "keep":
 		op := revisions.OpAdd
 		if f.Op == revisions.OpDelete {
-			// The revision deleted it too, and Published changed it: keep the deletion out.
-			return s.Revisions.DropFile(ctx, rev, p)
-		}
-		if _, err := store.Exec(ctx, s.DB, `UPDATE revision_files SET op = ?, from_path = '', base_md = '', conflict = '', has_conflicts = FALSE WHERE id = ?`, op, f.ID); err != nil {
+			// Published still has the page: keeping it cancels our deletion.
+			if err := s.Revisions.DropFile(ctx, rev, p); err != nil {
+				return err
+			}
+		} else if _, err := store.Exec(ctx, s.DB, `UPDATE revision_files SET op = ?, from_path = '', base_md = '', conflict = '', has_conflicts = FALSE WHERE id = ?`, op, f.ID); err != nil {
 			return err
 		}
 	case "delete":
-		if err := s.Revisions.DropFile(ctx, rev, p); err != nil {
+		if f.Op == revisions.OpDelete {
+			// Keep our deletion of the page Published changed.
+			if _, err := store.Exec(ctx, s.DB, `UPDATE revision_files SET conflict = '', has_conflicts = FALSE WHERE id = ?`, f.ID); err != nil {
+				return err
+			}
+		} else if err := s.Revisions.DropFile(ctx, rev, p); err != nil {
 			return err
 		}
 	default:
