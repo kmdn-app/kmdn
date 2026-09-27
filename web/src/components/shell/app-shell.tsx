@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "./sidebar";
 import { useRepos } from "@/lib/repos";
@@ -50,6 +51,7 @@ export function AppShell({
   const [panelOpen, setPanelOpen] = useState(() => !isPhone() && stored(PANEL_KEY, false));
   const [sidebarOpen, setSidebarOpen] = useState(() => stored(SIDEBAR_KEY, true));
   const [mobileNav, setMobileNav] = useState(false);
+  const { t } = useTranslation();
   // Pages outside a repository (account, admin) keep the last repository's sidebar.
   const { data: repos } = useRepos();
   const ctxRepo = repo ?? repos?.find((r) => r.id === lastRepo()) ?? repos?.[0];
@@ -89,6 +91,13 @@ export function AppShell({
   return (
     <CommandPaletteProvider repo={ctxRepo}>
     <div className="flex h-full min-h-0 bg-background">
+      <a
+        href="#main"
+        onClick={(e) => (e.preventDefault(), document.getElementById("main")?.focus())}
+        className="sr-only z-50 rounded-md bg-background px-3 py-2 text-sm font-medium shadow focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+      >
+        {t("shell.skipToContent")}
+      </a>
       <div
         className={cn(
           "shrink-0 border-r border-sidebar-border bg-sidebar max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[min(300px,86%)] max-md:shadow-xl",
@@ -99,7 +108,7 @@ export function AppShell({
         <Sidebar repo={ctxRepo} revision={revision} currentPath={currentPath} onNavigate={() => setMobileNav(false)} />
       </div>
       {mobileNav && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} aria-hidden />}
-      <main className="flex min-w-0 flex-1 flex-col">{children({ panelOpen, togglePanel, toggleSidebar })}</main>
+      <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">{children({ panelOpen, togglePanel, toggleSidebar })}</main>
       {panelOpen && <div className="fixed inset-0 z-20 bg-black/40 md:hidden" onClick={togglePanel} aria-hidden />}
       {panelOpen && <RightPanel onClose={togglePanel}>{withAssistant(panel, ctxRepo, revision, currentPath)}</RightPanel>}
     </div>

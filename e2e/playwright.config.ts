@@ -19,7 +19,8 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-    { name: "phone", use: { ...devices["Pixel 7"] }, testMatch: /mobile\.spec\.ts/ },
+    { name: "desktop", use: { ...devices["Desktop Chrome"] }, testIgnore: [/a11y\.spec\.ts/, /mobile\.spec\.ts/] },
+    { name: "a11y", use: { ...devices["Desktop Chrome"] }, testMatch: /a11y\.spec\.ts/, dependencies: ["desktop"] },
+    { name: "phone", use: { ...devices["Pixel 7"] }, testMatch: /mobile\.spec\.ts/, dependencies: ["desktop"] },
   ],
 });

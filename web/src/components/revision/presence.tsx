@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Avatar, userColor } from "@/components/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMe } from "@/lib/api";
+import { useAnnounceChanges } from "@/lib/announce";
 import type { RepoView } from "@/lib/repos";
 import { usePresence, type RevisionView } from "@/lib/revisions";
 
@@ -27,6 +28,12 @@ export function PresenceStack({ repo, rev, path }: { repo: RepoView; rev: Revisi
   const { data: people } = usePresence(rev);
   const navigate = useNavigate();
   const others = (people ?? []).filter((p) => p.id !== me?.id);
+  useAnnounceChanges(
+    people && me ? others : undefined,
+    (p) => p.id,
+    (p) => t("presence.joined", { name: p.name }),
+    (p) => t("presence.left", { name: p.name }),
+  );
   if (others.length === 0) return null;
   const shown = others.slice(0, 4);
   return (

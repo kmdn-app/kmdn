@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { editorSuggestions, type EditorSuggestion } from "@/components/editor/suggest";
 import { api, errorMessage, unwrap, useMe } from "@/lib/api";
 import type { RevisionView } from "@/lib/revisions";
+import { useAnnounceChanges } from "@/lib/announce";
 
 /** Pending suggestions in the editor's page, recomputed when the document changes. */
 export function useEditorSuggestions(editor: Editor | null): EditorSuggestion[] {
@@ -89,6 +90,11 @@ export function SuggestionList({ editor, rev, path }: { editor: Editor | null; r
     for (const x of [...rev.members, ...rev.reviewers]) m.set(x.user_id, x.name);
     return m;
   }, [rev.members, rev.reviewers]);
+  // Other people's (and the assistant's) new suggestions, read out.
+  const theirs = useMemo(() => items.filter((s) => s.author !== me?.id || s.assistant), [items, me?.id]);
+  useAnnounceChanges(me ? theirs : undefined, (s) => s.id, (s) =>
+    t(s.assistant ? "suggestions.announceAssistant" : "suggestions.announce", { name: names.get(s.author) ?? t("revision.someone") }),
+  );
   const resolve = useMutation({
     mutationFn: (r: Resolve) => unwrap(api.POST("/revisions/{revision}/suggestions/resolve", { params: { path: { revision: rev.id } }, body: { path, ...r } })),
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),

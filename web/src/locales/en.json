@@ -127,7 +127,8 @@
     "repoSettings": "Repository settings",
     "publishedHint": "You're viewing the published version. Revisions arrive in the next milestone.",
     "revisionsSoon": "Revisions arrive in the next milestone",
-    "noFiles": "No pages in the content root."
+    "noFiles": "No pages in the content root.",
+    "skipToContent": "Skip to content"
   },
   "home": {
     "noRepos": "No repositories yet",
@@ -620,7 +621,9 @@
     "label_other": "{{count}} people in this revision",
     "here": "on this page",
     "viewing": "viewing",
-    "online": "In the revision now"
+    "online": "In the revision now",
+    "joined": "{{name}} joined the revision",
+    "left": "{{name}} left"
   },
   "review": {
     "approvedOf": "Approved {{approved}} of {{total}}",
@@ -773,7 +776,9 @@
       "horizontalRule": "divider",
       "table": "table"
     },
-    "viaAssistant": "Assistant for {{name}}"
+    "viaAssistant": "Assistant for {{name}}",
+    "announce": "New suggestion from {{name}}",
+    "announceAssistant": "New suggestion from the assistant for {{name}}"
   },
   "updates": {
     "banner_one": "Published changed {{count}} page in this revision",
