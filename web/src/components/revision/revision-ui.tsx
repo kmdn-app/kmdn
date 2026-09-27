@@ -39,15 +39,15 @@ export function StatePill({ rev, className }: { rev: RevisionView; className?: s
   const { t } = useTranslation();
   return (
     <span className={cn("inline-flex items-center gap-1.5", className)}>
-      <span className="inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-[12px] font-medium whitespace-nowrap">
+      <span className="inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-[0.75rem] font-medium whitespace-nowrap">
         <StateDot state={rev.state} />
         {t(`revision.state.${rev.state}`)}
       </span>
       {rev.changes_requested && (
-        <span className="inline-flex h-6 items-center rounded-full bg-warning/15 px-2 text-[12px] font-medium whitespace-nowrap text-warning">{t("revision.changesRequested")}</span>
+        <span className="inline-flex h-6 items-center rounded-full bg-warning/15 px-2 text-[0.75rem] font-medium whitespace-nowrap text-warning">{t("revision.changesRequested")}</span>
       )}
       {rev.has_conflicts && (
-        <span className="inline-flex h-6 items-center rounded-full bg-destructive/10 px-2 text-[12px] font-medium whitespace-nowrap text-destructive">{t("revision.conflict")}</span>
+        <span className="inline-flex h-6 items-center rounded-full bg-destructive/10 px-2 text-[0.75rem] font-medium whitespace-nowrap text-destructive">{t("revision.conflict")}</span>
       )}
     </span>
   );
@@ -129,7 +129,7 @@ export function RevisionPicker({ repo, revision, currentPath, onNew }: { repo: R
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex h-8 w-full items-center gap-2 rounded-lg border bg-background px-2.5 text-left text-[13px] font-medium shadow-xs hover:bg-accent"
+          className="flex h-8 w-full items-center gap-2 rounded-lg border bg-background px-2.5 text-left text-[0.8125rem] font-medium shadow-xs hover:bg-accent"
           aria-label={t("revision.picker")}
         >
           {revision ? <StateDot state={revision.state} /> : <span className="size-1.5 rounded-full bg-success" />}
@@ -155,7 +155,7 @@ export function RevisionPicker({ repo, revision, currentPath, onNew }: { repo: R
         </DropdownMenuItem>
         {revision && (
           <DropdownMenuItem onSelect={() => go(revision.number)}>
-            <StateDot state={revision.state} className="mx-[5px]" />
+            <StateDot state={revision.state} className="mx-[0.3125rem]" />
             <span className="truncate">{revision.title}</span>
             <Check className="ml-auto" />
           </DropdownMenuItem>
@@ -166,7 +166,7 @@ export function RevisionPicker({ repo, revision, currentPath, onNew }: { repo: R
             <DropdownMenuLabel className="text-xs text-muted-foreground">{t("revision.yours")}</DropdownMenuLabel>
             {others.slice(0, 8).map((r) => (
               <DropdownMenuItem key={r.id} onSelect={() => go(r.number)}>
-                <StateDot state={r.state} className="mx-[5px]" />
+                <StateDot state={r.state} className="mx-[0.3125rem]" />
                 <span className="truncate">{r.title}</span>
                 <span className="ml-auto text-xs text-muted-foreground">#{r.number}</span>
               </DropdownMenuItem>

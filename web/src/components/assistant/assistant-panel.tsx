@@ -70,8 +70,8 @@ function MessageItem({ m, repo, revision, canStart, onAccept, accepting }: { m: 
   if (m.role === "user") {
     return (
       <div className="grid justify-items-end gap-1">
-        {m.author_name && <span className="text-[11.5px] text-muted-foreground">{m.author_name}</span>}
-        <div className="max-w-[90%] rounded-2xl rounded-tr-sm bg-muted px-3 py-2 text-[13.5px] whitespace-pre-wrap">{m.parts.map((p) => p.text).join("")}</div>
+        {m.author_name && <span className="text-[0.71875rem] text-muted-foreground">{m.author_name}</span>}
+        <div className="max-w-[90%] rounded-2xl rounded-tr-sm bg-muted px-3 py-2 text-[0.84375rem] whitespace-pre-wrap">{m.parts.map((p) => p.text).join("")}</div>
       </div>
     );
   }
@@ -80,7 +80,7 @@ function MessageItem({ m, repo, revision, canStart, onAccept, accepting }: { m: 
       {m.parts.map((p, i) => {
         if (p.type === "tool")
           return (
-            <div key={i} className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <div key={i} className="flex items-center gap-1.5 text-[0.75rem] text-muted-foreground">
               <Wrench className="size-3" />
               {p.label}
             </div>
@@ -92,7 +92,7 @@ function MessageItem({ m, repo, revision, canStart, onAccept, accepting }: { m: 
               to="/$owner/$repo/$"
               params={{ owner: repo.owner, repo: repo.name, _splat: p.path ?? "" }}
               search={revision ? { revision: revision.number } : {}}
-              className="flex items-center gap-1.5 justify-self-start rounded-md border px-2 py-1 text-[12px] hover:bg-accent"
+              className="flex items-center gap-1.5 justify-self-start rounded-md border px-2 py-1 text-[0.75rem] hover:bg-accent"
             >
               <FilePen className="size-3.5 text-muted-foreground" />
               {p.label}
@@ -100,10 +100,10 @@ function MessageItem({ m, repo, revision, canStart, onAccept, accepting }: { m: 
           );
         if (p.type === "file_op")
           return (
-            <div key={i} className="grid gap-2 rounded-xl border bg-card p-3 text-[13px]">
+            <div key={i} className="grid gap-2 rounded-xl border bg-card p-3 text-[0.8125rem]">
               <span className="font-medium">{p.label}</span>
               {p.accepted ? (
-                <span className="text-[12px] text-success">{t("assistant.done")}</span>
+                <span className="text-[0.75rem] text-success">{t("assistant.done")}</span>
               ) : (
                 canStart && (
                   <Button size="sm" variant="outline" className="justify-self-start" disabled={accepting} onClick={() => onAccept(p.call_id!)}>
@@ -117,14 +117,14 @@ function MessageItem({ m, repo, revision, canStart, onAccept, accepting }: { m: 
         if (p.type === "proposal" && p.proposal)
           return (
             <div key={i} className="grid gap-2 rounded-xl border bg-card p-3">
-              <div className="flex items-center gap-2 text-[13px] font-medium">
+              <div className="flex items-center gap-2 text-[0.8125rem] font-medium">
                 <FilePen className="size-4 text-muted-foreground" />
                 {t("assistant.startRevision", { title: p.proposal.title })}
               </div>
-              <p className="text-[12.5px] text-muted-foreground">{p.proposal.description}</p>
+              <p className="text-[0.78125rem] text-muted-foreground">{p.proposal.description}</p>
               <div className="flex flex-wrap gap-1">
                 {p.proposal.files.map((f) => (
-                  <span key={f} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
+                  <span key={f} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.6875rem]">
                     {f}
                   </span>
                 ))}
@@ -135,7 +135,7 @@ function MessageItem({ m, repo, revision, canStart, onAccept, accepting }: { m: 
                   {t("assistant.start")}
                 </Button>
               )}
-              <p className="text-[11.5px] text-muted-foreground">{t("assistant.movesNotice")}</p>
+              <p className="text-[0.71875rem] text-muted-foreground">{t("assistant.movesNotice")}</p>
             </div>
           );
         return (
@@ -234,7 +234,7 @@ export function AssistantPanel({ repo, path, revision }: { repo: RepoView; path?
 
   if (status.data && !status.data.enabled) {
     return (
-      <div className="grid gap-2 text-[13px]">
+      <div className="grid gap-2 text-[0.8125rem]">
         <h2 className="font-medium">{t("shell.panel.assistant")}</h2>
         <p className="text-muted-foreground">{me?.is_instance_admin ? t("assistant.offAdmin") : t("assistant.off")}</p>
       </div>
@@ -243,7 +243,7 @@ export function AssistantPanel({ repo, path, revision }: { repo: RepoView; path?
   return (
     <div className="-m-3.5 flex h-[calc(100%+1.75rem)] flex-col">
       {revision ? (
-        <div className="border-b px-3.5 py-2.5 text-[12px] text-muted-foreground">{t("assistant.shared", { number: revision.number })}</div>
+        <div className="border-b px-3.5 py-2.5 text-[0.75rem] text-muted-foreground">{t("assistant.shared", { number: revision.number })}</div>
       ) : (
       <div className="flex items-center gap-1.5 border-b px-3 py-2">
         <Select value={current ?? "new"} onValueChange={(v) => setThreadID(v)}>
@@ -266,7 +266,7 @@ export function AssistantPanel({ repo, path, revision }: { repo: RepoView; path?
       )}
       <div className="min-h-0 flex-1 overflow-auto px-3.5 py-3">
         {!current && !revision && (
-          <div className="grid justify-items-center gap-2 py-10 text-center text-[13px] text-muted-foreground">
+          <div className="grid justify-items-center gap-2 py-10 text-center text-[0.8125rem] text-muted-foreground">
             <Sparkles className="size-5" />
             <p>{revision ? t("assistant.introRevision") : t("assistant.intro")}</p>
           </div>
@@ -278,26 +278,26 @@ export function AssistantPanel({ repo, path, revision }: { repo: RepoView; path?
           {running && (
             <div className="grid gap-1.5">
               {live.tools.map((l, i) => (
-                <div key={i} className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <div key={i} className="flex items-center gap-1.5 text-[0.75rem] text-muted-foreground">
                   <Wrench className="size-3" />
                   {l}
                 </div>
               ))}
               {live.text ? (
-                <p className="text-[13.5px] whitespace-pre-wrap">{live.text}</p>
+                <p className="text-[0.84375rem] whitespace-pre-wrap">{live.text}</p>
               ) : (
-                <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <span className="flex items-center gap-1.5 text-[0.75rem] text-muted-foreground">
                   <Loader2 className="size-3 animate-spin" />
                   {t("assistant.thinking")}
                 </span>
               )}
-              {live.queued && <span className="text-[12px] text-muted-foreground">{t("assistant.queued")}</span>}
+              {live.queued && <span className="text-[0.75rem] text-muted-foreground">{t("assistant.queued")}</span>}
             </div>
           )}
         </div>
         <div ref={endRef} />
       </div>
-      {!canPrompt && <p className="border-t p-3 text-[12.5px] text-muted-foreground">{t("assistant.readOnly")}</p>}
+      {!canPrompt && <p className="border-t p-3 text-[0.78125rem] text-muted-foreground">{t("assistant.readOnly")}</p>}
       <form
         hidden={!canPrompt}
         className="border-t p-3"
@@ -325,7 +325,7 @@ export function AssistantPanel({ repo, path, revision }: { repo: RepoView; path?
             {send.isPending ? <Loader2 className="animate-spin" /> : <ArrowUp />}
           </Button>
         </div>
-        {path && <p className="mt-1.5 truncate text-[11.5px] text-muted-foreground">{t("assistant.context", { path })}</p>}
+        {path && <p className="mt-1.5 truncate text-[0.71875rem] text-muted-foreground">{t("assistant.context", { path })}</p>}
       </form>
     </div>
   );

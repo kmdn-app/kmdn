@@ -21,8 +21,8 @@ const highlight = HighlightStyle.define([
 ]);
 
 const theme = EditorView.theme({
-  "&": { fontSize: "14px", backgroundColor: "transparent", color: "var(--foreground)" },
-  ".cm-content": { fontFamily: "var(--font-mono)", padding: "24px 0 160px", caretColor: "var(--foreground)" },
+  "&": { fontSize: "0.875rem", backgroundColor: "transparent", color: "var(--foreground)" },
+  ".cm-content": { fontFamily: "var(--font-mono)", padding: "1.5rem 0 10rem", caretColor: "var(--foreground)" },
   ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "var(--muted-foreground)" },
   ".cm-activeLine": { backgroundColor: "color-mix(in oklab, var(--muted) 60%, transparent)" },
   "&.cm-focused": { outline: "none" },
@@ -127,5 +127,5 @@ export function SourceEditor({ provider, revisionID, path, editable }: { provide
     view.current?.dispatch({ effects: readOnly.current.reconfigure(EditorState.readOnly.of(!editable)) });
   }, [editable]);
 
-  return <div ref={host} className="mx-auto max-w-[860px] px-6 max-md:px-2" />;
+  return <div ref={host} className="mx-auto max-w-[53.75rem] px-6 max-md:px-2" />;
 }

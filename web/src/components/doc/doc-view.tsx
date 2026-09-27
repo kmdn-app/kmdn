@@ -198,7 +198,7 @@ class Renderer {
         <div className="rawblk-h">
           <Braces className="size-3.5" />
           Raw markdown
-          <span className="rounded-md border px-1.5 text-[11px]">{kind === "shortcode" ? "shortcode" : kind}</span>
+          <span className="rounded-md border px-1.5 text-[0.6875rem]">{kind === "shortcode" ? "shortcode" : kind}</span>
         </div>
         <pre>{raw}</pre>
       </div>
@@ -374,7 +374,7 @@ function Mermaid({ source }: { source: string }) {
       {error ? (
         <>
           <p className="px-3 pt-2 text-xs text-destructive">Diagram error: {error}</p>
-          <pre className="px-3 pb-3 text-[13px]">{source}</pre>
+          <pre className="px-3 pb-3 text-[0.8125rem]">{source}</pre>
         </>
       ) : (
         <div ref={ref} className="flex justify-center p-3.5" role="img" aria-label="Diagram" />
@@ -404,19 +404,19 @@ function Properties({ value, format }: { value: string; format: string }) {
     <div className="props">
       <div className="props-head">
         Properties <span className="font-normal">· {rows ? rows.length : "frontmatter"}</span>
-        <span className="ml-auto font-mono text-[11.5px]">{format}</span>
+        <span className="ml-auto font-mono text-[0.71875rem]">{format}</span>
       </div>
       {rows ? (
         rows.map((r) => (
           <div key={r.k} className="props-row">
-            <div className="text-[13px] text-muted-foreground">{r.k}</div>
+            <div className="text-[0.8125rem] text-muted-foreground">{r.k}</div>
             <div className="flex min-w-0 flex-wrap gap-1.5">
               {Array.isArray(r.v) ? r.v.map((t) => <span key={t} className="tagchip">{t}</span>) : <span className="min-w-0 break-words">{r.v || "—"}</span>}
             </div>
           </div>
         ))
       ) : (
-        <pre className="px-3 py-2 text-[13px]">{value}</pre>
+        <pre className="px-3 py-2 text-[0.8125rem]">{value}</pre>
       )}
     </div>
   );

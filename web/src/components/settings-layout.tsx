@@ -10,7 +10,7 @@ export function SettingsLayout({ title, sections, active, children, linkProps }:
   return (
     // Container queries: the main column narrows when the side panel is open.
     <div className="@container">
-    <div className="mx-auto grid max-w-[1080px] grid-cols-[200px_minmax(0,1fr)] gap-10 px-8 pt-7 pb-20 @max-2xl:grid-cols-1 @max-2xl:gap-4 @max-2xl:px-4">
+    <div className="mx-auto grid max-w-[67.5rem] grid-cols-[12.5rem_minmax(0,1fr)] gap-10 px-8 pt-7 pb-20 @max-2xl:grid-cols-1 @max-2xl:gap-4 @max-2xl:px-4">
       <nav aria-label={title} className="flex flex-col gap-0.5 self-start @2xl:sticky @2xl:top-0 @max-2xl:flex-row @max-2xl:flex-wrap">
         <div className="px-2.5 pb-2 text-xs font-medium text-muted-foreground @max-2xl:hidden">{title}</div>
         {sections.map((s) => (
@@ -19,7 +19,7 @@ export function SettingsLayout({ title, sections, active, children, linkProps }:
             {...linkProps(s.key)}
             aria-current={active === s.key ? "page" : undefined}
             className={cn(
-              "flex h-8 items-center gap-2 rounded-[7px] px-2.5 text-[13.5px] whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-3.5",
+              "flex h-8 items-center gap-2 rounded-[0.4375rem] px-2.5 text-[0.84375rem] whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground [&_svg]:size-3.5",
               active === s.key && "bg-accent font-medium text-foreground",
               s.danger && "text-destructive hover:text-destructive",
             )}
@@ -41,7 +41,7 @@ export function Panel({ title, desc, children, actions }: { title: string; desc?
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-          {desc && <p className="mt-1 text-[13.5px] text-muted-foreground">{desc}</p>}
+          {desc && <p className="mt-1 text-[0.84375rem] text-muted-foreground">{desc}</p>}
         </div>
         {actions}
       </div>
@@ -64,7 +64,7 @@ export function Row({ title, desc, children }: { title: string; desc?: ReactNode
     <div className="flex items-center justify-between gap-4 border-b py-3.5 last:border-b-0 first:pt-0 last:pb-0">
       <div>
         <div className="text-sm font-medium">{title}</div>
-        {desc && <div className="mt-0.5 text-[13px] text-muted-foreground">{desc}</div>}
+        {desc && <div className="mt-0.5 text-[0.8125rem] text-muted-foreground">{desc}</div>}
       </div>
       {children}
     </div>

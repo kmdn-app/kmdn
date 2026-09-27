@@ -148,7 +148,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
                     title={t("comments.commentOnSelection")}
                   >
                     <MessageSquarePlus />
-                    <span className="@max-5xl:hidden">{t("comments.comment")}</span>
+                    <span className="@max-5xl:sr-only">{t("comments.comment")}</span>
                   </Button>
                 )}
                 {editor && !phone && status?.mode === "rw" && view === "result" && mode === "visual" && (
@@ -161,7 +161,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
                     className={cn(suggesting && "text-success")}
                   >
                     <PenLine />
-                    <span className="@max-5xl:hidden">{t("suggestions.toggle")}</span>
+                    <span className="@max-5xl:sr-only">{t("suggestions.toggle")}</span>
                   </Button>
                 )}
                 {inRevision && !phone && <ViewToggle view={view} onChange={setView} />}
@@ -180,7 +180,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
           )}
           {phone && inRevision && (
             <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
-              <span className="text-[12px] text-muted-foreground">{t("revision.phoneReadOnly")}</span>
+              <span className="text-[0.75rem] text-muted-foreground">{t("revision.phoneReadOnly")}</span>
               <span className="flex-1" />
               <ViewToggle view={view === "source" ? "changes" : view} onChange={setView} views={["result", "changes"]} />
             </div>
@@ -214,7 +214,7 @@ function ViewToggle({ view, onChange, views }: { view: ReviewView; onChange: (v:
           role="radio"
           aria-checked={view === v}
           onClick={() => onChange(v)}
-          className={cn("h-6 rounded px-2 text-[12px] font-medium text-muted-foreground", view === v && "bg-background text-foreground shadow-xs")}
+          className={cn("h-6 rounded px-2 text-[0.75rem] font-medium text-muted-foreground", view === v && "bg-background text-foreground shadow-xs")}
         >
           {t(`diff.views.${v}`)}
         </button>
@@ -298,7 +298,7 @@ function ModeToggle({ mode, onChange }: { mode: EditorMode; onChange: (m: Editor
           role="radio"
           aria-checked={mode === m}
           onClick={() => onChange(m)}
-          className={cn("h-6 rounded px-2 text-[12px] font-medium text-muted-foreground", mode === m && "bg-background text-foreground shadow-xs")}
+          className={cn("h-6 rounded px-2 text-[0.75rem] font-medium text-muted-foreground", mode === m && "bg-background text-foreground shadow-xs")}
         >
           {t(`editor.modes.${m}`)}
         </button>
@@ -374,7 +374,7 @@ function Body({
   }
   return (
     <>
-      <UpdatesBanner rev={rev} className="mx-auto mt-5 max-w-[720px] max-md:mx-4" />
+      <UpdatesBanner rev={rev} className="mx-auto mt-5 max-w-[45rem] max-md:mx-4" />
       <PageConflict rev={rev} path={path} />
       <ReadOnlyBanner rev={rev} reason={status?.mode === "ro" ? status.reason : undefined} />
       {noDoc ? (
@@ -393,7 +393,7 @@ function Body({
           status?.synced ? (
             <>
               {pendingSuggestions > 0 && (
-                <div className="mx-auto mt-5 flex max-w-[720px] items-start gap-3 rounded-xl border bg-muted/40 px-4 py-3 text-[13.5px] max-md:mx-4">
+                <div className="mx-auto mt-5 flex max-w-[45rem] items-start gap-3 rounded-xl border bg-muted/40 px-4 py-3 text-[0.84375rem] max-md:mx-4">
                   <Lock className="mt-0.5 size-4 text-muted-foreground" />
                   <div>{t("suggestions.sourceLocked", { count: pendingSuggestions })}</div>
                 </div>
@@ -429,7 +429,7 @@ function PageConflict({ rev, path }: { rev: RevisionView; path: string }) {
   const f = files.data?.find((x) => x.path === path);
   if (f?.conflict !== "deleted_upstream") return null;
   return (
-    <div className="mx-auto mt-5 flex max-w-[720px] flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-[13.5px] max-md:mx-4">
+    <div className="mx-auto mt-5 flex max-w-[45rem] flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-[0.84375rem] max-md:mx-4">
       <TriangleAlert className="size-4 shrink-0 text-destructive" />
       <span className="min-w-0 flex-1">{t("updates.conflict.pageDeleted")}</span>
       {rev.access.can_edit && (
@@ -460,7 +460,7 @@ function ReadOnlyBanner({ rev, reason }: { rev: RevisionView; reason?: string })
   if (!reason) return null;
   const editors = rev.members.map((m) => m.name.split(" ")[0]).join(", ");
   return (
-    <div className="mx-auto mt-5 flex max-w-[720px] items-start gap-3 rounded-xl border bg-muted/40 px-4 py-3 text-[13.5px] max-md:mx-4">
+    <div className="mx-auto mt-5 flex max-w-[45rem] items-start gap-3 rounded-xl border bg-muted/40 px-4 py-3 text-[0.84375rem] max-md:mx-4">
       <Lock className="mt-0.5 size-4 text-muted-foreground" />
       <div>{t(`revision.readOnly.${reason}`, { defaultValue: t("revision.readOnly.generic"), editors })}</div>
     </div>
@@ -479,7 +479,7 @@ const STATE_DOT: Record<string, string> = {
 function RevisionPill({ rev }: { rev: RevisionView }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex h-7 max-w-[240px] shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium whitespace-nowrap @max-4xl:hidden" title={rev.title}>
+    <span className="inline-flex h-7 max-w-[15rem] shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[0.78125rem] font-medium whitespace-nowrap @max-6xl:hidden" title={rev.title}>
       <FilePen className="size-3.5 text-muted-foreground" />
       <span className={cn("size-1.5 shrink-0 rounded-full", STATE_DOT[rev.state])} />
       <span className="truncate">
@@ -539,9 +539,9 @@ function SaveState({ status }: { status: ReturnType<typeof useRoomStatus> }) {
     label = t("revision.viewOnly");
   }
   return (
-    <span role="status" className="inline-flex shrink-0 items-center gap-1 text-[12.5px] text-muted-foreground @max-3xl:hidden">
+    <span role="status" title={label} className="inline-flex shrink-0 items-center gap-1 text-[0.78125rem] text-muted-foreground @max-3xl:hidden">
       {icon}
-      {label}
+      <span className="@max-5xl:sr-only">{label}</span>
     </span>
   );
 }

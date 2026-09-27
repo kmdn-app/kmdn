@@ -31,7 +31,7 @@ export function ApprovalSummary({ rev, className }: { rev: RevisionView; classNa
   if (rev.state !== "in_review" && rev.state !== "approved") return null;
   const approved = rev.reviewers.filter((r) => r.state === "approved").length;
   return (
-    <span className={cn("text-[12px] text-muted-foreground", className)}>
+    <span className={cn("text-[0.75rem] text-muted-foreground", className)}>
       {t("review.approvedOf", { approved, total: rev.reviewers.length })}
     </span>
   );
@@ -155,24 +155,24 @@ function SubmitDialog({ rev, onClose, onDone }: { rev: RevisionView; onClose: ()
           <fieldset className="grid gap-1.5">
             <legend className="mb-1.5 text-sm font-medium">{t("review.reviewers")}</legend>
             <div className="max-h-52 overflow-auto rounded-lg border">
-              {candidates.data?.length === 0 && <p className="p-3 text-[13px] text-muted-foreground">{t("review.noCandidates")}</p>}
+              {candidates.data?.length === 0 && <p className="p-3 text-[0.8125rem] text-muted-foreground">{t("review.noCandidates")}</p>}
               {candidates.data?.map((c) => (
                 <label key={c.user_id} className="flex cursor-pointer items-center gap-2.5 border-b px-3 py-2 last:border-b-0 hover:bg-accent/50">
                   <input type="checkbox" checked={picked.has(c.user_id)} onChange={() => toggle(c.user_id)} className="accent-primary" />
                   <Avatar name={c.name} id={c.user_id} size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-[13.5px]">{c.name}</span>
-                  {c.suggested && <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] text-muted-foreground">{t("review.suggested")}</span>}
+                  <span className="min-w-0 flex-1 truncate text-[0.84375rem]">{c.name}</span>
+                  {c.suggested && <span className="rounded-full bg-accent px-2 py-0.5 text-[0.6875rem] text-muted-foreground">{t("review.suggested")}</span>}
                 </label>
               ))}
             </div>
           </fieldset>
           {broken > 0 && (
-            <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-[13px]">
+            <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-[0.8125rem]">
               <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
               {t("review.brokenLinksWarning", { count: broken })}
             </p>
           )}
-          {submit.error && <p className="text-[13px] text-destructive">{errorMessage(submit.error, t("errors.generic"))}</p>}
+          {submit.error && <p className="text-[0.8125rem] text-destructive">{errorMessage(submit.error, t("errors.generic"))}</p>}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               {t("common.cancel")}
@@ -213,7 +213,7 @@ function RequestChangesDialog({ rev, onClose, onDone }: { rev: RevisionView; onC
           }}
         >
           <Textarea autoFocus rows={4} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("review.notePlaceholder")} aria-label={t("review.note")} />
-          {send.error && <p className="text-[13px] text-destructive">{errorMessage(send.error, t("errors.generic"))}</p>}
+          {send.error && <p className="text-[0.8125rem] text-destructive">{errorMessage(send.error, t("errors.generic"))}</p>}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               {t("common.cancel")}
@@ -259,7 +259,7 @@ export function ReviewersSection({ repo, rev }: { repo: RepoView; rev: RevisionV
   return (
     <section>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold">
+        <h2 className="text-[0.9375rem] font-semibold">
           {t("review.reviewers")} <ApprovalSummary rev={rev} className="ml-1 font-normal" />
         </h2>
         {rev.access.can_submit && inReview && (
@@ -273,8 +273,8 @@ export function ReviewersSection({ repo, rev }: { repo: RepoView; rev: RevisionV
         {rev.reviewers.map((r) => (
           <div key={r.user_id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
             <Avatar name={r.name} id={r.user_id} />
-            <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">{r.name}</span>
-            <span className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+            <span className="min-w-0 flex-1 truncate text-[0.84375rem] font-medium">{r.name}</span>
+            <span className="flex items-center gap-1.5 text-[0.78125rem] text-muted-foreground">
               {icon(r.state)}
               {t(`review.states.${r.state}`)}
             </span>
@@ -291,8 +291,8 @@ export function ReviewersSection({ repo, rev }: { repo: RepoView; rev: RevisionV
             .map((c) => (
               <button key={c.user_id} type="button" onClick={() => add.mutate(c.user_id)} className="flex w-full items-center gap-2.5 border-t px-4 py-2 text-left hover:bg-accent/50">
                 <Avatar name={c.name} id={c.user_id} size="sm" />
-                <span className="text-[13.5px]">{c.name}</span>
-                {c.suggested && <span className="text-[11px] text-muted-foreground">{t("review.suggested")}</span>}
+                <span className="text-[0.84375rem]">{c.name}</span>
+                {c.suggested && <span className="text-[0.6875rem] text-muted-foreground">{t("review.suggested")}</span>}
               </button>
             ))}
       </div>
@@ -341,9 +341,9 @@ function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: Re
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="pub-body">{t("publish.commitBody")}</Label>
-              <Textarea id="pub-body" rows={4} value={body ?? p.body} onChange={(e) => setBody(e.target.value)} className="font-mono text-[13px]" />
+              <Textarea id="pub-body" rows={4} value={body ?? p.body} onChange={(e) => setBody(e.target.value)} className="font-mono text-[0.8125rem]" />
             </div>
-            <div className="grid gap-2 rounded-lg border p-3 text-[13px]">
+            <div className="grid gap-2 rounded-lg border p-3 text-[0.8125rem]">
               <div>
                 <span className="text-muted-foreground">{t("publish.coAuthors")}</span>{" "}
                 {p.co_authors.length ? p.co_authors.map((c) => c.name).join(", ") : t("publish.nobody")}
@@ -359,7 +359,7 @@ function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: Re
               {p.protected && <div className="text-muted-foreground">{t("publish.protected", { branch: p.target_branch })}</div>}
             </div>
             {findings.length > 0 && (
-              <div className="grid gap-1.5 rounded-lg border px-3 py-2 text-[13px]">
+              <div className="grid gap-1.5 rounded-lg border px-3 py-2 text-[0.8125rem]">
                 <p className="text-muted-foreground">{t("consistency.publishNote", { count: findings.length })}</p>
                 <ul className="grid gap-1">
                   {findings.slice(0, 5).map((f) => (
@@ -374,18 +374,18 @@ function PublishDialog({ repo, rev, onClose, onDone }: { repo: RepoView; rev: Re
               </div>
             )}
             {p.required_reviews > 0 && (
-              <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-[13px]">
+              <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-[0.8125rem]">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
                 {t("publish.requiredReviews", { count: p.required_reviews })}
               </p>
             )}
             {p.blocked && (
-              <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-[13px]">
+              <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-[0.8125rem]">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
                 {t(`publish.blocked.${p.blocked}`, { defaultValue: t("publish.blocked.other") })}
               </p>
             )}
-            {publish.error && <p className="text-[13px] text-destructive">{errorMessage(publish.error, t("errors.generic"))}</p>}
+            {publish.error && <p className="text-[0.8125rem] text-destructive">{errorMessage(publish.error, t("errors.generic"))}</p>}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={onClose}>
                 {t("common.cancel")}

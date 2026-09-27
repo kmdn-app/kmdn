@@ -35,7 +35,7 @@ function Card({ s, name, canResolve, busy, onResolve, onFocus }: { s: EditorSugg
   else what = t("suggestions.split");
   return (
     <div role="button" tabIndex={0} onClick={onFocus} onKeyDown={(e) => e.key === "Enter" && onFocus()} className="grid gap-1.5 rounded-lg border border-dashed bg-card p-3 text-left">
-      <div className="flex items-center gap-2 text-[12.5px]">
+      <div className="flex items-center gap-2 text-[0.78125rem]">
         <Avatar name={name} id={s.author} size="xs" />
         <span className="font-medium">{s.assistant ? t("suggestions.viaAssistant", { name }) : name}</span>
         {s.at && <Time iso={new Date(s.at).toISOString()} className="text-muted-foreground" />}
@@ -72,7 +72,7 @@ function Card({ s, name, canResolve, busy, onResolve, onFocus }: { s: EditorSugg
           </span>
         )}
       </div>
-      <p className="text-[13px] break-words">{what}</p>
+      <p className="text-[0.8125rem] break-words">{what}</p>
     </div>
   );
 }
@@ -113,12 +113,12 @@ export function SuggestionList({ editor, rev, path }: { editor: Editor | null; r
   };
   return (
     <section aria-label={t("suggestions.title")} className="grid gap-2">
-      <div className="flex items-center gap-1 px-1 text-[12px] text-muted-foreground">
+      <div className="flex items-center gap-1 px-1 text-[0.75rem] text-muted-foreground">
         <span className="font-medium text-foreground">{t("suggestions.count", { count: items.length })}</span>
         {canAll && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="ml-auto h-6 px-2 text-[12px]" disabled={resolve.isPending}>
+              <Button variant="ghost" size="sm" className="ml-auto h-6 px-2 text-[0.75rem]" disabled={resolve.isPending}>
                 {t("suggestions.bulk")}
                 <ChevronDown />
               </Button>

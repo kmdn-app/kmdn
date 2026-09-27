@@ -100,7 +100,7 @@ export function AuditLogPanel() {
             ))}
             {actions.map((a) => (
               <SelectItem key={a} value={a}>
-                <code className="font-mono text-[12px]">{a}</code>
+                <code className="font-mono text-[0.75rem]">{a}</code>
               </SelectItem>
             ))}
           </SelectContent>
@@ -134,13 +134,13 @@ export function AuditLogPanel() {
             ))}
           </SelectContent>
         </Select>
-        <label className="grid gap-0.5 text-[11.5px] text-muted-foreground">
+        <label className="grid gap-0.5 text-[0.71875rem] text-muted-foreground">
           {t("auditLog.from")}
-          <Input type="date" value={f.from} onChange={(e) => set("from")(e.target.value)} className="h-8 w-36 text-[13px]" />
+          <Input type="date" value={f.from} onChange={(e) => set("from")(e.target.value)} className="h-8 w-36 text-[0.8125rem]" />
         </label>
-        <label className="grid gap-0.5 text-[11.5px] text-muted-foreground">
+        <label className="grid gap-0.5 text-[0.71875rem] text-muted-foreground">
           {t("auditLog.to")}
-          <Input type="date" value={f.to} onChange={(e) => set("to")(e.target.value)} className="h-8 w-36 text-[13px]" />
+          <Input type="date" value={f.to} onChange={(e) => set("to")(e.target.value)} className="h-8 w-36 text-[0.8125rem]" />
         </label>
         {filtered && (
           <Button size="sm" variant="ghost" onClick={() => setF({ action: ANY, actor: ANY, repo: ANY, from: "", to: "" })}>
@@ -150,8 +150,8 @@ export function AuditLogPanel() {
         )}
       </div>
       <div className="overflow-x-auto rounded-xl border focus-visible:outline-2 focus-visible:outline-ring" tabIndex={0} role="region" aria-label={t("admin.audit")}>
-        <table className="w-full text-[13px]">
-          <thead className="text-left text-[12.5px] text-muted-foreground">
+        <table className="w-full text-[0.8125rem]">
+          <thead className="text-left text-[0.78125rem] text-muted-foreground">
             <tr className="border-b">
               <th className="px-3 py-2.5 font-medium">{t("admin.time")}</th>
               <th className="px-3 py-2.5 font-medium">{t("auditLog.actor")}</th>
@@ -168,7 +168,7 @@ export function AuditLogPanel() {
                 <td className="px-3 py-2">
                   <span className="block max-w-44 truncate">{e.actor_name || t(`auditLog.actors.${e.actor_type}`, { defaultValue: e.actor_type })}</span>
                   {(e.actor_type !== "user" || e.ip) && (
-                    <span className="block text-[11.5px] text-muted-foreground">
+                    <span className="block text-[0.71875rem] text-muted-foreground">
                       {e.actor_type !== "user" && t(`auditLog.actors.${e.actor_type}`, { defaultValue: e.actor_type })}
                       {e.actor_type !== "user" && e.ip && " · "}
                       {e.ip}
@@ -176,7 +176,7 @@ export function AuditLogPanel() {
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11.5px]">{e.action}</code>
+                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.71875rem]">{e.action}</code>
                 </td>
                 <td className="px-3 py-2 text-muted-foreground max-md:hidden">
                   {e.repo_name && <span className="text-foreground">{e.repo_name} </span>}

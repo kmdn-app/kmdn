@@ -95,7 +95,8 @@ test.describe.serial("sign in, edit, review, publish", () => {
     // Readers see the published change, its history and blame (which read
     // contents through the partial mirror, with the forge's credentials).
     await r.goto(`${repoPath}/docs/travel.md`);
-    await expect(r.getByText("Flights need a manager's approval.")).toBeVisible();
+    // The mirror catches up with the merge through the sync job.
+    await expect(r.getByText("Flights need a manager's approval.")).toBeVisible({ timeout: 20_000 });
     await expect(r.getByText(/Last updated/)).toBeVisible();
     await r.goto(`${repoPath}/docs/travel.md?view=blame`);
     await expect(r.getByRole("main").getByText("Ana").first()).toBeVisible();

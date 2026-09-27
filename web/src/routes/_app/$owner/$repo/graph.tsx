@@ -74,7 +74,7 @@ function GraphPage() {
               <>
                 <div className="relative @max-2xl:hidden">
                   <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("graph.search")} className="h-8 w-44 pl-7 text-[13px]" aria-label={t("graph.search")} />
+                  <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("graph.search")} className="h-8 w-44 pl-7 text-[0.8125rem]" aria-label={t("graph.search")} />
                 </div>
                 <Select value={folder} onValueChange={setFolder}>
                   <SelectTrigger size="sm" className="w-36" aria-label={t("graph.folder")}>
@@ -118,8 +118,8 @@ function GraphPage() {
             {graph.data && nodes.length === 0 && <p className="p-8 text-muted-foreground">{t("graph.empty")}</p>}
             {graph.data && nodes.length > 0 && <GraphCanvas nodes={nodes} edges={edges} colorOf={colorOf} match={match} selected={selected} onSelect={setSelected} cacheKey={`kmdn-graph:${repo.id}:${scope}:${folder}`} />}
             {graph.data && (
-              <div className="pointer-events-none absolute top-3 left-3 grid max-w-[260px] gap-2">
-                <div className="pointer-events-auto rounded-lg border bg-background/90 px-3 py-2 text-[12px] text-muted-foreground shadow-xs backdrop-blur">
+              <div className="pointer-events-none absolute top-3 left-3 grid max-w-[16.25rem] gap-2">
+                <div className="pointer-events-auto rounded-lg border bg-background/90 px-3 py-2 text-[0.75rem] text-muted-foreground shadow-xs backdrop-blur">
                   {t("graph.stats", { pages: nodes.length, links: edges.length - broken - dupCount })}
                   {broken > 0 && <span className="text-destructive"> · {t("graph.broken", { count: broken })}</span>}
                   {hasDups && (
@@ -130,7 +130,7 @@ function GraphPage() {
                   )}
                 </div>
                 {orphans.length > 0 && (
-                  <details className="pointer-events-auto rounded-lg border bg-background/90 px-3 py-2 text-[12.5px] shadow-xs backdrop-blur">
+                  <details className="pointer-events-auto rounded-lg border bg-background/90 px-3 py-2 text-[0.78125rem] shadow-xs backdrop-blur">
                     <summary className="cursor-pointer font-medium">{t("graph.orphans", { count: orphans.length })}</summary>
                     <ul className="mt-1.5 grid max-h-56 gap-1 overflow-auto">
                       {orphans.map((o) => (
@@ -146,18 +146,18 @@ function GraphPage() {
               </div>
             )}
             {node && (
-              <div className="absolute right-3 bottom-3 w-[280px] rounded-xl border bg-background p-4 shadow-md">
+              <div className="absolute right-3 bottom-3 w-[17.5rem] rounded-xl border bg-background p-4 shadow-md">
                 <div className="flex items-start gap-2">
                   <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: colorOf(node.folder) }} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{node.title}</div>
-                    <div className="truncate font-mono text-[11.5px] text-muted-foreground">{node.path}</div>
+                    <div className="truncate font-mono text-[0.71875rem] text-muted-foreground">{node.path}</div>
                   </div>
                   <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => setSelected(null)} aria-label={t("common.close")}>
                     <X className="size-4" />
                   </button>
                 </div>
-                <div className="mt-2 text-[12.5px] text-muted-foreground">
+                <div className="mt-2 text-[0.78125rem] text-muted-foreground">
                   {t("graph.inOut", { in: node.in, out: node.out })}
                   {node.orphan && ` · ${t("graph.orphan")}`}
                   {node.changed && ` · ${t("graph.changed")}`}
@@ -166,7 +166,7 @@ function GraphPage() {
                   (graph.data?.duplicates ?? [])
                     .filter((d) => d.a === node.path || d.b === node.path)
                     .map((d) => (
-                      <div key={d.a + d.b} className="mt-1 truncate text-[12.5px] text-warning">
+                      <div key={d.a + d.b} className="mt-1 truncate text-[0.78125rem] text-warning">
                         {t("graph.duplicateOf", { page: d.a === node.path ? d.b : d.a })}
                       </div>
                     ))}

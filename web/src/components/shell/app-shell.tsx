@@ -100,8 +100,8 @@ export function AppShell({
       </a>
       <div
         className={cn(
-          "shrink-0 border-r border-sidebar-border bg-sidebar max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[min(300px,86%)] max-md:shadow-xl",
-          sidebarOpen ? "md:w-[248px]" : "md:hidden",
+          "shrink-0 border-r border-sidebar-border bg-sidebar max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[min(18.75rem,86%)] max-md:shadow-xl",
+          sidebarOpen ? "md:w-[15.5rem]" : "md:hidden",
           !mobileNav && "max-md:hidden",
         )}
       >

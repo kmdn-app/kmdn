@@ -28,7 +28,7 @@ export function LinksPanel({ repo, path, revision }: { repo: RepoView; path: str
       </div>
     );
   }
-  if (!q.data) return <p className="p-4 text-[13px] text-muted-foreground">{t("links.unavailable")}</p>;
+  if (!q.data) return <p className="p-4 text-[0.8125rem] text-muted-foreground">{t("links.unavailable")}</p>;
   const { outgoing, incoming } = q.data;
   const broken = outgoing.filter((o) => o.broken).length;
   const target = (p: string) => (
@@ -37,7 +37,7 @@ export function LinksPanel({ repo, path, revision }: { repo: RepoView; path: str
     </Link>
   );
   return (
-    <div className="grid gap-5 p-4 text-[13px]">
+    <div className="grid gap-5 p-4 text-[0.8125rem]">
       <LocalGraph repo={repo} path={path} outgoing={outgoing} incoming={incoming} search={search} />
       <section>
         <h3 className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -64,14 +64,14 @@ export function LinksPanel({ repo, path, revision }: { repo: RepoView; path: str
                     {o.url}
                   </a>
                 ) : o.broken || !o.to_path || o.image ? (
-                  <span className="block truncate font-mono text-[12px]">{o.url}</span>
+                  <span className="block truncate font-mono text-[0.75rem]">{o.url}</span>
                 ) : (
                   <span className="block truncate">
                     {target(o.to_path)}
                     {o.anchor && <span className="text-muted-foreground">#{o.anchor}</span>}
                   </span>
                 )}
-                <span className="text-[11.5px] text-muted-foreground">
+                <span className="text-[0.71875rem] text-muted-foreground">
                   {t("links.line", { line: o.line })}
                   {o.broken && ` · ${t(`links.reasons.${o.broken}`)}`}
                 </span>
@@ -92,7 +92,7 @@ export function LinksPanel({ repo, path, revision }: { repo: RepoView; path: str
               <ArrowDownLeft className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
                 <span className="block truncate">{target(l.from_path)}</span>
-                <span className="text-[11.5px] text-muted-foreground">{t("links.line", { line: l.line })}</span>
+                <span className="text-[0.71875rem] text-muted-foreground">{t("links.line", { line: l.line })}</span>
               </div>
             </li>
           ))}
@@ -172,13 +172,13 @@ function LocalGraph({
           <g key={n.path} className={cn(!n.broken && "cursor-pointer")} onClick={() => !n.broken && go(n.path)}>
             <title>{n.path}</title>
             <circle cx={x} cy={y} r={5} strokeWidth={1.2} strokeDasharray={n.broken ? "2 2" : undefined} className={n.broken ? "fill-background stroke-destructive" : "fill-background stroke-foreground/60"} />
-            <text x={x} y={y < cy - 20 ? y - 9 : y + 15} textAnchor="middle" className={cn("text-[9px]", n.broken ? "fill-destructive" : "fill-muted-foreground")}>
+            <text x={x} y={y < cy - 20 ? y - 9 : y + 15} textAnchor="middle" className={cn("text-[0.5625rem]", n.broken ? "fill-destructive" : "fill-muted-foreground")}>
               {label(n.path)}
             </text>
           </g>
         ))}
       </svg>
-      {all.length > shown.length && <p className="mt-1 text-[11.5px] text-muted-foreground">{t("links.more", { count: all.length - shown.length })}</p>}
+      {all.length > shown.length && <p className="mt-1 text-[0.71875rem] text-muted-foreground">{t("links.more", { count: all.length - shown.length })}</p>}
     </section>
   );
 }

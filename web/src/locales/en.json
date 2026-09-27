@@ -332,6 +332,7 @@
     "status_deactivated": "Deactivated",
     "lastActive": "Last active",
     "instanceAdmin": "Admin",
+    "userActions": "Actions for {{name}}",
     "makeAdmin": "Make admin",
     "removeAdmin": "Remove admin",
     "deactivate": "Deactivate",

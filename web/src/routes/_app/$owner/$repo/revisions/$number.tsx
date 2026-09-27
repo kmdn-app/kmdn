@@ -79,7 +79,7 @@ function Overview() {
         <>
           <TopBar controls={controls} title={r ? `#${r.number} ${r.title}` : t("revision.overview")} actions={r && <Actions repo={repo} rev={r} />} />
           <div className="min-h-0 flex-1 overflow-auto">
-            <div className="mx-auto grid max-w-[880px] gap-8 px-8 pt-7 pb-20 max-md:px-4">
+            <div className="mx-auto grid max-w-[55rem] gap-8 px-8 pt-7 pb-20 max-md:px-4">
               {rev.error && <p className="text-muted-foreground">{errorMessage(rev.error, t("errors.generic"))}</p>}
               {!r && !rev.error && <Skeleton className="h-24 w-full" />}
               {r && (
@@ -125,7 +125,7 @@ function Actions({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
     <>
       <Button size="sm" variant="ghost" onClick={() => act.mutate("close")} disabled={act.isPending || rev.state === "publishing"}>
         <Archive />
-        <span className="max-md:hidden">{t("revision.close")}</span>
+        <span className="max-md:sr-only">{t("revision.close")}</span>
       </Button>
       <ReviewActions repo={repo} rev={rev} />
     </>
@@ -193,7 +193,7 @@ function Header({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
               </Button>
             )}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted-foreground">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-[0.8125rem] text-muted-foreground">
             <StatePill rev={rev} />
             <span>
               #{rev.number} · {t("revision.startedBy", { name: owner?.name ?? "—" })} <Time iso={rev.created_at} />
@@ -206,16 +206,16 @@ function Header({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
             )}
           </div>
           {rev.description ? (
-            <p className="mt-4 text-[14.5px] whitespace-pre-wrap">{rev.description}</p>
+            <p className="mt-4 text-[0.90625rem] whitespace-pre-wrap">{rev.description}</p>
           ) : (
             canEdit && (
-              <button type="button" onClick={startEditing} className="mt-4 text-[13.5px] text-muted-foreground hover:text-foreground">
+              <button type="button" onClick={startEditing} className="mt-4 text-[0.84375rem] text-muted-foreground hover:text-foreground">
                 {t("revision.addDescription")}
               </button>
             )
           )}
           {rev.state === "published" && rev.published_sha && (
-            <p className="mt-4 rounded-lg border border-success/30 bg-success/5 px-3 py-2 text-[13px]">
+            <p className="mt-4 rounded-lg border border-success/30 bg-success/5 px-3 py-2 text-[0.8125rem]">
               {t("publish.done", { branch: repo.target_branch })}{" "}
               {commitURL(repo, rev.published_sha) ? (
                 <a href={commitURL(repo, rev.published_sha)!} target="_blank" rel="noreferrer" className="font-mono underline">
@@ -227,14 +227,14 @@ function Header({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
             </p>
           )}
           {rev.state === "publishing" && rev.change_request_url && (
-            <p className="mt-4 rounded-lg border px-3 py-2 text-[13px]">
+            <p className="mt-4 rounded-lg border px-3 py-2 text-[0.8125rem]">
               {t("publish.waitingForMerge")}{" "}
               <a href={rev.change_request_url} target="_blank" rel="noreferrer" className="underline">
                 {t("publish.openThePR")}
               </a>
             </p>
           )}
-          {rev.access.reason && rev.state !== "closed" && rev.state !== "published" && rev.state !== "publishing" && <p className="mt-4 rounded-lg border bg-muted/40 px-3 py-2 text-[13px]">{t(`revision.readOnly.${rev.access.reason}`, { defaultValue: t("revision.readOnly.generic"), editors: rev.members.map((m) => m.name.split(" ")[0]).join(", ") })}</p>}
+          {rev.access.reason && rev.state !== "closed" && rev.state !== "published" && rev.state !== "publishing" && <p className="mt-4 rounded-lg border bg-muted/40 px-3 py-2 text-[0.8125rem]">{t(`revision.readOnly.${rev.access.reason}`, { defaultValue: t("revision.readOnly.generic"), editors: rev.members.map((m) => m.name.split(" ")[0]).join(", ") })}</p>}
         </>
       )}
     </section>
@@ -244,7 +244,7 @@ function Header({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
 function SectionTitle({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="text-[15px] font-semibold">{title}</h2>
+      <h2 className="text-[0.9375rem] font-semibold">{title}</h2>
       {action}
     </div>
   );
@@ -279,7 +279,7 @@ function Pages({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
       />
       <div className="overflow-hidden rounded-xl border">
         {files.data?.length === 0 && (
-          <p className="p-6 text-center text-[13.5px] text-muted-foreground">
+          <p className="p-6 text-center text-[0.84375rem] text-muted-foreground">
             {canEdit ? t("revision.noChangesHint") : t("revision.noChanges")}
           </p>
         )}
@@ -287,26 +287,26 @@ function Pages({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
           const mark = OP_MARK[f.op];
           return (
             <div key={f.id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
-              <span className={cn("w-3 text-center font-mono text-[12px] font-semibold", mark?.cls)} title={t(`revision.ops.${f.op}`)}>
+              <span className={cn("w-3 text-center font-mono text-[0.75rem] font-semibold", mark?.cls)} title={t(`revision.ops.${f.op}`)}>
                 {mark?.letter}
               </span>
               <FileText className="size-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
                 {f.op === "delete" ? (
-                  <span className="truncate text-[13.5px] text-muted-foreground line-through">{f.path}</span>
+                  <span className="truncate text-[0.84375rem] text-muted-foreground line-through">{f.path}</span>
                 ) : (
                   <Link
                     to="/$owner/$repo/$"
                     params={{ owner: repo.owner, repo: repo.name, _splat: f.path }}
                     search={{ revision: rev.number }}
-                    className="truncate text-[13.5px] font-medium hover:underline"
+                    className="truncate text-[0.84375rem] font-medium hover:underline"
                   >
                     {f.path}
                   </Link>
                 )}
-                {f.from_path && <div className="truncate text-[12px] text-muted-foreground">{t("revision.renamedFrom", { path: f.from_path })}</div>}
+                {f.from_path && <div className="truncate text-[0.75rem] text-muted-foreground">{t("revision.renamedFrom", { path: f.from_path })}</div>}
               </div>
-              <span className="font-mono text-[12px] tabular-nums">
+              <span className="font-mono text-[0.75rem] tabular-nums">
                 {f.additions > 0 && <span className="text-success">+{f.additions}</span>}
                 {f.deletions > 0 && <span className="ml-1.5 text-destructive">−{f.deletions}</span>}
               </span>
@@ -372,18 +372,18 @@ function AddPageDialog({ repo, rev, onClose }: { repo: RepoView; rev: RevisionVi
         >
           <div className="grid gap-1.5">
             <Label htmlFor="new-path">{t("revision.pagePath")}</Label>
-            <div className="flex items-center rounded-md border border-input shadow-xs focus-within:ring-[3px] focus-within:ring-ring/50">
-              {root && <span className="pl-3 font-mono text-[13px] text-muted-foreground select-none">{root}/</span>}
+            <div className="flex items-center rounded-md border border-input shadow-xs focus-within:ring-[0.1875rem] focus-within:ring-ring/50">
+              {root && <span className="pl-3 font-mono text-[0.8125rem] text-muted-foreground select-none">{root}/</span>}
               <input
                 id="new-path"
                 value={rel}
                 onChange={(e) => setRel(e.target.value)}
                 placeholder="guides/new-page"
-                className="h-9 min-w-0 flex-1 bg-transparent px-1 font-mono text-[13px] outline-none first:pl-3"
+                className="h-9 min-w-0 flex-1 bg-transparent px-1 font-mono text-[0.8125rem] outline-none first:pl-3"
                 autoFocus
               />
             </div>
-            <p className="text-[12px] text-muted-foreground">{t("revision.willCreate", { path: full })}</p>
+            <p className="text-[0.75rem] text-muted-foreground">{t("revision.willCreate", { path: full })}</p>
           </div>
           {(templates.data?.length ?? 0) > 0 && (
             <div className="grid gap-1.5">
@@ -398,7 +398,7 @@ function AddPageDialog({ repo, rev, onClose }: { repo: RepoView; rev: RevisionVi
               </select>
             </div>
           )}
-          {add.error && <p className="text-[13px] text-destructive">{errorMessage(add.error, t("errors.generic"))}</p>}
+          {add.error && <p className="text-[0.8125rem] text-destructive">{errorMessage(add.error, t("errors.generic"))}</p>}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               {t("common.cancel")}
@@ -458,14 +458,14 @@ function RenameDialog({ repo, rev, file, onClose }: { repo: RepoView; rev: Revis
             rename.mutate();
           }}
         >
-          <Input value={path} onChange={(e) => setPath(e.target.value)} className="font-mono text-[13px]" autoFocus aria-label={t("revision.pagePath")} />
+          <Input value={path} onChange={(e) => setPath(e.target.value)} className="font-mono text-[0.8125rem]" autoFocus aria-label={t("revision.pagePath")} />
           {rewrites.length > 0 && (
             <div className="rounded-lg border">
-              <label className="flex items-center gap-2 border-b px-3 py-2 text-[13px] font-medium">
+              <label className="flex items-center gap-2 border-b px-3 py-2 text-[0.8125rem] font-medium">
                 <input type="checkbox" checked={updateLinks} onChange={(e) => setUpdateLinks(e.target.checked)} className="accent-primary" />
                 {t("revision.updateLinks", { count: rewrites.length, pages })}
               </label>
-              <ul className="max-h-40 overflow-auto px-3 py-2 font-mono text-[11.5px] text-muted-foreground">
+              <ul className="max-h-40 overflow-auto px-3 py-2 font-mono text-[0.71875rem] text-muted-foreground">
                 {rewrites.map((r, i) => (
                   <li key={i} className="truncate" title={`${r.path}:${r.line}`}>
                     {r.path}:{r.line} <span className="line-through">{r.before}</span> → <span className="text-foreground">{r.after}</span>
@@ -474,7 +474,7 @@ function RenameDialog({ repo, rev, file, onClose }: { repo: RepoView; rev: Revis
               </ul>
             </div>
           )}
-          {rename.error && <p className="text-[13px] text-destructive">{errorMessage(rename.error, t("errors.generic"))}</p>}
+          {rename.error && <p className="text-[0.8125rem] text-destructive">{errorMessage(rename.error, t("errors.generic"))}</p>}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               {t("common.cancel")}
@@ -522,10 +522,10 @@ function People({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
           <div key={m.user_id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
             <Avatar name={m.name} id={m.user_id} />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13.5px] font-medium">{m.name}</div>
-              <div className="truncate text-[12px] text-muted-foreground">{m.email}</div>
+              <div className="truncate text-[0.84375rem] font-medium">{m.name}</div>
+              <div className="truncate text-[0.75rem] text-muted-foreground">{m.email}</div>
             </div>
-            <span className="text-[12px] text-muted-foreground">{t(`revision.roles.${m.role}`)}</span>
+            <span className="text-[0.75rem] text-muted-foreground">{t(`revision.roles.${m.role}`)}</span>
             {manage && m.role !== "owner" && (
               <Button variant="ghost" size="icon" className="size-7" onClick={() => remove.mutate(m.user_id)} aria-label={t("revision.removePerson", { name: m.name })}>
                 <X />
@@ -546,8 +546,8 @@ function People({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
                   .map((u) => (
                     <button key={u.id} type="button" onClick={() => add.mutate(u.id)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-accent">
                       <Avatar name={u.name} id={u.id} size="sm" />
-                      <span className="text-[13.5px]">{u.name}</span>
-                      <span className="text-[12px] text-muted-foreground">{u.email}</span>
+                      <span className="text-[0.84375rem]">{u.name}</span>
+                      <span className="text-[0.75rem] text-muted-foreground">{u.email}</span>
                     </button>
                   ))}
               </div>
@@ -573,8 +573,8 @@ function Activity({ rev }: { rev: RevisionView }) {
           .slice()
           .reverse()
           .map((e) => (
-            <li key={e.id} className="relative text-[13.5px]">
-              <span className="absolute top-2 -left-[23px] size-1.5 rounded-full bg-border ring-4 ring-background" />
+            <li key={e.id} className="relative text-[0.84375rem]">
+              <span className="absolute top-2 -left-[1.4375rem] size-1.5 rounded-full bg-border ring-4 ring-background" />
               <span className="font-medium">{e.actor_name || t("revision.someone")}</span>{" "}
               {t(`revision.events.${e.kind}`, { defaultValue: e.kind, path: String((e.data as { path?: string }).path ?? ""), from: String((e.data as { from_path?: string }).from_path ?? "") })}{" "}
               <span className="text-muted-foreground">
@@ -644,13 +644,13 @@ function Checkpoints({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
             </Button>
           </form>
         )}
-        {list.data?.length === 0 && <p className="p-6 text-center text-[13.5px] text-muted-foreground">{t("checkpoints.none")}</p>}
+        {list.data?.length === 0 && <p className="p-6 text-center text-[0.84375rem] text-muted-foreground">{t("checkpoints.none")}</p>}
         {list.data?.map((c) => (
           <div key={c.id} className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
             {c.commit_sha ? <GitCommitHorizontal className="size-4 text-foreground" /> : c.kind === "named" ? <Bookmark className="size-4 text-foreground" /> : <HistoryIcon className="size-4 text-muted-foreground" />}
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13.5px] font-medium">{c.name || t(`checkpoints.kinds.${c.kind}`)}</div>
-              <div className="text-[12px] text-muted-foreground">
+              <div className="truncate text-[0.84375rem] font-medium">{c.name || t(`checkpoints.kinds.${c.kind}`)}</div>
+              <div className="text-[0.75rem] text-muted-foreground">
                 {c.created_by_name && `${c.created_by_name} · `}
                 <Time iso={c.created_at} /> · {t("revision.pages", { count: c.file_count })}
                 {c.commit_sha && (
@@ -669,12 +669,12 @@ function Checkpoints({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
             </div>
             <Button variant="ghost" size="sm" onClick={() => setViewing(c.id)}>
               <Eye />
-              <span className="max-md:hidden">{t("checkpoints.view")}</span>
+              <span className="max-md:sr-only">{t("checkpoints.view")}</span>
             </Button>
             {canEdit && (
               <Button variant="ghost" size="sm" onClick={() => restore.mutate(c.id)} disabled={restore.isPending}>
                 <RotateCcw />
-                <span className="max-md:hidden">{t("checkpoints.restore")}</span>
+                <span className="max-md:sr-only">{t("checkpoints.restore")}</span>
               </Button>
             )}
           </div>
@@ -713,7 +713,7 @@ function CheckpointDialog({ repo, rev, id, onClose }: { repo: RepoView; rev: Rev
               type="button"
               disabled={f.op === "delete"}
               onClick={() => setPath(f.path)}
-              className={cn("rounded-md border px-2 py-1 font-mono text-[12px]", f.path === shown && "bg-accent", f.op === "delete" && "line-through opacity-60")}
+              className={cn("rounded-md border px-2 py-1 font-mono text-[0.75rem]", f.path === shown && "bg-accent", f.op === "delete" && "line-through opacity-60")}
             >
               {OP_MARK[f.op]?.letter} {f.path}
             </button>
@@ -745,7 +745,7 @@ function Checks({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
   return (
     <section>
       <SectionTitle title={t("revision.checks")} />
-      <div className="overflow-hidden rounded-xl border text-[13.5px]">
+      <div className="overflow-hidden rounded-xl border text-[0.84375rem]">
         {conflicted.map((f) => (
           <p key={"c" + f.path} className="flex items-start gap-2 border-b px-4 py-2.5">
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />

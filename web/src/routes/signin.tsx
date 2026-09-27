@@ -67,7 +67,7 @@ function RequestForm({
       <h1 className="mt-3.5 text-center text-xl font-semibold tracking-tight">{t("signin.title", { instance })}</h1>
       <p className="mt-1.5 mb-6 text-center text-muted-foreground">{t("signin.subtitle")}</p>
       {oauth_error && (
-        <p role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[13px]">
+        <p role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[0.8125rem]">
           {t(`signin.oauthError.${oauth_error}`, { defaultValue: t("signin.oauthError.generic") })}
         </p>
       )}
@@ -106,7 +106,7 @@ function RequestForm({
           aria-describedby={err ? "signin-error" : undefined}
         />
         {err && (
-          <p id="signin-error" role="alert" className="text-[13px] text-destructive">
+          <p id="signin-error" role="alert" className="text-[0.8125rem] text-destructive">
             {err instanceof ApiError && err.status === 429 ? t("signin.rateLimited") : errorMessage(err, t("errors.network"))}
           </p>
         )}
@@ -145,7 +145,7 @@ function PasskeySignIn({ redirect }: { redirect?: string }) {
         {t("signin.passkey")}
       </Button>
       {error && (
-        <p role="alert" className="text-[13px] text-destructive">
+        <p role="alert" className="text-[0.8125rem] text-destructive">
           {error}
         </p>
       )}
@@ -198,7 +198,7 @@ function CheckEmail({ email, minutes, onBack }: { email: string; minutes: number
           </Button>
         </div>
         {verify.error && (
-          <p role="alert" className="text-[13px] text-destructive">
+          <p role="alert" className="text-[0.8125rem] text-destructive">
             {t("signin.invalid")}
           </p>
         )}

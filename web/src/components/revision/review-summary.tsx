@@ -61,7 +61,7 @@ export function ReviewSummary({ repo, rev }: { repo: RepoView; rev: RevisionView
   return (
     <section>
       <div className="mb-2.5 flex items-center gap-2">
-        <h2 className="text-[15px] font-semibold">{t("review.title")}</h2>
+        <h2 className="text-[0.9375rem] font-semibold">{t("review.title")}</h2>
         {canAsk && (
           <Button size="sm" variant="ghost" className="ml-auto h-7" disabled={d.pending || refresh.isPending} onClick={() => refresh.mutate()}>
             {d.pending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
@@ -69,7 +69,7 @@ export function ReviewSummary({ repo, rev }: { repo: RepoView; rev: RevisionView
           </Button>
         )}
       </div>
-      <div className="grid gap-3 rounded-xl border p-4 text-[13.5px]">
+      <div className="grid gap-3 rounded-xl border p-4 text-[0.84375rem]">
         {d.pending && !d.review && <p className="flex items-center gap-2 text-muted-foreground"><Loader2 className="size-4 animate-spin" />{t("review.writing")}</p>}
         {d.review && (
           <>
@@ -83,12 +83,12 @@ export function ReviewSummary({ repo, rev }: { repo: RepoView; rev: RevisionView
             )}
             {d.review.commit_title && (
               <div className="rounded-lg bg-muted/50 px-3 py-2">
-                <div className="text-[11.5px] font-medium tracking-wide text-muted-foreground uppercase">{t("review.commit")}</div>
+                <div className="text-[0.71875rem] font-medium tracking-wide text-muted-foreground uppercase">{t("review.commit")}</div>
                 <div className="mt-0.5 font-medium">{d.review.commit_title}</div>
-                {d.review.commit_body && <p className="mt-1 text-[12.5px] whitespace-pre-wrap text-muted-foreground">{d.review.commit_body}</p>}
+                {d.review.commit_body && <p className="mt-1 text-[0.78125rem] whitespace-pre-wrap text-muted-foreground">{d.review.commit_body}</p>}
               </div>
             )}
-            <p className="text-[11.5px] text-muted-foreground">
+            <p className="text-[0.71875rem] text-muted-foreground">
               {t("review.by")} · <Time iso={d.review.created_at} />
               {d.review.stale && <span className="text-warning"> · {t("review.stale")}</span>}
             </p>
@@ -109,7 +109,7 @@ export function ReviewSummary({ repo, rev }: { repo: RepoView; rev: RevisionView
                   {f.quote && <span className="text-muted-foreground"> “{f.quote}”</span>}
                 </span>
                 {canFix && (
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-[12px]" disabled={fix.isPending} onClick={() => fix.mutate(f)}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-[0.75rem]" disabled={fix.isPending} onClick={() => fix.mutate(f)}>
                     <Wand2 />
                     {t("review.fix")}
                   </Button>

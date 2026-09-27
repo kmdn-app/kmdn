@@ -45,7 +45,7 @@ export function UpdatesBanner({ rev, className }: { rev: RevisionView; className
   if (!u) return null;
   return (
     <>
-      <div className={cn("flex items-center gap-3 rounded-xl border border-sky-500/30 bg-sky-500/5 px-4 py-3 text-[13.5px]", className)}>
+      <div className={cn("flex items-center gap-3 rounded-xl border border-sky-500/30 bg-sky-500/5 px-4 py-3 text-[0.84375rem]", className)}>
         <GitMerge className="size-4 shrink-0 text-sky-500" />
         <div className="min-w-0 flex-1">
           <span className="font-medium">{t("updates.banner", { count: u.files.length })}</span>
@@ -55,7 +55,7 @@ export function UpdatesBanner({ rev, className }: { rev: RevisionView; className
               {u.last_commit.author_name}, <Time iso={u.last_commit.date} />
             </span>
           )}
-          <p className="text-[12.5px] text-muted-foreground">{t("updates.blocking")}</p>
+          <p className="text-[0.78125rem] text-muted-foreground">{t("updates.blocking")}</p>
         </div>
         <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
           {t("updates.review")}
@@ -83,7 +83,7 @@ function UpdatesDialog({ rev, update, canApply, open, onOpenChange }: { rev: Rev
   });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[760px]">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[47.5rem]">
         <DialogHeader>
           <DialogTitle>{t("updates.title")}</DialogTitle>
           <DialogDescription>
@@ -93,25 +93,25 @@ function UpdatesDialog({ rev, update, canApply, open, onOpenChange }: { rev: Rev
         <ul className="grid gap-2">
           {update.files.map((f) => (
             <li key={f.path} className="rounded-lg border">
-              <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px]" onClick={() => setShown(shown === f.path ? null : f.path)} aria-expanded={shown === f.path}>
+              <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-[0.8125rem]" onClick={() => setShown(shown === f.path ? null : f.path)} aria-expanded={shown === f.path}>
                 <ChevronRight className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", shown === f.path && "rotate-90")} />
-                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">{f.path}</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-[0.78125rem]">{f.path}</span>
                 {f.kind === "merge" && (
-                  <span className="text-[12px] text-muted-foreground tabular-nums">
+                  <span className="text-[0.75rem] text-muted-foreground tabular-nums">
                     <span className="text-success">+{f.additions}</span> <span className="text-destructive">−{f.deletions}</span>
                   </span>
                 )}
                 <Badge variant={f.conflicts ? "destructive" : "secondary"}>{f.kind === "merge" ? (f.conflicts ? t("updates.conflicts", { count: f.conflicts }) : t("updates.clean")) : t(`updates.kinds.${f.kind}`)}</Badge>
               </button>
               {shown === f.path && f.hunks.length > 0 && (
-                <div className="max-h-[320px] overflow-auto border-t">
+                <div className="max-h-[20rem] overflow-auto border-t">
                   <SourceDiff hunks={f.hunks} />
                 </div>
               )}
             </li>
           ))}
         </ul>
-        <p className="text-[12.5px] text-muted-foreground">{update.conflicts ? t("updates.noteConflicts") : t("updates.note")}</p>
+        <p className="text-[0.78125rem] text-muted-foreground">{update.conflicts ? t("updates.noteConflicts") : t("updates.note")}</p>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("updates.notNow")}
@@ -122,7 +122,7 @@ function UpdatesDialog({ rev, update, canApply, open, onOpenChange }: { rev: Rev
               {t("updates.apply")}
             </Button>
           ) : (
-            <span className="self-center text-[12.5px] text-muted-foreground">{t(rev.state === "editing" ? "updates.waitEditors" : "updates.waitReviewers")}</span>
+            <span className="self-center text-[0.78125rem] text-muted-foreground">{t(rev.state === "editing" ? "updates.waitEditors" : "updates.waitReviewers")}</span>
           )}
         </DialogFooter>
       </DialogContent>
