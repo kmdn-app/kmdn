@@ -94,6 +94,25 @@ const api = {
     });
     return JSON.stringify(counts);
   },
+  /**
+   * The update that sets (or, with an empty value, deletes) key in the
+   * document's map `name`, written by clientID. Comment anchors live in the
+   * "comments" map; the server writes them so read-only commenters can anchor.
+   */
+  ySetMapEntry: (update: ArrayBuffer, clientID: number, name: string, key: string, valueJSON: string): ArrayBuffer => {
+    const d = load(update);
+    d.clientID = clientID;
+    let out: Uint8Array = new Uint8Array([0, 0]);
+    d.on("update", (u: Uint8Array) => {
+      out = u;
+    });
+    d.transact(() => {
+      const m = d.getMap(name);
+      if (valueJSON === "") m.delete(key);
+      else m.set(key, JSON.parse(valueJSON));
+    });
+    return buf(out);
+  },
   /** merge updates into one (compaction) */
   yMerge: (updates: ArrayBuffer[]): ArrayBuffer => buf(Y.mergeUpdates(updates.map(u8))),
   /** what a peer with state vector sv is missing */

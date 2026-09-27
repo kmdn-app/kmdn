@@ -19,7 +19,8 @@ export function RightPanel({ onClose, children }: { onClose: () => void; childre
   const { t } = useTranslation();
   return (
     <aside aria-label="Side panel" className="flex w-[360px] shrink-0 flex-col border-l bg-background max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[min(360px,100%)] max-lg:shadow-xl">
-      <Tabs defaultValue={panelInitial(children)} className="flex min-h-0 flex-1 flex-col gap-0">
+      {/* Keyed on the initial tab so pages can switch it (e.g. to Comments). */}
+      <Tabs key={panelInitial(children)} defaultValue={panelInitial(children)} className="flex min-h-0 flex-1 flex-col gap-0">
         <div className="flex min-h-[52px] items-center gap-1.5 border-b px-3 py-2">
           <TabsList className="h-8 flex-1">
             {TABS.map(({ key, icon: Icon }) => (

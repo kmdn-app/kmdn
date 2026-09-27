@@ -586,7 +586,8 @@ func (r *Room) ingest(ctx context.Context, data []byte, clients []uint64, c revi
 		r.quietT.Stop()
 	}
 	r.quietT = time.AfterFunc(r.hub.Options.QuietPeriod, func() { r.materialize(context.Background()) })
-	needManifest := !r.inManifest
+	// Comment anchors don't change the page: they don't add it to the revision.
+	needManifest := !r.inManifest && kind != "comment"
 	r.mu.Unlock()
 
 	out := syncMsg(syncUpdate, data)

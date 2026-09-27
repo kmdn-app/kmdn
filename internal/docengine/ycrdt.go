@@ -251,3 +251,11 @@ func (e *Engine) YContributions(ctx context.Context, state []byte) (map[uint64]i
 	}
 	return out, nil
 }
+
+// YSetMapEntry returns the update setting key in the document's map name to
+// a JSON value (an empty value deletes it), written by clientID.
+func (e *Engine) YSetMapEntry(ctx context.Context, state []byte, clientID uint32, name, key, valueJSON string) ([]byte, error) {
+	return e.binCall(ctx, "ySetMapEntry", len(state), func(v *vm) []goja.Value {
+		return []goja.Value{bin(v, state), v.rt.ToValue(clientID), v.rt.ToValue(name), v.rt.ToValue(key), v.rt.ToValue(valueJSON)}
+	})
+}

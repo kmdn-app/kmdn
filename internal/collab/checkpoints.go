@@ -17,6 +17,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/ids"
+	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -57,6 +58,31 @@ func (h *Hub) Apply(ctx context.Context, repo repos.Repo, rev revisions.Revision
 		return nil // already identical
 	}
 	return room.ingest(ctx, update, []uint64{client}, c, nil, kind)
+}
+
+// PutAnchor stores a comment thread's position in the page's document (its
+// "comments" map), on the commenter's behalf, so it moves with the text. Pages
+// without a document (nobody edited them yet) keep the quote-only anchor.
+func (h *Hub) PutAnchor(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, threadID string, anchorJSON []byte) error {
+	h.init()
+	room, err := h.room(ctx, repo, rev, p, false, c.User.ID)
+	if err != nil {
+		var je *realtime.JoinError
+		if errors.As(err, &je) && je.Code == "no_document" {
+			return nil
+		}
+		return err
+	}
+	state := room.merged(ctx)
+	if state == nil {
+		return errors.New("collab: document unavailable")
+	}
+	client := uint64(rand.Uint32())
+	update, err := h.Engine.YSetMapEntry(ctx, state, uint32(client), "comments", threadID, string(anchorJSON))
+	if err != nil {
+		return err
+	}
+	return room.ingest(ctx, update, []uint64{client}, c, nil, "comment")
 }
 
 type activity struct {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
-import { Check, ChevronRight, CloudOff, FilePen, Loader2, Lock } from "lucide-react";
+import { Check, ChevronRight, CloudOff, FilePen, Loader2, Lock, MessageSquarePlus } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { DocView } from "@/components/doc/doc-view";
@@ -20,6 +20,9 @@ import { ChangesView, SourceDiff } from "@/components/revision/diff-views";
 import { cn } from "@/lib/utils";
 import { EditorToolbar, PageEditor, useRoomStatus, type ImageUploader } from "./page-editor";
 import { SourceEditor } from "./source-editor";
+import { selectionAnchor } from "./comment-anchors";
+import { CommentsPanel, type PendingComment } from "@/components/revision/comments-panel";
+import { useThreads } from "@/lib/threads";
 
 /** Opens the page's room for as long as the view shows it. */
 function useRoom(revisionID: string | undefined, path: string) {
@@ -46,6 +49,11 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
   const [editor, setEditor] = useState<Editor | null>(null);
   const [mode, setMode] = useEditorMode();
   const [view, setView] = useState<ReviewView>("result");
+  const [pending, setPending] = useState<PendingComment | null>(null);
+  const [activeThread, setActiveThread] = useState<string | null>(null);
+  const threadsQ = useThreads(rev.data?.id, path, "hot");
+  const resolvedSet = useMemo(() => new Set((threadsQ.data ?? []).filter((x) => x.state === "resolved").map((x) => x.id)), [threadsQ.data]);
+  const comments = useMemo(() => ({ active: activeThread, hidden: resolvedSet, onClick: (id: string) => setActiveThread(id) }), [activeThread, resolvedSet]);
   const files = useRevisionFiles(rev.data);
   const inRevision = !!files.data?.some((f) => f.path === path && f.op !== "delete");
   const onEditor = useCallback((e: Editor | null) => setEditor(e), []);
@@ -76,7 +84,30 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
     );
   }
   return (
-    <AppShell repo={repo} revision={rev.data} currentPath={path} panel={rev.data ? { initial: "links", links: <LinksPanel repo={repo} path={path} revision={rev.data} /> } : undefined}>
+    <AppShell
+      repo={repo}
+      revision={rev.data}
+      currentPath={path}
+      panel={
+        rev.data
+          ? {
+              initial: pending || activeThread ? "comments" : "links",
+              links: <LinksPanel repo={repo} path={path} revision={rev.data} />,
+              comments: (
+                <CommentsPanel
+                  revisionID={rev.data.id}
+                  path={path}
+                  pending={pending}
+                  onPendingDone={() => setPending(null)}
+                  active={activeThread}
+                  onActive={setActiveThread}
+                  canComment={rev.data.state !== "published" && rev.data.state !== "closed"}
+                />
+              ),
+            }
+          : undefined
+      }
+    >
       {(controls) => (
         <>
           <TopBar
@@ -95,6 +126,21 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
             actions={
               <>
                 {rev.data && <PresenceStack repo={repo} rev={rev.data} path={path} />}
+                {editor && view === "result" && mode === "visual" && rev.data?.state !== "published" && rev.data?.state !== "closed" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      const anchor = selectionAnchor(editor);
+                      setPending({ quote: anchor?.quote ?? "", position: anchor?.position ?? null });
+                      if (!controls.panelOpen) controls.togglePanel();
+                    }}
+                    title={t("comments.commentOnSelection")}
+                  >
+                    <MessageSquarePlus />
+                    <span className="max-lg:hidden">{t("comments.comment")}</span>
+                  </Button>
+                )}
                 {inRevision && <ViewToggle view={view} onChange={setView} />}
                 {status && !status.error && view === "result" && <ModeToggle mode={mode} onChange={setMode} />}
                 {rev.data && <RevisionPill rev={rev.data} />}
@@ -114,7 +160,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-auto">
-            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} view={inRevision ? view : "result"} /> : <Loading />}
+            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} view={inRevision ? view : "result"} comments={comments} /> : <Loading />}
           </div>
         </>
       )}
@@ -206,6 +252,7 @@ function Body({
   upload,
   mode,
   view,
+  comments,
 }: {
   repo: RepoView;
   rev: RevisionView;
@@ -215,6 +262,7 @@ function Body({
   upload?: ImageUploader;
   mode: EditorMode;
   view: ReviewView;
+  comments: { active: string | null; hidden: Set<string>; onClick: (id: string) => void };
 }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
@@ -265,7 +313,7 @@ function Body({
             <Loading />
           )
         ) : (
-          <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} base={baseDoc} />
+          <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} docCtx={ctx} base={baseDoc} comments={comments} />
         ))
       )}
     </>

@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { schemaExtensions } from "./schema";
 import { ChangeMarks, setChangeBase } from "./change-marks";
+import { CommentAnchors, setAnchorView } from "./comment-anchors";
 import { EditorDocContext, nodeViewExtensions } from "./node-views";
 import type { DocContext } from "@/components/doc/doc-view";
 import type { AnyExtension } from "@tiptap/core";
@@ -72,6 +73,7 @@ export function PageEditor({
   onEditor,
   docCtx,
   base,
+  comments,
 }: {
   provider: RoomProvider;
   user: EditorUser;
@@ -82,6 +84,8 @@ export function PageEditor({
   docCtx: DocContext;
   /** The page at the revision's base: changed passages get marked (Result view). */
   base?: DocNode | null;
+  /** Comment anchors: which thread to show as active, which to hide, clicks. */
+  comments?: { active: string | null; hidden: Set<string>; onClick: (id: string) => void };
 }) {
   const { t } = useTranslation();
   const status = useRoomStatus(provider);
@@ -98,6 +102,7 @@ export function PageEditor({
       Dropcursor.configure({ width: 2, class: "drop-cursor" }),
       Gapcursor,
       ChangeMarks,
+      CommentAnchors.configure({ doc: provider.doc }),
     ],
     // The editor is rebuilt only for a new room.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -147,6 +152,9 @@ export function PageEditor({
   useEffect(() => {
     if (editor && !editor.isDestroyed) setChangeBase(editor.view, base ?? null);
   }, [editor, base]);
+  useEffect(() => {
+    if (comments) setAnchorView(editor, comments);
+  }, [editor, comments]);
   useEffect(() => {
     editor?.setEditable(editable);
   }, [editor, editable]);
