@@ -3576,9 +3576,12 @@ export interface components {
         BlameLine: {
             line: number;
             sha: string;
+            /** @description The commit's author; for a commit kmdn made, its first Co-authored-by */
             author: string;
             email: string;
             time: number;
+            /** @description Other people credited on the commit */
+            co_authors: string[];
         };
         Member: {
             /** @enum {string} */

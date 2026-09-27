@@ -411,6 +411,7 @@ func (m *Mirror) Log(ctx context.Context, rev, path string, n int) ([]Commit, er
 			c.Parents = strings.Fields(f[1])
 		}
 		c.Body, c.CoAuthors, c.ReviewedBy, c.Revision = parseTrailers(strings.TrimRight(f[6], "\n"))
+		c.AuthorName, c.AuthorEmail, c.CoAuthors = creditPeople(c.AuthorName, c.AuthorEmail, c.CoAuthors)
 		commits = append(commits, c)
 	}
 	return commits, nil
@@ -445,6 +446,7 @@ func (m *Mirror) Recent(ctx context.Context, rev string, n int) ([]CommitWithPat
 			c.Parents = strings.Fields(f[1])
 		}
 		c.Body, c.CoAuthors, c.ReviewedBy, c.Revision = parseTrailers(strings.TrimRight(f[6], "\n"))
+		c.AuthorName, c.AuthorEmail, c.CoAuthors = creditPeople(c.AuthorName, c.AuthorEmail, c.CoAuthors)
 		var paths []string
 		for _, l := range strings.Split(names, "\n") {
 			if l = strings.TrimSpace(l); l != "" {
@@ -502,6 +504,25 @@ type BlameLine struct {
 	Author string `json:"author"`
 	Email  string `json:"email"`
 	Time   int64  `json:"time"`
+	// CoAuthors are the other people credited on the commit.
+	CoAuthors []string `json:"co_authors"`
+}
+
+// IsBot reports whether a commit author is kmdn itself: the plain git
+// identity "kmdn" or a GitHub App ("<slug>[bot]").
+func IsBot(name string) bool {
+	return name == "kmdn" || strings.HasSuffix(name, "[bot]")
+}
+
+// creditPeople moves the credit for a commit kmdn made (a publish: a
+// squashed commit or a merge) to the people in its Co-authored-by trailers.
+// They're ordered by how much of their content survives, so the first is
+// the change's main author.
+func creditPeople(name, email string, co []Person) (string, string, []Person) {
+	if !IsBot(name) || len(co) == 0 {
+		return name, email, co
+	}
+	return co[0].Name, co[0].Email, co[1:]
 }
 
 // Blame returns per-line attribution of path at rev.
@@ -550,7 +571,42 @@ func (m *Mirror) Blame(ctx context.Context, rev, path string) ([]BlameLine, erro
 			in.t, _ = strconv.ParseInt(l[12:], 10, 64)
 		}
 	}
-	return lines, sc.Err()
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	// Commits kmdn made credit the people in their trailers.
+	var bots []string
+	for sha, in := range meta {
+		if IsBot(in.author) {
+			bots = append(bots, sha)
+		}
+	}
+	credit := map[string][]Person{}
+	if len(bots) > 0 {
+		out, err := m.Git.run(ctx, m.Path, nil, nil, append([]string{"show", "-s", "--format=%H%x00%B%x01"}, bots...)...)
+		if err != nil {
+			return nil, err
+		}
+		for _, rec := range strings.Split(string(out), "\x01") {
+			sha, body, ok := strings.Cut(strings.TrimSpace(rec), "\x00")
+			if !ok {
+				continue
+			}
+			_, co, _, _ := parseTrailers(body)
+			credit[sha] = co
+		}
+	}
+	for i := range lines {
+		l := &lines[i]
+		name, email, co := creditPeople(l.Author, l.Email, credit[l.SHA])
+		l.Author, l.Email, l.CoAuthors = name, email, []string{}
+		if IsBot(meta[l.SHA].author) {
+			for _, p := range co {
+				l.CoAuthors = append(l.CoAuthors, p.Name)
+			}
+		}
+	}
+	return lines, nil
 }
 
 // ChangedPaths lists paths that differ between two commits.
