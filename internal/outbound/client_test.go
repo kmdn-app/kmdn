@@ -17,7 +17,7 @@ func TestClientBlocksPrivateAddresses(t *testing.T) {
 	}))
 	defer srv.Close()
 	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
-	for _, host := range []string{"127.0.0.1", "localhost", "::1", "10.0.0.1", "169.254.169.254"} {
+	for _, host := range []string{"127.0.0.1", "localhost", "::1", "10.0.0.1", "169.254.169.254", "100.100.100.200", "::ffff:100.100.100.200"} {
 		client := Client(false)
 		_, err := client.Get("http://" + net.JoinHostPort(host, port))
 		client.CloseIdleConnections()
