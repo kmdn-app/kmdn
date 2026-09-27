@@ -94,7 +94,7 @@ test.describe.serial("sign in, edit, review, publish", () => {
     await expect(r.getByRole("main").getByText("Ana").first()).toBeVisible();
   });
 
-  test("on a protected branch, publishing opens a merge request", async () => {
+  test("a revision is a draft merge request, ready once published on a protected branch", async () => {
     await fetch(`${FORGE_URL}/_fake/projects`, { method: "POST", body: JSON.stringify({ path: `${owner}/${name}`, protected: true }) });
     const csrf = (await admin.cookies()).find((c) => c.name === "kmdn_csrf")!.value;
     expect((await a.request.post(`/api/v1/repos/${repoID}/refresh`, { headers: { "X-Kmdn-CSRF": csrf } })).status()).toBe(202);
@@ -103,6 +103,9 @@ test.describe.serial("sign in, edit, review, publish", () => {
     await a.goto(`${repoPath}/docs/index.md`);
     await a.getByRole("button", { name: "Edit", exact: true }).click();
     await expect(a).toHaveURL(/revision=2/);
+    // Starting the revision opened its branch and a draft merge request.
+    const mrOf2 = async () => (await forgeState()).merge_requests.find((m) => /^kmdn\/2-/.test(m.source_branch));
+    await expect.poll(async () => (await mrOf2())?.draft, { timeout: 20_000 }).toBe(true);
     await a.locator(".ProseMirror").getByText("Start here.").click();
     await a.keyboard.press("End");
     await a.keyboard.type(" Ask in #docs if you're stuck.");
@@ -111,6 +114,8 @@ test.describe.serial("sign in, edit, review, publish", () => {
     await a.getByRole("button", { name: "Submit for review", exact: true }).first().click();
     await a.getByRole("dialog").getByText(REVIEWER.name).click();
     await a.getByRole("dialog").getByRole("button", { name: "Send to 1 reviewer" }).click();
+    // In review: no longer a draft.
+    await expect.poll(async () => (await mrOf2())?.draft, { timeout: 20_000 }).toBe(false);
 
     await r.goto(`${repoPath}/revisions/2`);
     await r.getByRole("button", { name: "Approve", exact: true }).first().click();
@@ -119,12 +124,11 @@ test.describe.serial("sign in, edit, review, publish", () => {
     await a.goto(`${repoPath}/revisions/2`);
     await a.getByRole("button", { name: "Publish", exact: true }).first().click();
     await a.getByRole("dialog").getByRole("button", { name: /Open (a )?merge request|Open (a )?pull request|Publish/ }).last().click();
-    await expect.poll(async () => (await forgeState()).merge_requests.length, { timeout: 20_000 }).toBe(1);
-    const mr = (await forgeState()).merge_requests[0]!;
+    const mr = (await mrOf2())!;
     expect(mr.target_branch).toBe("main");
-    expect(mr.source_branch).toMatch(/^kmdn\//);
+    await expect.poll(async () => forgeFile(`${owner}/${name}`, "docs/index.md", mr.source_branch), { timeout: 20_000 }).toContain("Ask in #docs");
     // main is untouched until the merge request is merged.
     expect(await forgeFile(`${owner}/${name}`, "docs/index.md")).not.toContain("Ask in #docs");
-    expect(await forgeFile(`${owner}/${name}`, "docs/index.md", mr.source_branch)).toContain("Ask in #docs");
   });
+
 });

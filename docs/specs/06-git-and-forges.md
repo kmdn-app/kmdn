@@ -3,23 +3,27 @@
 ## Forge adapters
 
 ```go
-type Forge interface {
-    Kind() string                                   // "github" | "gitlab"
-    CloneURL(ctx, repo) (url string, auth Credential, err error)
+type Adapter interface {
+    Kind() string                                   // "github" | "gitlab" | "git"
+    Credential(ctx, repo) (*gitmirror.Credential, error)
     RepoInfo(ctx, repo) (RepoInfo, error)           // default branch, visibility, size
     BranchProtection(ctx, repo, branch) (Protection, error)
-    PublishCommit(ctx, repo, req PublishRequest) (PublishResult, error)
-    OpenChangeRequest(ctx, repo, req ChangeRequest) (ChangeRequestRef, error)
-    ChangeRequestStatus(ctx, ref) (ChangeRequestState, error)
-    VerifyWebhook(r *http.Request) (Event, error)
-    OAuth() OAuthProvider                           // user linking / sign-in
+    ParseWebhook(r, body, secret) (Event, error)
+}
+
+// Forges with pull/merge requests (GitHub, GitLab; not plain git).
+type ChangeRequester interface {
+    OpenChangeRequest(ctx, repo, ChangeRequestInput{Head, Base, Title, Body, Draft}) (ChangeRequest, error)
+    FindChangeRequest(ctx, repo, head) (ChangeRequest, bool, error)
+    SetDraft(ctx, repo, cr, draft bool) error      // GitHub: GraphQL; GitLab: "Draft:" title prefix
+    MergeChangeRequest(ctx, repo, cr, MergeInput{Title, Message, HeadSHA}) (MergeResult, error)
 }
 ```
 
 ### GitHub (github.com and GitHub Enterprise Server)
 
 - One **GitHub App** per kmdn instance, created from a manifest during setup (the setup wizard redirects to GitHub's app-manifest flow, then stores App ID, private key, webhook secret, client ID/secret). GHES: admin enters the base URL first.
-- **Permissions**: Contents: read & write · Metadata: read · Pull requests: read & write (protected-branch fallback) · Administration: read (branch protection / rulesets detection). User permission: email addresses read (for noreply/linked email).
+- **Permissions**: Contents: read & write · Metadata: read · Pull requests: read & write (every revision has one) · Administration: read (branch protection / rulesets detection). User permission: email addresses read (for noreply/linked email).
 - **Events**: `push`, `pull_request`, `installation`, `installation_repositories`, `repository` (rename/transfer/delete).
 - **Tokens**: installation access tokens (1 h), cached and refreshed at 50 min.
 - **User OAuth**: the same App's user-to-server OAuth for "Continue with GitHub" and account linking.
@@ -36,11 +40,23 @@ type Forge interface {
 ## Mirrors
 
 - Location: `<data>/mirrors/<forge>/<host>/<owner>/<repo>.git` (bare).
+- kmdn keeps each open revision's branch tip at `refs/kmdn/revisions/<revision_id>` so its commits survive gc; a mirror that lost it (restored, re-cloned) fetches the branch back.
 - Initial clone: `git clone --bare --filter=blob:none` then fetch blobs for the content root on demand, keeping large non-content repos cheap. Only the target branch is fetched (`+refs/heads/<target>:refs/heads/<target>`), plus `refs/kmdn/*` for kmdn's own refs.
 - Update triggers: push webhook (primary), periodic fetch every 5 min as a safety net, manual "Refresh" in repo settings.
 - Credentials are provided per command through a `GIT_ASKPASS` helper reading from an in-memory pipe; never written to disk or remotes.
 - Reads: tree listing, blob reads (`git cat-file --batch` long-running process per repo), history (`git log --follow -- <path>`), blame (`git blame --porcelain`), diffs.
 - `git` CLI ≥ 2.40 required (for `merge-tree --write-tree`). `kmdn doctor` checks it.
+
+## Revision branches
+
+Every revision is a branch on the forge with a pull/merge request, so the forge shows each change as it's written and publishing is a merge ([D58](decisions.md), [D59](decisions.md)). Reviews, comments and approvals still happen in kmdn.
+
+- **Start.** Creating a revision queues a job that pushes `kmdn/<number>-<slug>` (slug from the title, 40 characters; `-2`, `-3`… if the name is taken by someone else) from `base_sha`, starting with an empty commit "Start revision #N: <title>" authored by the revision's creator and carrying the `Kmdn-Revision:` trailer (GitHub refuses a pull request without commits). It then opens a **draft** pull request (GitHub) or a merge request titled `Draft: <title>` (GitLab) against the target branch, whose description links back to the revision. Repositories without draft pull requests (GitHub private repositories on free plans) get a regular one. Plain git remotes get the branch only. The job is idempotent: it adopts a branch whose history carries the revision's trailer and a pull request already open from the branch.
+- **Draft ↔ ready.** The pull request is a draft while the revision is Editing and ready for review while In review or Approved: Submit for review marks it ready; Withdraw, Request changes and conflicts from updates turn it back into a draft. GitHub needs GraphQL for both (`markPullRequestReadyForReview`, `convertPullRequestToDraft`); GitLab toggles the title prefix.
+- **Commits.** Each **Save all** writes one commit on the branch (see [05](05-collaboration.md#saving-and-checkpoints)). The commit's tree is the revision's base with its manifest applied, its parent is the branch tip, and it's pushed with a lease on the tip kmdn last pushed. When `base_sha` moved since the branch last took it (updates from Published, or a fast-forward), the commit also has the new base as a second parent, so the pull request's diff only shows the revision's own changes.
+- **Pushes from elsewhere.** kmdn owns the branch. If the lease fails because someone pushed to it, saving stops with "The branch changed outside kmdn"; v1 doesn't import those commits.
+- **Forge events.** A pull request merged on the forge publishes the revision with the merge commit, whatever its state. One closed without merging is noted in the revision's activity (and stops a publish in progress).
+- **State stored** on `revisions`: `branch`, `branch_sha` (tip last pushed), `branch_base_sha` (base the branch last merged), `change_request_url/ref/node`, `change_request_draft`.
 
 ## Repo connection settings
 
@@ -97,7 +113,7 @@ On every target-branch update (webhook → fetch → new head `H`):
 ### 4. Apply
 
 - Who: any revision editor while Editing; an assigned reviewer while In review or Approved.
-- A checkpoint is recorded, then kmdn applies `diff(ours, merged)` to each Y.Doc as one system transaction attributed to `kmdn-sync` on behalf of the person who applied it (never credited as authorship). If collaborators edited in the meantime, the diff is recomputed against the current state before applying.
+- Pending changes are saved first (a commit, like Save all, by the person applying), then kmdn applies `diff(ours, merged)` to each Y.Doc as one system transaction attributed to `kmdn-sync` on behalf of the person who applied it (never credited as authorship). If collaborators edited in the meantime, the diff is recomputed against the current state before applying.
 - Clean hunks go in directly. Conflicted regions become `conflict` nodes holding both versions (a Published side and a This revision side). Until resolved, the page materializes with the revision's side.
 - Blocks the merge doesn't change keep their pending suggestions; blocks it rewrites (or a paragraph with a pending split) lose them, as if rejected.
 - `base_sha = H`, `base_md` updated. Activity: "Tom applied updates from Published (2 pages, 1 conflict)".
@@ -116,23 +132,25 @@ A page Published deleted while the revision edits it shows a banner instead: **K
 
 Preconditions: revision Approved, no pending suggestions, no conflicts, no pending update from Published. If Published moved after approval and touches the revision's files, a pending update appears and publishing waits for it (which resets approvals). If Published moved but touches none of the revision's files, the base fast-forwards and publishing proceeds.
 
-1. Build the new tree: start from `H`'s tree, apply each manifest entry (modified content = final materialized markdown, added, deleted, renamed, assets from upload storage).
-2. Build the commit message ([Attribution](#attribution)).
-3. Check protection on the target branch (cached 5 min, re-checked at publish).
-4. **Unprotected** branch:
-   - **GitHub**: create blobs/tree/commit with the Git Data API (no `author`/`committer`, so GitHub signs it as `kmdn[bot]` → Verified), then `PATCH refs/heads/<target>` with `force: false`. A 422 non-fast-forward → re-sync and retry once.
-   - **GitLab**: build the commit locally in the mirror (`git commit-tree` with author `kmdn <bot email>`), push with `--force-with-lease=refs/heads/<target>:<H>`. Unsigned.
-5. **Protected** branch: push the same commit to `kmdn/<revision-slug>-<short-id>` and open a PR/MR titled with the revision title, body = revision description + review summary + link back to kmdn + list of approvers. Revision → **Publishing**. Watched via webhooks:
-   - merged → **Published** (merge commit SHA stored; if squashed by the forge, the forge's squash commit is recorded).
-   - closed unmerged → back to **Approved** with notice.
-   - new commits pushed to the PR branch by someone else → revision notes "Changed on GitHub", not re-imported in v1.
-6. After success: fetch mirror, mark revision Published, store `published_sha`, record audit entry, notify, fire outgoing webhooks, close rooms (read-only), delete the kmdn branch on the forge if one was created and merged.
+Publishing **merges the revision's pull request** with a merge commit, whether the target branch is protected or not ([D60](decisions.md)). The commits people saved stay in the target branch's history.
 
-Idempotency: publish is a job with a stable key per revision; a crash mid-publish resumes by checking whether the target ref already contains a commit with trailer `Kmdn-Revision: <revision_id>`.
+1. Save pending changes: if the content differs from the last commit, a final commit is saved on the branch (authored by the person publishing).
+2. Build the merge message ([Attribution](#attribution)).
+3. Mark the pull request ready if it's still a draft.
+4. Merge it through the forge API with the merge method **merge** (never squash or rebase), with the message as the merge commit's title and body, pinned to the branch tip kmdn pushed:
+   - **GitHub**: `PUT /repos/{o}/{r}/pulls/{n}/merge` with `merge_method: merge`. GitHub makes and signs the merge commit.
+   - **GitLab**: `PUT /projects/{id}/merge_requests/{iid}/merge` with `merge_commit_message` and `sha`.
+   - **Plain git**: kmdn writes the merge commit in the mirror (parents: target head, branch tip) and pushes it with a lease on the head.
+5. **Protected branches.** kmdn merges through the API, so protection that only restricts pushes doesn't stop it. When the forge refuses because required checks are still running, kmdn turns on auto-merge (GitHub auto-merge with the merge method *merge*; GitLab "merge when pipeline succeeds") and the revision stays **Publishing** until the merge webhook arrives. Protection that needs approvals on the forge can't be satisfied by kmdn (the pull request's author is kmdn's bot): the Publish dialog says to add the kmdn App (or the token's bot user) to the rule's bypass list. A repository that doesn't allow merge commits can't be published to; the Publish dialog says so.
+6. After the merge: fetch the mirror, mark the revision Published with the merge commit's SHA, record an audit entry, notify, fire outgoing webhooks, close rooms (read-only), delete the revision branch on the forge.
+
+Idempotency: publish is a job with a stable key per revision; a crash mid-publish resumes by checking whether the target branch already contains a commit with trailer `Kmdn-Revision: <revision url>` (the merge commit carries it), or the pull request is already merged.
 
 ## Attribution
 
-Commit format:
+The merge commit that publishes a revision (and, on plain git, the merge kmdn writes) has this message. The commits saved on the branch are authored by the person who clicked Save all (commit email below), committed by kmdn, and carry the `Kmdn-Revision:` trailer.
+
+Merge commit format:
 
 ```
 Update onboarding for 2026
@@ -156,7 +174,7 @@ Assisted-by: kmdn-assistant
 - **Reviewed-by**: approving maintainers.
 - **Assisted-by: kmdn-assistant**: present when any surviving content came from the assistant. Assistant content is credited to the user who asked for it as Co-authored-by.
 - **Kmdn-Revision**: link back to the revision (used for idempotency and for History to link commits to revisions).
-- Author/committer: `kmdn[bot]` on GitHub (App identity), the access token's bot user on GitLab.
+- Merge commit author: the forge's merging identity (`kmdn[bot]` on GitHub, the access token's bot user on GitLab, `kmdn` on plain git). Saved commits: author = the person, committer = kmdn.
 
 ## Webhook ingress
 

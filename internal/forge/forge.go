@@ -76,8 +76,10 @@ type Event struct {
 
 // ChangeRequest is a pull request (GitHub) or merge request (GitLab) kmdn opened.
 type ChangeRequest struct {
-	URL string `json:"url"`
-	Ref string `json:"ref"` // PR number / MR iid
+	URL   string `json:"url"`
+	Ref   string `json:"ref"`  // PR number / MR iid
+	Node  string `json:"node"` // GitHub GraphQL id (draft ↔ ready go through GraphQL)
+	Draft bool   `json:"draft"`
 }
 
 // ChangeRequestEvent says a pull/merge request was merged or closed.
@@ -89,9 +91,24 @@ type ChangeRequestEvent struct {
 	MergeSHA string
 }
 
-// ChangeRequester opens pull/merge requests for protected branches.
+// ChangeRequestInput opens a pull/merge request from Head into Base.
+type ChangeRequestInput struct {
+	Head, Base  string
+	Title, Body string
+	// Draft opens it as a draft. Forges or plans without drafts open a
+	// regular one; ChangeRequest.Draft says which it is.
+	Draft bool
+}
+
+// ChangeRequester opens and updates the pull/merge request of a revision
+// branch (docs/specs/06-git-and-forges.md#revision-branches).
 type ChangeRequester interface {
-	OpenChangeRequest(ctx context.Context, repo Repo, head, base, title, body string) (ChangeRequest, error)
+	OpenChangeRequest(ctx context.Context, repo Repo, in ChangeRequestInput) (ChangeRequest, error)
+	// FindChangeRequest returns the open change request from head, if any
+	// (a retry after kmdn opened one but didn't record it).
+	FindChangeRequest(ctx context.Context, repo Repo, head string) (ChangeRequest, bool, error)
+	// SetDraft turns the change request into a draft, or marks it ready for review.
+	SetDraft(ctx context.Context, repo Repo, cr ChangeRequest, draft bool) error
 }
 
 // Install is a GitHub App installation.

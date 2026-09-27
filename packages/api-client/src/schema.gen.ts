@@ -3185,7 +3185,14 @@ export interface components {
             /** Format: date-time */
             published_at?: string;
             published_sha?: string;
+            /** @description The revision's pull/merge request on the forge */
             change_request_url?: string;
+            /** @description The pull/merge request is a draft (while Editing) */
+            change_request_draft: boolean;
+            /** @description The revision's branch on the forge, kmdn/<number>-<slug>; empty until pushed */
+            branch?: string;
+            /** @description The branch tip kmdn last pushed */
+            branch_sha?: string;
             /** Format: date-time */
             closed_at?: string;
         };

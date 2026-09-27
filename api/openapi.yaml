@@ -3253,7 +3253,7 @@ components:
       enum: [editing, in_review, approved, publishing, published, closed]
     Revision:
       type: object
-      required: [id, repo_id, number, title, description, state, changes_requested, has_conflicts, review_round, base_sha, created_by, created_at, updated_at]
+      required: [id, repo_id, number, title, description, state, changes_requested, has_conflicts, review_round, base_sha, created_by, created_at, updated_at, change_request_draft]
       properties:
         id: { type: string }
         repo_id: { type: string }
@@ -3271,7 +3271,10 @@ components:
         submitted_at: { type: string, format: date-time }
         published_at: { type: string, format: date-time }
         published_sha: { type: string }
-        change_request_url: { type: string }
+        change_request_url: { type: string, description: "The revision's pull/merge request on the forge" }
+        change_request_draft: { type: boolean, description: "The pull/merge request is a draft (while Editing)" }
+        branch: { type: string, description: "The revision's branch on the forge, kmdn/<number>-<slug>; empty until pushed" }
+        branch_sha: { type: string, description: "The branch tip kmdn last pushed" }
         closed_at: { type: string, format: date-time }
     RevisionAccess:
       type: object

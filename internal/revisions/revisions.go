@@ -67,6 +67,17 @@ type Revision struct {
 	PublishedSHA     string     `json:"published_sha,omitempty"`
 	ChangeRequestURL string     `json:"change_request_url,omitempty"`
 	ClosedAt         *time.Time `json:"closed_at,omitempty"`
+	// Branch is the revision's branch on the forge (kmdn/<number>-<slug>),
+	// empty until kmdn pushed it; BranchSHA its tip as kmdn last pushed it.
+	Branch    string `json:"branch,omitempty"`
+	BranchSHA string `json:"branch_sha,omitempty"`
+	// ChangeRequestDraft: the pull/merge request is a draft (while Editing).
+	ChangeRequestDraft bool `json:"change_request_draft"`
+
+	// BranchBaseSHA is the Published commit the branch last merged.
+	BranchBaseSHA     string `json:"-"`
+	ChangeRequestRef  string `json:"-"`
+	ChangeRequestNode string `json:"-"`
 }
 
 // Member is someone editing the revision.
@@ -111,14 +122,16 @@ type Event struct {
 }
 
 const revCols = `id, repo_id, number, title, description, state, changes_requested, has_conflicts, review_round, base_sha,
-	COALESCE(created_by, ''), created_at, updated_at, submitted_at, published_at, published_sha, change_request_url, closed_at`
+	COALESCE(created_by, ''), created_at, updated_at, submitted_at, published_at, published_sha, change_request_url, closed_at,
+	branch, branch_sha, branch_base_sha, change_request_ref, change_request_node, change_request_draft`
 
 func scanRevision(row interface{ Scan(...any) error }) (Revision, error) {
 	var r Revision
 	var created, updated int64
 	var submitted, published, closed sql.NullInt64
 	err := row.Scan(&r.ID, &r.RepoID, &r.Number, &r.Title, &r.Description, &r.State, &r.ChangesRequested, &r.HasConflicts,
-		&r.ReviewRound, &r.BaseSHA, &r.CreatedBy, &created, &updated, &submitted, &published, &r.PublishedSHA, &r.ChangeRequestURL, &closed)
+		&r.ReviewRound, &r.BaseSHA, &r.CreatedBy, &created, &updated, &submitted, &published, &r.PublishedSHA, &r.ChangeRequestURL, &closed,
+		&r.Branch, &r.BranchSHA, &r.BranchBaseSHA, &r.ChangeRequestRef, &r.ChangeRequestNode, &r.ChangeRequestDraft)
 	if err != nil {
 		return r, store.NotFound(err)
 	}

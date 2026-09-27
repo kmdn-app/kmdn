@@ -7,17 +7,14 @@ package publish
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
-	"net/url"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/audit"
+	"github.com/kmdn-app/kmdn/internal/branches"
 	"github.com/kmdn-app/kmdn/internal/docengine"
 	"github.com/kmdn-app/kmdn/internal/forge"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
@@ -46,8 +43,7 @@ type Service struct {
 	Docs      Docs
 	Engine    *docengine.Engine
 	Jobs      *jobs.Queue
-	BaseURL   string // for Kmdn-Revision links
-	DataDir   string // uploads
+	Branches  *branches.Service
 	Log       *slog.Logger
 	// SuggestedCommit is the review assistant's title and body, when current. Optional.
 	SuggestedCommit func(ctx context.Context, rev revisions.Revision) (title, body string, ok bool)
@@ -94,30 +90,6 @@ func (s *Service) Register() {
 		return map[string]string{"sha": sha, "url": url}, err
 	})
 	s.Repos.OnChangeRequest = append(s.Repos.OnChangeRequest, s.onChangeRequest)
-}
-
-func (s *Service) revisionURL(repo repos.Repo, rev revisions.Revision) string {
-	return fmt.Sprintf("%s/%s/%s/revisions/%d", strings.TrimRight(s.BaseURL, "/"), url.PathEscape(repo.Owner), url.PathEscape(repo.Name), rev.Number)
-}
-
-// commitEmail picks a user's co-author address: the linked forge's noreply
-// address (default), the account email, or a custom one.
-func (s *Service) commitEmail(ctx context.Context, u users.User, hostID string) string {
-	var mode, custom string
-	_ = store.QueryRow(ctx, s.DB, `SELECT commit_email_mode, COALESCE(commit_email_custom, '') FROM users WHERE id = ?`, u.ID).Scan(&mode, &custom)
-	switch mode {
-	case "custom":
-		if custom != "" {
-			return custom
-		}
-	case "forge_noreply", "":
-		var noreply string
-		_ = store.QueryRow(ctx, s.DB, `SELECT COALESCE(noreply_email, '') FROM linked_accounts WHERE user_id = ? AND forge_host_id = ?`, u.ID, hostID).Scan(&noreply)
-		if noreply != "" {
-			return noreply
-		}
-	}
-	return u.Email
 }
 
 // contributions counts surviving content per user across the revision's
@@ -258,7 +230,7 @@ func (s *Service) Preview(ctx context.Context, repo repos.Repo, rev revisions.Re
 		return credits[i].u.Name < credits[j].u.Name
 	})
 	for _, c := range credits {
-		p.CoAuthors = append(p.CoAuthors, Person{UserID: c.u.ID, Name: c.u.Name, Email: s.commitEmail(ctx, c.u, repo.ForgeHostID)})
+		p.CoAuthors = append(p.CoAuthors, Person{UserID: c.u.ID, Name: c.u.Name, Email: branches.CommitEmail(ctx, s.DB, c.u, repo.ForgeHostID)})
 	}
 	rs, err := revisions.Reviewers(ctx, s.DB, rev)
 	if err != nil {
@@ -269,7 +241,7 @@ func (s *Service) Preview(ctx context.Context, repo repos.Repo, rev revisions.Re
 			continue
 		}
 		if u, err := users.ByID(ctx, s.DB, r.UserID); err == nil {
-			p.Reviewers = append(p.Reviewers, Person{UserID: u.ID, Name: u.Name, Email: s.commitEmail(ctx, u, repo.ForgeHostID)})
+			p.Reviewers = append(p.Reviewers, Person{UserID: u.ID, Name: u.Name, Email: branches.CommitEmail(ctx, s.DB, u, repo.ForgeHostID)})
 		}
 	}
 	var msg strings.Builder
@@ -277,7 +249,7 @@ func (s *Service) Preview(ctx context.Context, repo repos.Repo, rev revisions.Re
 	if p.Body != "" {
 		msg.WriteString("\n" + p.Body + "\n")
 	}
-	msg.WriteString("\nKmdn-Revision: " + s.revisionURL(repo, rev) + "\n")
+	msg.WriteString("\nKmdn-Revision: " + s.Branches.RevisionURL(repo, rev) + "\n")
 	for _, c := range p.CoAuthors {
 		msg.WriteString("Co-authored-by: " + c.Name + " <" + c.Email + ">\n")
 	}
@@ -380,75 +352,6 @@ func blockedMessage(code string) string {
 	return "This revision can't be published right now."
 }
 
-// botIdentity is who authors kmdn's commits on this forge.
-func (s *Service) botIdentity(ctx context.Context, repo repos.Repo) gitmirror.Identity {
-	host := "kmdn"
-	if u, err := url.Parse(s.BaseURL); err == nil && u.Hostname() != "" {
-		host = u.Hostname()
-	}
-	if repo.ForgeKind == forge.KindGitHub {
-		if h, err := repos.GetHost(ctx, s.DB, repo.ForgeHostID); err == nil && h.AppSlug != "" && h.AppID != "" {
-			return gitmirror.Identity{Name: h.AppSlug + "[bot]", Email: h.AppID + "+" + h.AppSlug + "[bot]@users.noreply.github.com"}
-		}
-	}
-	return gitmirror.Identity{Name: "kmdn", Email: "kmdn@" + host}
-}
-
-func branchName(rev revisions.Revision) string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(rev.Title) {
-		if b.Len() >= 40 {
-			break
-		}
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-		case b.Len() > 0 && !strings.HasSuffix(b.String(), "-"):
-			b.WriteByte('-')
-		}
-	}
-	slug := strings.Trim(b.String(), "-")
-	if slug == "" {
-		slug = "revision"
-	}
-	return fmt.Sprintf("kmdn/%d-%s", rev.Number, slug)
-}
-
-// changes turns the manifest and uploads into commit changes.
-func (s *Service) changes(ctx context.Context, rev revisions.Revision) ([]gitmirror.Change, map[string]bool, error) {
-	files, err := revisions.Files(ctx, s.DB, rev.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-	touched := map[string]bool{}
-	var out []gitmirror.Change
-	for _, f := range files {
-		touched[f.Path] = true
-		switch f.Op {
-		case revisions.OpDelete:
-			out = append(out, gitmirror.Change{Path: f.Path, Delete: true})
-		case revisions.OpRename:
-			touched[f.FromPath] = true
-			out = append(out, gitmirror.Change{Path: f.FromPath, Delete: true}, gitmirror.Change{Path: f.Path, Content: []byte(f.ContentMD)})
-		default:
-			out = append(out, gitmirror.Change{Path: f.Path, Content: []byte(f.ContentMD)})
-		}
-	}
-	assets, err := revisions.Assets(ctx, s.DB, rev.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, a := range assets {
-		b, err := os.ReadFile(filepath.Join(s.DataDir, "uploads", a.SHA256[:2], a.SHA256))
-		if err != nil {
-			return nil, nil, fmt.Errorf("asset %s: %w", a.Path, err)
-		}
-		touched[a.Path] = true
-		out = append(out, gitmirror.Change{Path: a.Path, Content: b})
-	}
-	return out, touched, nil
-}
-
 // run is the publish job.
 func (s *Service) run(ctx context.Context, in jobInput) (string, string, error) {
 	rev, err := revisions.Get(ctx, s.DB, in.RevisionID)
@@ -495,12 +398,12 @@ func (s *Service) run(ctx context.Context, in jobInput) (string, string, error) 
 	if err != nil {
 		return "", "", err
 	}
-	trailer := "Kmdn-Revision: " + s.revisionURL(repo, rev)
+	trailer := "Kmdn-Revision: " + s.Branches.RevisionURL(repo, rev)
 	// Resume: a previous attempt may have pushed before crashing.
 	if sha, ok, err := m.FindTrailer(ctx, rev.BaseSHA, head, trailer); err == nil && ok {
 		return sha, "", s.finish(ctx, repo, rev, in.By, sha)
 	}
-	changes, touched, err := s.changes(ctx, rev)
+	changes, touched, err := s.Branches.Changes(ctx, rev)
 	if err != nil {
 		return "", "", err
 	}
@@ -521,7 +424,7 @@ func (s *Service) run(ctx context.Context, in jobInput) (string, string, error) 
 	if err != nil {
 		return "", "", err
 	}
-	sha, err := m.BuildCommit(ctx, head, changes, preview.Message, s.botIdentity(ctx, repo))
+	sha, err := m.BuildCommit(ctx, head, changes, preview.Message, s.Branches.Bot(ctx, repo))
 	if err != nil {
 		return "", "", err
 	}
@@ -540,35 +443,25 @@ func (s *Service) run(ctx context.Context, in jobInput) (string, string, error) 
 		}
 		return sha, "", s.finish(ctx, repo, rev, in.By, sha)
 	}
-	cr, ok := adapter.(forge.ChangeRequester)
-	if !ok {
+	// Protected: the revision's own pull request carries the publish commit
+	// and the forge merges it.
+	if _, ok := adapter.(forge.ChangeRequester); !ok {
 		return "", "", jobs.Permanent(errors.New("the target branch is protected and this forge can't open pull requests"))
 	}
-	branch := branchName(rev)
-	if err := m.Push(ctx, cred, sha, branch, ""); err != nil && !errors.Is(err, gitmirror.ErrStale) {
-		return "", "", err
-	}
-	body := preview.Body
-	if body != "" {
-		body += "\n\n"
-	}
-	body += "---\nReviewed and approved in kmdn: " + s.revisionURL(repo, rev) + "\n"
-	if len(preview.Reviewers) > 0 {
-		names := make([]string, len(preview.Reviewers))
-		for i, r := range preview.Reviewers {
-			names[i] = r.Name
-		}
-		body += "Approved by " + strings.Join(names, ", ") + ".\n"
-	}
-	req, err := cr.OpenChangeRequest(ctx, repo.ForgeRepo(), branch, repo.TargetBranch, preview.Title, body)
+	unlock := s.Branches.Lock(rev.ID)
+	defer unlock()
+	rev, _, err = s.Branches.Commit(ctx, repo, rev, preview.Message, s.Branches.Bot(ctx, repo))
 	if err != nil {
 		return "", "", err
 	}
-	if err := s.Revisions.MarkPublishing(ctx, rev.ID, in.By, req.URL, req.Ref); err != nil {
+	if err := s.Branches.MarkReady(ctx, repo, rev); err != nil {
 		return "", "", err
 	}
-	_ = audit.Write(ctx, s.DB, audit.Entry{ActorType: "user", ActorID: in.By, Action: "revision.pull_request_opened", TargetType: "revision", TargetID: rev.ID, RepoID: repo.ID, Data: map[string]any{"url": req.URL}})
-	return "", req.URL, nil
+	if err := s.Revisions.MarkPublishing(ctx, rev.ID, in.By, rev.ChangeRequestURL, rev.ChangeRequestRef); err != nil {
+		return "", "", err
+	}
+	_ = audit.Write(ctx, s.DB, audit.Entry{ActorType: "user", ActorID: in.By, Action: "revision.pull_request_opened", TargetType: "revision", TargetID: rev.ID, RepoID: repo.ID, Data: map[string]any{"url": rev.ChangeRequestURL}})
+	return "", rev.ChangeRequestURL, nil
 }
 
 func (s *Service) finish(ctx context.Context, repo repos.Repo, rev revisions.Revision, by, sha string) error {
@@ -583,7 +476,9 @@ func (s *Service) finish(ctx context.Context, repo repos.Repo, rev revisions.Rev
 	return nil
 }
 
-// onChangeRequest finishes a publish when kmdn's pull/merge request merges.
+// onChangeRequest follows a revision's pull/merge request: merged (by kmdn's
+// publish or on the forge) publishes the revision; closed unmerged stops a
+// publish, or is noted in the activity.
 func (s *Service) onChangeRequest(ctx context.Context, repo repos.Repo, ev forge.ChangeRequestEvent) error {
 	rev, err := revisions.ByChangeRequest(ctx, s.DB, repo.ID, ev.Ref)
 	if errors.Is(err, store.ErrNotFound) {
@@ -605,5 +500,12 @@ func (s *Service) onChangeRequest(ctx context.Context, repo repos.Repo, ev forge
 		}
 		return nil
 	}
-	return s.Revisions.PublishStopped(ctx, rev.ID, "change_request_closed", map[string]any{"ref": ev.Ref})
+	if rev.State == revisions.Publishing {
+		return s.Revisions.PublishStopped(ctx, rev.ID, "change_request_closed", map[string]any{"ref": ev.Ref})
+	}
+	if err := revisions.Record(ctx, s.DB, rev.ID, revisions.ActorSystem, "", "change_request_closed", map[string]any{"ref": ev.Ref}); err != nil {
+		return err
+	}
+	s.Revisions.Notify(ctx, rev.ID, "change_request_closed")
+	return nil
 }

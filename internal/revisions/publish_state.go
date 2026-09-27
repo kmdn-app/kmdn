@@ -26,11 +26,13 @@ func (s *Service) MarkPublishing(ctx context.Context, revID, by, url, ref string
 	return err
 }
 
-// MarkPublished ends the revision: its content is on the target branch in sha.
+// MarkPublished ends the revision: its content is on the target branch in
+// sha. Besides kmdn's own publish, the forge can merge the pull request
+// while the revision is still being edited or reviewed.
 func (s *Service) MarkPublished(ctx context.Context, revID, by, sha string) error {
 	err := s.DB.InTx(ctx, func(tx *store.Tx) error {
-		res, err := store.Exec(ctx, tx, `UPDATE revisions SET state = ?, published_sha = ?, published_at = ? WHERE id = ? AND state IN (?, ?)`,
-			string(Published), sha, store.Millis(time.Now()), revID, string(Approved), string(Publishing))
+		res, err := store.Exec(ctx, tx, `UPDATE revisions SET state = ?, published_sha = ?, published_at = ? WHERE id = ? AND state IN (?, ?, ?, ?)`,
+			string(Published), sha, store.Millis(time.Now()), revID, string(Editing), string(InReview), string(Approved), string(Publishing))
 		if err != nil {
 			return err
 		}
@@ -64,7 +66,8 @@ func (s *Service) PublishStopped(ctx context.Context, revID, kind string, data m
 	return err
 }
 
-// ByChangeRequest finds the revision publishing through a pull/merge request.
+// ByChangeRequest finds the open revision behind a pull/merge request.
 func ByChangeRequest(ctx context.Context, q store.Querier, repoID, ref string) (Revision, error) {
-	return scanRevision(store.QueryRow(ctx, q, `SELECT `+revCols+` FROM revisions WHERE repo_id = ? AND change_request_ref = ? AND state = ?`, repoID, ref, string(Publishing)))
+	return scanRevision(store.QueryRow(ctx, q, `SELECT `+revCols+` FROM revisions WHERE repo_id = ? AND change_request_ref = ? AND state IN (?, ?, ?, ?)`,
+		repoID, ref, string(Editing), string(InReview), string(Approved), string(Publishing)))
 }

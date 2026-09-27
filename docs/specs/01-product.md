@@ -47,7 +47,7 @@ kmdn closes that gap: a Docs-quality editor for everyone, with git as the source
 | **Target branch** | The branch revisions publish into (default branch unless configured) | "Published" |
 | **Published version** | Content of the target branch at its current head | "Published" |
 | **Revision** | A named, multi-file changeset based on the target branch, co-edited live, reviewed in kmdn, published as one commit | "Revision" |
-| **Checkpoint** | Automatic or named point-in-time state of a revision (kmdn-internal) | "Checkpoint" |
+| **Checkpoint** | A saved state of a revision: one commit on its branch, made by Save all | "Checkpoint" |
 | **Published version** | A past state of a page on the target branch (a git commit) | "Published version" |
 | **Reviewer** | A maintainer assigned to a revision; all assigned reviewers must approve | "Reviewer" |
 | **Suggestion** | A tracked insertion/deletion awaiting accept/reject | "Suggestion" |
@@ -70,7 +70,7 @@ kmdn closes that gap: a Docs-quality editor for everyone, with git as the source
 - Review in the editor: assigned reviewers edit directly while authors are read-only; Result view by default with a Changes/Source diff switch; inline threads sorted by hot topics; suggestion mode; every assigned reviewer approves; explicit Publish.
 - Updates from Published: previewed, then applied; conflicts send the revision back to Editing and are resolved inline by its editors.
 - Consistency check (duplicates, contradictions) per revision and as a weekly repo scan; link graph (per page and per repo).
-- Publish: one squashed commit, Co-authored-by / Reviewed-by / Assisted-by trailers. PR/MR on protected branches.
+- Every revision is a branch with a draft PR/MR; Save all commits to it; publish merges it with a merge commit carrying Co-authored-by / Reviewed-by / Assisted-by trailers, protected branches included.
 - History: published versions from git, revision checkpoints, blame overlay.
 - Doc discussions on published docs, "Fix this" → revision.
 - Assistant: repo Q&A with citations, edits as suggestions, multi-file revisions, review assistant. Anthropic default, OpenAI-compatible endpoints.
