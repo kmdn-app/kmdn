@@ -2583,6 +2583,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/admin/ai/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAIUsageOrg"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications": {
         parameters: {
             query?: never;
@@ -3717,6 +3733,8 @@ export interface components {
         OrgSettings: {
             /** @description AI features for the org's repositories */
             assistant?: boolean;
+            /** @description The org's AI budget per calendar month (UTC); 0: none of its own */
+            monthly_tokens?: number;
         };
         OrgSettingsView: {
             settings: components["schemas"]["OrgSettings"];
@@ -8802,6 +8820,36 @@ export interface operations {
                     "application/json": {
                         today_tokens: number;
                         month_tokens: number;
+                        by_user: components["schemas"]["AIUsageRow"][];
+                        by_task: components["schemas"]["AIUsageRow"][];
+                    };
+                };
+            };
+        };
+    };
+    getAIUsageOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tokens today and this month, by user and by task */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        today_tokens: number;
+                        month_tokens: number;
+                        /** @description The org's monthly token budget (0: none) */
+                        monthly_budget?: number;
                         by_user: components["schemas"]["AIUsageRow"][];
                         by_task: components["schemas"]["AIUsageRow"][];
                     };

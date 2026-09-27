@@ -165,7 +165,7 @@ func (s *Service) run(ctx context.Context, t Thread, msgs []Message, prompt Mess
 		return
 	}
 	role, _ := access.Effective(ctx, s.DB, u, repo.ID)
-	if err := s.LLM.CheckBudget(ctx, u.ID); err != nil {
+	if err := s.LLM.CheckBudget(ctx, u.ID, repo.ID); err != nil {
 		var be *llm.ErrBudget
 		if errors.As(err, &be) {
 			s.errorMessage(ctx, t, "", be.Msg)

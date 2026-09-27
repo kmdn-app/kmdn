@@ -1242,6 +1242,11 @@
     "status_suspended": "Suspended",
     "create": "New organization",
     "createName": "Organization name",
-    "created": "Organization created"
+    "created": "Organization created",
+    "budget": "Monthly AI budget",
+    "budgetHint": "Tokens per calendar month (UTC) for this organization. 0 means no budget of its own.",
+    "usedThisMonth": "{{used}} tokens used this month",
+    "usedOfBudget": "{{used}} of {{budget}} tokens used this month",
+    "saveBudget": "Save budget"
   }
 }

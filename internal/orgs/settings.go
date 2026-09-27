@@ -16,6 +16,9 @@ type Settings struct {
 	// Assistant turns every AI feature on or off for the org's repositories
 	// (the instance must have a provider too).
 	Assistant bool `json:"assistant"`
+	// MonthlyTokens caps the org's AI use per calendar month (UTC); 0 means
+	// no cap of its own (the instance's still applies).
+	MonthlyTokens int `json:"monthly_tokens"`
 }
 
 // DefaultSettings apply to an org that has saved none.
@@ -33,6 +36,11 @@ type SettingsStore struct {
 	DB      store.Querier
 	Managed Managed
 }
+
+// ErrInvalid is returned for a setting with a value it can't take.
+type ErrInvalid struct{ Field, Reason string }
+
+func (e *ErrInvalid) Error() string { return e.Field + ": " + e.Reason }
 
 // ErrLocked is returned when a change touches a managed field.
 var ErrLocked = errors.New("orgs: setting managed by the deployment")
@@ -99,6 +107,9 @@ func (s *SettingsStore) Update(ctx context.Context, q store.Querier, orgID strin
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&next); err != nil {
 		return Settings{}, err
+	}
+	if next.MonthlyTokens < 0 {
+		return Settings{}, &ErrInvalid{"monthly_tokens", "Use 0 for no budget, or a positive number of tokens."}
 	}
 	if err := settings.SetOrg(ctx, q, orgID, settingsKey, next); err != nil {
 		return Settings{}, err

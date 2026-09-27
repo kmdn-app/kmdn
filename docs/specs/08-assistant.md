@@ -81,7 +81,7 @@ type Provider interface {
 ## Limits, cost and privacy
 
 - Instance admin sets provider keys (stored encrypted, see [09](09-auth-permissions.md#secrets)).
-- Per-user daily token budget (default 500k tokens) and per-instance monthly budget; usage recorded per run in `assistant_runs` and shown in the admin console.
+- Per-user daily token budget (default 500k tokens), a monthly budget per organization (org settings, `monthly_tokens`; a deployment can fix it per plan) and an optional per-instance monthly cap; usage recorded per run in `assistant_runs` (with its org) and shown in the org console and the instance console. An org can also turn AI features off ([16](16-organizations.md#ai)).
 - Repo-level switch "Allow assistant in this repo" (default on) for repos whose content must not leave the instance; with a local OpenAI-compatible provider this can stay on.
 - Content sent to the provider: only what the tools return and the current context. No background indexing sent out.
 - Every run is audited (who, repo, revision, tools called, tokens).
