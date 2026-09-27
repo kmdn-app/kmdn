@@ -87,7 +87,7 @@ Risk: cursor jumps under heavy concurrent edits in the same block. Mitigation: n
 - Yjs binary state passes as `Uint8Array` (goja `ArrayBuffer` / wasm memory copy).
 - Runtimes are created from a precompiled bundle (goja `Program` / QuickJS bytecode) for fast startup.
 - Every call has a CPU budget and memory cap; exceeding them returns an error and marks the input for inspection.
-- Shared source metadata is untrusted input. Both hosts bound its aggregate size before parsing; the Go host applies its configured Markdown input limit as well as the encoded-state and execution limits. Invalid metadata cannot overwrite semantic content.
+- Shared source metadata is untrusted input. Both hosts reject unknown fields, nested values, embeds and formatted source text. Authored text is bounded by `MaxInputBytes`; known metadata keys and values have an aggregate budget of four times that limit. The Go host also applies the encoded-state and execution limits. Invalid metadata cannot overwrite semantic content.
 - The bundle version is stamped; Y.Doc snapshots record the engine version that wrote them for future migrations.
 
 ## Link index and graph

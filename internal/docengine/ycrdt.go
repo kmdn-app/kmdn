@@ -26,6 +26,18 @@ func bytesOf(val goja.Value) ([]byte, error) {
 	return ab.Bytes(), nil
 }
 
+func sourceError(err error) error {
+	var exception *goja.Exception
+	if errors.As(err, &exception) {
+		if object, ok := exception.Value().(*goja.Object); ok {
+			if message := object.Get("message"); message != nil && message.String() == "docengine: authored source exceeds input limit" {
+				return ErrTooLarge
+			}
+		}
+	}
+	return err
+}
+
 func (e *Engine) binCall(ctx context.Context, name string, size int, args func(v *vm) []goja.Value) ([]byte, error) {
 	if size > MaxUpdateBytes {
 		return nil, ErrTooLarge
@@ -37,7 +49,7 @@ func (e *Engine) binCall(ctx context.Context, name string, size int, args func(v
 		}
 		out, err := f(goja.Undefined(), args(v)...)
 		if err != nil {
-			return nil, err
+			return nil, sourceError(err)
 		}
 		return bytesOf(out)
 	})
@@ -83,9 +95,9 @@ func (e *Engine) YMaterialize(ctx context.Context, state []byte, sourceMap strin
 		if err != nil {
 			return "", err
 		}
-		out, err := f(goja.Undefined(), bin(v, state), v.rt.ToValue(sourceMap))
+		out, err := f(goja.Undefined(), bin(v, state), v.rt.ToValue(sourceMap), v.rt.ToValue(e.opts.MaxInputBytes))
 		if err != nil {
-			return "", err
+			return "", sourceError(err)
 		}
 		return out.String(), nil
 	})
@@ -153,7 +165,7 @@ func (e *Engine) YApplyMarkdown(ctx context.Context, state []byte, markdown stri
 		return nil, ErrTooLarge
 	}
 	return e.binCall(ctx, "yApplyMarkdown", len(state), func(v *vm) []goja.Value {
-		return []goja.Value{bin(v, state), v.rt.ToValue(markdown), v.rt.ToValue(clientID)}
+		return []goja.Value{bin(v, state), v.rt.ToValue(markdown), v.rt.ToValue(clientID), v.rt.ToValue(e.opts.MaxInputBytes)}
 	})
 }
 

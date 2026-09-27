@@ -11,6 +11,7 @@
 ```
 Y.Doc
 ├─ "content"    Y.XmlFragment   ProseMirror tree (y-prosemirror)
+├─ "source"     Y.Map           leading Y.Text + element-keyed block source
 ├─ "comments"   Y.Map<threadId, {anchor: RelativePositionRange}>   anchors only; bodies in DB
 └─ "meta"       Y.Map           { baseSha, engineVersion }
 ```

@@ -3,6 +3,24 @@ import { realtime } from "./realtime";
 
 const buffers = new Map<string, Set<() => void>>();
 const unacknowledged = new Map<string, symbol>();
+type FailedSource = { message: string; source?: string; base?: string };
+const failures = new Map<string, Map<string, FailedSource>>();
+
+export function getSourceBufferError(revision: string, path: string): FailedSource | undefined {
+  return failures.get(revision)?.get(path);
+}
+
+/** A failed flush must remain visible to Save after its editor has closed. */
+export function setSourceBufferError(revision: string, path: string, message?: string, source?: string, base?: string): void {
+  let paths = failures.get(revision);
+  if (message) {
+    if (!paths) failures.set(revision, (paths = new Map()));
+    paths.set(path, { message, source: source ?? paths.get(path)?.source, base: base ?? paths.get(path)?.base });
+  } else {
+    paths?.delete(path);
+    if (!paths?.size) failures.delete(revision);
+  }
+}
 
 /** Receipt tracking outlives the editor that produced the update. */
 export function markSourceUpdate(revision: string): void {
@@ -25,16 +43,20 @@ export const sourceBufferMiddleware: Parameters<Api["use"]>[0] = {
     if (["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) {
       const revision = /^\/api\/v1\/revisions\/([^/]+)(?:\/|$)/.exec(new URL(request.url).pathname)?.[1];
       const active = revision ? buffers.get(revision) : undefined;
-      active?.forEach((flush) => flush());
-      const version = revision ? unacknowledged.get(revision) : undefined;
-      if (revision && (active?.size || version || realtime.hasPendingUpdates(revision))) {
+      if (revision) {
         try {
-          await realtime.waitForUpdates(revision);
+          active?.forEach((flush) => flush());
+          const failure = failures.get(revision)?.values().next().value;
+          if (failure) throw new Error(failure.message);
+          const version = unacknowledged.get(revision);
+          if (active?.size || version || realtime.hasPendingUpdates(revision)) {
+            await realtime.waitForUpdates(revision);
+            // A later source edit needs its own receipt even if this request succeeds.
+            if (unacknowledged.get(revision) === version) unacknowledged.delete(revision);
+          }
         } catch (error) {
           throw new ApiError({ type: "about:blank", status: 409, title: "Changes are not saved", code: "source_not_synced", detail: error instanceof Error ? error.message : "The server has not received these edits." });
         }
-        // A later source edit needs its own receipt even if this request succeeds.
-        if (unacknowledged.get(revision) === version) unacknowledged.delete(revision);
       }
     }
     return request;

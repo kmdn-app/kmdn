@@ -86,14 +86,13 @@ export const defaultStyle: Style = {
 };
 
 /**
- * SourceMap links a parsed document to its original text. It lives outside the
- * collaborative document (server-side per revision file, and in the client
- * session).
+ * SourceMap links a parsed document to its original text. It is derived by
+ * each host, never accepted as trusted metadata from a collaborative document.
  */
 export type SourceMap = {
-  /** The original markdown, normalized to "\n" line endings. */
+  /** Original markdown without its BOM, retaining authored line endings. */
   original: string;
-  /** Per source id: byte range [start, end) in `original` and content hash. */
+  /** Per source id: UTF-16 range [start, end) in `original` and content hash. */
   blocks: { start: number; end: number; hash: string }[];
   /** Text before the first block and after the last block. */
   leading: string;
