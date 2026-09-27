@@ -450,6 +450,14 @@ func (s *Service) run(ctx context.Context, in jobInput) (string, string, error) 
 	if err != nil {
 		return "", "", err
 	}
+	// Preview flushes live rooms too: a reviewer may have edited since the
+	// job was queued, dismissing another reviewer's approval.
+	if rev, err = revisions.Get(ctx, s.DB, rev.ID); err != nil {
+		return "", "", err
+	}
+	if blocked := s.blocked(ctx, rev); blocked != "" {
+		return "", "", jobs.Permanent(&revisions.ErrConflict{Code: blocked, Msg: blockedMessage(blocked)})
+	}
 	title, body, _ := strings.Cut(preview.Message, "\n")
 
 	cr, ok := adapter.(forge.ChangeRequester)
@@ -503,11 +511,25 @@ func (s *Service) mergeLocally(ctx context.Context, repo repos.Repo, rev revisio
 	if err != nil {
 		return "", err
 	}
-	changes, _, err := s.Branches.Changes(ctx, rev)
+	m := s.Repos.Mirror(repo)
+	paths, err := m.ChangedPaths(ctx, rev.BranchBaseSHA, tip)
 	if err != nil {
 		return "", err
 	}
-	m := s.Repos.Mirror(repo)
+	// Live documents can change after approval is checked. Merge only the
+	// saved branch's patch, while preserving unrelated target-branch changes.
+	changes := make([]gitmirror.Change, 0, len(paths))
+	for _, path := range paths {
+		content, err := m.ReadFile(ctx, cred, tip, path)
+		if errors.Is(err, gitmirror.ErrNotFound) {
+			changes = append(changes, gitmirror.Change{Path: path, Delete: true})
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		changes = append(changes, gitmirror.Change{Path: path, Content: content})
+	}
 	bot := s.Branches.Bot(ctx, repo)
 	sha, err := m.Commit(ctx, gitmirror.CommitInput{From: head, Changes: changes, Parents: []string{head, tip}, Message: message, Author: bot})
 	if err != nil {
