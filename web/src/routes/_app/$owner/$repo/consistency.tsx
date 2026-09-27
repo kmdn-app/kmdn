@@ -79,13 +79,13 @@ function ConsistencyReport() {
           />
           {dialog}
           <div className="min-h-0 flex-1 overflow-auto">
-            <div className="mx-auto grid max-w-[980px] gap-4 px-8 pt-7 pb-20 max-md:px-4">
-              <p className="text-[13.5px] text-muted-foreground">{t("consistency.intro")}</p>
+            <div className="mx-auto grid max-w-[61.25rem] gap-4 px-8 pt-7 pb-20 max-md:px-4">
+              <p className="text-[0.84375rem] text-muted-foreground">{t("consistency.intro")}</p>
               {d && !d.available && (
-                <p className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-[13.5px]">{me?.is_instance_admin ? t("consistency.offAdmin") : t("consistency.off")}</p>
+                <p className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-[0.84375rem]">{me?.is_instance_admin ? t("consistency.offAdmin") : t("consistency.off")}</p>
               )}
               {d && (
-                <div className="text-[12.5px] text-muted-foreground">
+                <div className="text-[0.78125rem] text-muted-foreground">
                   {scan ? (
                     <>
                       {t("consistency.lastScan")} <Time iso={scan.started_at} /> · {t("consistency.passagesCompared", { count: scan.passages })}
@@ -111,7 +111,7 @@ function ConsistencyReport() {
                       type="button"
                       aria-selected={kind === k}
                       onClick={() => void navigate({ search: (s) => ({ ...s, kind: k === "contradiction" ? undefined : k }), replace: true })}
-                      className={cn("h-8 rounded-full px-3 text-[13px] text-muted-foreground hover:bg-accent", kind === k && "bg-accent font-medium text-foreground")}
+                      className={cn("h-8 rounded-full px-3 text-[0.8125rem] text-muted-foreground hover:bg-accent", kind === k && "bg-accent font-medium text-foreground")}
                     >
                       {t(`consistency.${k}s`)}
                       {d && <span className="ml-1.5 tabular-nums opacity-70">{count(k)}</span>}
@@ -126,7 +126,7 @@ function ConsistencyReport() {
                       type="button"
                       aria-selected={status === s}
                       onClick={() => void navigate({ search: (x) => ({ ...x, status: s === "open" ? undefined : s }), replace: true })}
-                      className={cn("h-7 rounded-md px-2.5 text-[12.5px] text-muted-foreground hover:bg-accent", status === s && "bg-accent font-medium text-foreground")}
+                      className={cn("h-7 rounded-md px-2.5 text-[0.78125rem] text-muted-foreground hover:bg-accent", status === s && "bg-accent font-medium text-foreground")}
                     >
                       {t(`consistency.status.${s}`)}
                     </button>
@@ -141,7 +141,7 @@ function ConsistencyReport() {
                       <Skeleton className="h-16 w-full" />
                     </div>
                   ))}
-                {d && list.length === 0 && <p className="p-8 text-center text-[13.5px] text-muted-foreground">{status === "open" && all.length === 0 ? t("consistency.nothing") : t("consistency.nothingHere")}</p>}
+                {d && list.length === 0 && <p className="p-8 text-center text-[0.84375rem] text-muted-foreground">{status === "open" && all.length === 0 ? t("consistency.nothing") : t("consistency.nothingHere")}</p>}
                 {list.map((f) => (
                   <FindingCard key={f.id} repo={repo} f={f} actions={actions} />
                 ))}

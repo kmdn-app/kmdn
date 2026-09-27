@@ -145,7 +145,7 @@ function PublishedPage() {
             }
             actions={
               <>
-                <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium whitespace-nowrap @max-3xl:hidden">
+                <span className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[0.78125rem] font-medium whitespace-nowrap @max-3xl:hidden">
                   <span className={cn("size-1.5 rounded-full", sha ? "bg-warning" : "bg-success")} />
                   {sha ? t("file.oldVersion") : t("shell.published")}
                 </span>
@@ -162,7 +162,7 @@ function PublishedPage() {
                     }}
                   >
                     <MessageSquarePlus />
-                    <span className="@max-4xl:hidden">{t("comments.comment")}</span>
+                    <span className="@max-4xl:sr-only">{t("comments.comment")}</span>
                   </Button>
                 )}
                 {!sha && file.data?.markdown && (
@@ -173,7 +173,7 @@ function PublishedPage() {
                     onClick={() => void navigate({ search: view === "blame" ? {} : { view: "blame" }, replace: true })}
                   >
                     <ScanText />
-                    <span className="@max-4xl:hidden">{t("file.blame")}</span>
+                    <span className="@max-4xl:sr-only">{t("file.blame")}</span>
                   </Button>
                 )}
                 {phone ? null : canEdit && file.data?.markdown ? (
@@ -216,7 +216,7 @@ function PublishedPage() {
           />
           <div className="min-h-0 flex-1 overflow-auto">
             {sha && (
-              <div className="mx-auto mt-5 flex max-w-[720px] items-start gap-3 rounded-xl border bg-muted/40 px-4 py-3 text-[13.5px] max-md:mx-4">
+              <div className="mx-auto mt-5 flex max-w-[45rem] items-start gap-3 rounded-xl border bg-muted/40 px-4 py-3 text-[0.84375rem] max-md:mx-4">
                 <HistoryIcon className="mt-0.5 size-4 text-muted-foreground" />
                 <div className="flex-1">
                   <div className="font-medium">{oldVersion ? t("file.versionFrom", { title: oldVersion.title }) : t("file.olderVersion")}</div>
@@ -286,7 +286,7 @@ function Byline({ commit, onHistory }: { commit: Commit; onHistory: () => void }
   const authorsOnly = people.filter((p) => !/\[bot\]|^kmdn$/i.test(p.name));
   const shown = authorsOnly.length ? authorsOnly : people;
   return (
-    <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-2.5 px-6 pt-10 text-[13px] text-muted-foreground max-md:px-4 max-md:pt-7">
+    <div className="mx-auto flex max-w-[45rem] flex-wrap items-center gap-2.5 px-6 pt-10 text-[0.8125rem] text-muted-foreground max-md:px-4 max-md:pt-7">
       <span className="flex -space-x-1.5">
         {shown.slice(0, 4).map((p) => (
           <Avatar key={p.name} name={p.name} id={p.email || p.name} size="sm" className="ring-2 ring-background" />
@@ -331,7 +331,7 @@ function HistoryPanel({ repo, path, commits, current }: { repo: RepoView; path: 
   if (!commits) return <Skeleton className="h-24 w-full" />;
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between text-[12.5px] text-muted-foreground">
+      <div className="mb-3 flex items-center justify-between text-[0.78125rem] text-muted-foreground">
         <span>{t("file.publishedVersions", { count: commits.length })}</span>
       </div>
       <ol className="relative grid gap-4 pl-7">
@@ -350,9 +350,9 @@ function HistoryPanel({ repo, path, commits, current }: { repo: RepoView; path: 
                     {c.co_authors.length > 0 && ` ${t("file.withOthers", { names: c.co_authors.map((p) => p.name.split(" ")[0]).join(", ") })}`}
                   </div>
                 </div>
-                {isCurrent && <span className="shrink-0 rounded-md bg-success/10 px-1.5 text-[11px] font-medium text-success">{i === 0 ? t("file.current") : t("file.viewing")}</span>}
+                {isCurrent && <span className="shrink-0 rounded-md bg-success/10 px-1.5 text-[0.6875rem] font-medium text-success">{i === 0 ? t("file.current") : t("file.viewing")}</span>}
               </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted-foreground">
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[0.71875rem] text-muted-foreground">
                 {c.reviewed_by.length > 0 && <span className="rounded-md border px-1.5">{t("file.reviewedBy", { name: c.reviewed_by[0]!.name })}</span>}
                 {c.path && c.path !== path && <span className="rounded-md border px-1.5">{t("file.renamedFrom", { path: c.path })}</span>}
                 <span className="font-mono">{c.sha.slice(0, 7)}</span>
@@ -390,7 +390,7 @@ function FollowButton({ repoID, path }: { repoID: string; path: string }) {
           onClick={() => toggle.mutate(!on, { onError: (e) => toast.error(errorMessage(e, t("errors.generic"))) })}
         >
           {st.data?.following ? <BellRing /> : <Bell />}
-          <span className="@max-4xl:hidden">{on || viaFolder ? t("follow.following") : t("follow.follow")}</span>
+          <span className="@max-4xl:sr-only">{on || viaFolder ? t("follow.following") : t("follow.follow")}</span>
         </Button>
       </TooltipTrigger>
       <TooltipContent>{viaFolder !== undefined ? t("follow.viaFolder", { folder: viaFolder || "/" }) : st.data?.auto_until ? t("follow.auto") : t("follow.hint")}</TooltipContent>
@@ -411,14 +411,14 @@ function UpdatedBanner({ repoID, path, since, commits, showing, loading, changed
   if (!news.length) return null;
   const people = [...new Set(news.flatMap((c) => [c.author_name, ...c.co_authors.map((p) => p.name)]).filter((n) => !/\[bot\]|^kmdn$/i.test(n)))];
   return (
-    <div className="mx-auto mt-6 flex max-w-[720px] items-start gap-3 rounded-xl border border-success/30 bg-success/5 px-4 py-3 text-[13.5px] max-md:mx-4">
+    <div className="mx-auto mt-6 flex max-w-[45rem] items-start gap-3 rounded-xl border border-success/30 bg-success/5 px-4 py-3 text-[0.84375rem] max-md:mx-4">
       <Sparkles className="mt-0.5 size-4 shrink-0 text-success" />
       <div className="min-w-0 flex-1">
         <div className="font-medium">
           {t("follow.updated", { date: new Date(news[0]!.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), people: people.slice(0, 3).join(", ") })}
         </div>
         <div className="mt-0.5 text-muted-foreground">{news.map((c) => summaries.data?.[c.sha] ?? c.title).join(" · ")}</div>
-        {showing && changed === 0 && <div className="mt-1 text-[12.5px] text-muted-foreground">{t("follow.noVisibleChange")}</div>}
+        {showing && changed === 0 && <div className="mt-1 text-[0.78125rem] text-muted-foreground">{t("follow.noVisibleChange")}</div>}
       </div>
       <Button size="sm" variant="outline" onClick={onToggle} disabled={loading}>
         {loading && <Loader2 className="animate-spin" />}

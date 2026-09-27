@@ -25,7 +25,7 @@ export function SystemPanel() {
     <Panel title={t("system.title")} desc={t("system.desc")}>
       {d && (
         <Card>
-          <dl className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4 text-[13.5px]">
+          <dl className="grid grid-cols-[repeat(auto-fit,minmax(9.375rem,1fr))] gap-4 text-[0.84375rem]">
             {[
               [t("system.version"), `${d.version.version} (${d.version.commit.slice(0, 7)})`],
               [t("system.go"), d.version.go],
@@ -35,14 +35,14 @@ export function SystemPanel() {
               [t("system.people"), String(d.users)],
             ].map(([k, v]) => (
               <div key={k} className="min-w-0">
-                <dt className="text-[12px] text-muted-foreground">{k}</dt>
+                <dt className="text-[0.75rem] text-muted-foreground">{k}</dt>
                 <dd className="truncate font-medium" title={v}>
                   {v}
                 </dd>
               </div>
             ))}
             <div>
-              <dt className="text-[12px] text-muted-foreground">{t("system.started")}</dt>
+              <dt className="text-[0.75rem] text-muted-foreground">{t("system.started")}</dt>
               <dd className="font-medium">
                 <Time iso={d.started_at} />
               </dd>
@@ -54,7 +54,7 @@ export function SystemPanel() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="font-medium">{t("system.doctor")}</div>
-            <p className="text-[13px] text-muted-foreground">{t("system.doctorDesc")}</p>
+            <p className="text-[0.8125rem] text-muted-foreground">{t("system.doctorDesc")}</p>
           </div>
           <Button size="sm" variant="outline" onClick={() => void doctor.refetch()} disabled={doctor.isFetching}>
             {doctor.isFetching ? <Loader2 className="animate-spin" /> : <Stethoscope />}
@@ -62,7 +62,7 @@ export function SystemPanel() {
           </Button>
         </div>
         {doctor.data && (
-          <ul className="grid gap-1.5 text-[13px]">
+          <ul className="grid gap-1.5 text-[0.8125rem]">
             {doctor.data.checks.map((c) => (
               <li key={c.name} className="flex items-start gap-2">
                 {c.status === "ok" ? (
@@ -83,10 +83,10 @@ export function SystemPanel() {
         <Card>
           <div className="font-medium">{t("system.jobs")}</div>
           {kinds.length === 0 ? (
-            <p className="text-[13px] text-muted-foreground">{t("system.idle")}</p>
+            <p className="text-[0.8125rem] text-muted-foreground">{t("system.idle")}</p>
           ) : (
-            <table className="w-full text-[13px]">
-              <thead className="text-left text-[12px] text-muted-foreground">
+            <table className="w-full text-[0.8125rem]">
+              <thead className="text-left text-[0.75rem] text-muted-foreground">
                 <tr>
                   <th className="py-1 font-medium">{t("system.kind")}</th>
                   <th className="py-1 text-right font-medium">{t("system.pending")}</th>
@@ -97,7 +97,7 @@ export function SystemPanel() {
               <tbody>
                 {kinds.map(([k, c]) => (
                   <tr key={k} className="border-t">
-                    <td className="py-1.5 font-mono text-[12px]">{k}</td>
+                    <td className="py-1.5 font-mono text-[0.75rem]">{k}</td>
                     <td className="py-1.5 text-right tabular-nums">{c.pending ?? 0}</td>
                     <td className="py-1.5 text-right tabular-nums">{c.running ?? 0}</td>
                     <td className={cn("py-1.5 text-right tabular-nums", (c.failed ?? 0) > 0 && "font-medium text-destructive")}>{c.failed ?? 0}</td>
@@ -108,12 +108,12 @@ export function SystemPanel() {
           )}
           {d.failed_jobs.length > 0 && (
             <div className="grid gap-2 border-t pt-3">
-              <div className="text-[13px] font-medium">{t("system.failedJobs")}</div>
+              <div className="text-[0.8125rem] font-medium">{t("system.failedJobs")}</div>
               {d.failed_jobs.map((j) => (
-                <div key={j.id} className="flex items-start gap-3 text-[13px]">
+                <div key={j.id} className="flex items-start gap-3 text-[0.8125rem]">
                   <div className="min-w-0 flex-1">
                     <div>
-                      <code className="font-mono text-[12px]">{j.kind}</code>{" "}
+                      <code className="font-mono text-[0.75rem]">{j.kind}</code>{" "}
                       <span className="text-muted-foreground">
                         · {t("system.attempts", { count: j.attempts })} · <Time iso={j.updated_at} />
                       </span>

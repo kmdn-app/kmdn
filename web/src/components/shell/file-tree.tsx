@@ -85,8 +85,8 @@ export function FileTree({
                 type="button"
                 onClick={() => toggle(sub.path)}
                 aria-expanded={isOpen}
-                className="flex h-[30px] w-full items-center gap-1.5 rounded-[7px] pr-2 text-left text-[13px] hover:bg-sidebar-accent"
-                style={{ paddingLeft: 8 + depth * 14 }}
+                className="flex h-[1.875rem] w-full items-center gap-1.5 rounded-[0.4375rem] pr-2 text-left text-[0.8125rem] hover:bg-sidebar-accent"
+                style={{ paddingLeft: `${(8 + depth * 14) / 16}rem` }}
               >
                 {isOpen ? <ChevronDown className="size-3 text-muted-foreground" /> : <ChevronRight className="size-3 text-muted-foreground" />}
                 <Folder className="size-3.5 text-muted-foreground" />
@@ -103,7 +103,7 @@ export function FileTree({
           const active = f.path === current;
           const Icon = f.markdown ? FileText : ImageIcon;
           const cls = cn(
-            "flex h-[30px] items-center gap-1.5 rounded-[7px] pr-2 text-[13px] hover:bg-sidebar-accent",
+            "flex h-[1.875rem] items-center gap-1.5 rounded-[0.4375rem] pr-2 text-[0.8125rem] hover:bg-sidebar-accent",
             active && "bg-sidebar-accent font-medium",
             !f.markdown && "text-muted-foreground",
           );
@@ -122,7 +122,7 @@ export function FileTree({
             >
               <Icon className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="truncate">{f.name}</span>
-              {f.op && OP_MARK[f.op] && <span className={cn("ml-auto font-mono text-[11px] font-semibold", OP_MARK[f.op]!.cls)}>{OP_MARK[f.op]!.letter}</span>}
+              {f.op && OP_MARK[f.op] && <span className={cn("ml-auto font-mono text-[0.6875rem] font-semibold", OP_MARK[f.op]!.cls)}>{OP_MARK[f.op]!.letter}</span>}
             </Link>
           ) : (
             <div className={cls} style={style} title={f.path}>

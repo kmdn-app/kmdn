@@ -40,9 +40,9 @@ function Profile() {
         <>
           <TopBar controls={controls} title={t("profile.title")} />
           <div className="min-h-0 flex-1 overflow-auto">
-            <div className="mx-auto grid max-w-[780px] gap-8 px-8 pt-7 pb-20 max-md:px-4">
+            <div className="mx-auto grid max-w-[48.75rem] gap-8 px-8 pt-7 pb-20 max-md:px-4">
               {link_error && (
-                <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[13.5px]">
+                <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[0.84375rem]">
                   {t(`profile.linkError.${link_error}`, { defaultValue: t("profile.linkError.generic") })}
                 </p>
               )}
@@ -84,7 +84,7 @@ function ProfileCard() {
       >
         <div className="flex flex-wrap items-center gap-4">
           <Avatar name={me!.name} id={me!.id} size="lg" />
-          <div className="grid min-w-[220px] flex-1 gap-4 sm:grid-cols-2">
+          <div className="grid min-w-[13.75rem] flex-1 gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor="pf-name">{t("profile.name")}</Label>
               <Input id="pf-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -121,7 +121,7 @@ function CommitEmail() {
       <input type="radio" name="commit-email" className="mt-1 accent-primary" checked={mode === value} onChange={() => setMode(value)} />
       <span className="min-w-0">
         <span className="block text-sm font-medium">{title}</span>
-        <span className={cn("block text-[12.5px] break-all text-muted-foreground", mono && "font-mono")}>{desc}</span>
+        <span className={cn("block text-[0.78125rem] break-all text-muted-foreground", mono && "font-mono")}>{desc}</span>
       </span>
     </label>
   );
@@ -177,7 +177,7 @@ function LinkedAccounts() {
               </Button>
             </Row>
           ))}
-        {(providers.data?.length ?? 0) === 0 && (linked.data?.length ?? 0) === 0 && <p className="text-[13.5px] text-muted-foreground">{t("profile.noProviders")}</p>}
+        {(providers.data?.length ?? 0) === 0 && (linked.data?.length ?? 0) === 0 && <p className="text-[0.84375rem] text-muted-foreground">{t("profile.noProviders")}</p>}
       </Card>
     </Panel>
   );
@@ -221,15 +221,15 @@ function Notifications() {
             {here.data ? t("inbox.prefs.disablePush") : t("inbox.prefs.enablePush")}
           </Button>
         ) : (
-          <span className="text-[12.5px] text-muted-foreground">{t("inbox.prefs.pushUnsupported")}</span>
+          <span className="text-[0.78125rem] text-muted-foreground">{t("inbox.prefs.pushUnsupported")}</span>
         ))
       }
     >
       <Card>
-        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 gap-y-3 text-[13.5px]">
-          <span className="text-[12px] font-medium text-muted-foreground">{t("inbox.prefs.kind")}</span>
-          <span className="text-[12px] font-medium text-muted-foreground">{t("inbox.prefs.inApp")}</span>
-          <span className="text-[12px] font-medium text-muted-foreground">{t("inbox.prefs.push")}</span>
+        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 gap-y-3 text-[0.84375rem]">
+          <span className="text-[0.75rem] font-medium text-muted-foreground">{t("inbox.prefs.kind")}</span>
+          <span className="text-[0.75rem] font-medium text-muted-foreground">{t("inbox.prefs.inApp")}</span>
+          <span className="text-[0.75rem] font-medium text-muted-foreground">{t("inbox.prefs.push")}</span>
           {(prefs.data?.items ?? []).map((p) => (
             <Fragment key={p.kind}>
               <span>{t(`inbox.prefKinds.${p.kind}`)}</span>
@@ -238,7 +238,7 @@ function Notifications() {
             </Fragment>
           ))}
         </div>
-        {here.data && <p className="text-[12.5px] text-muted-foreground">{t("inbox.prefs.pushOn")}</p>}
+        {here.data && <p className="text-[0.78125rem] text-muted-foreground">{t("inbox.prefs.pushOn")}</p>}
       </Card>
     </Panel>
   );
@@ -262,7 +262,7 @@ function Appearance() {
             role="radio"
             aria-checked={choice === o.v}
             onClick={() => setChoice(o.v)}
-            className={cn("flex h-8 items-center gap-1.5 rounded-md px-3 text-[13.5px] font-medium text-muted-foreground", choice === o.v && "bg-background text-foreground shadow-xs")}
+            className={cn("flex h-8 items-center gap-1.5 rounded-md px-3 text-[0.84375rem] font-medium text-muted-foreground", choice === o.v && "bg-background text-foreground shadow-xs")}
           >
             <o.icon className="size-3.5" />
             {o.label}
@@ -348,7 +348,7 @@ function Passkeys() {
             </Row>
           ),
         )}
-        {list.data?.length === 0 && <p className="text-[13.5px] text-muted-foreground">{t("profile.noPasskeys")}</p>}
+        {list.data?.length === 0 && <p className="text-[0.84375rem] text-muted-foreground">{t("profile.noPasskeys")}</p>}
         {supported ? (
           <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => (e.preventDefault(), add.mutate())}>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={defaultPasskeyName()} maxLength={60} className="w-56" aria-label={t("profile.passkeyName")} />
@@ -358,7 +358,7 @@ function Passkeys() {
             </Button>
           </form>
         ) : (
-          <p className="text-[13px] text-muted-foreground">{t("profile.passkeysUnsupported")}</p>
+          <p className="text-[0.8125rem] text-muted-foreground">{t("profile.passkeysUnsupported")}</p>
         )}
       </Card>
     </Panel>

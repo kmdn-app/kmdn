@@ -17,7 +17,7 @@ export function initials(name: string): string {
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
-const SIZES = { xs: "size-[18px] text-[8px]", sm: "size-5 text-[8.5px]", md: "size-7 text-[10.5px]", lg: "size-9 text-[12.5px]" };
+const SIZES = { xs: "size-[1.125rem] text-[0.5rem]", sm: "size-5 text-[0.53125rem]", md: "size-7 text-[0.65625rem]", lg: "size-9 text-[0.78125rem]" };
 
 /** ring: outline color (presence on the same page). */
 export function Avatar({ name, id, size = "md", className, ring }: { name: string; id: string; size?: keyof typeof SIZES; className?: string; ring?: string }) {

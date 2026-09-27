@@ -53,11 +53,11 @@ function RepoHome() {
             }
           />
           <div className="min-h-0 flex-1 overflow-auto">
-            <div className="mx-auto max-w-[1040px] px-8 py-10 max-sm:px-4">
+            <div className="mx-auto max-w-[65rem] px-8 py-10 max-sm:px-4">
               <Ask
                 repo={repo}
                 meta={
-                  <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                  <div className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
                     <ForgeIcon kind={repo.forge_kind} className="size-3.5" />
                     {repo.web_url ? (
                       <a href={repo.web_url} target="_blank" rel="noopener noreferrer" className="hover:underline">
@@ -85,7 +85,7 @@ function RepoHome() {
                   <Loader2 className="size-4 animate-spin" />
                   <div>
                     <div className="font-medium">{t("repo.syncingTitle")}</div>
-                    <div className="text-[13px] text-muted-foreground">{t("repo.syncingBody")}</div>
+                    <div className="text-[0.8125rem] text-muted-foreground">{t("repo.syncingBody")}</div>
                   </div>
                 </div>
               )}
@@ -94,7 +94,7 @@ function RepoHome() {
                   <AlertTriangle className="mt-0.5 size-4 text-destructive" />
                   <div className="flex-1">
                     <div className="font-medium">{repo.health === "disconnected" ? t("repo.disconnected") : t("repo.degraded")}</div>
-                    <div className="text-[13px] text-muted-foreground">{repo.health_detail}</div>
+                    <div className="text-[0.8125rem] text-muted-foreground">{repo.health_detail}</div>
                   </div>
                   {atLeast(repo.role, "maintainer") && (
                     <Button variant="outline" size="sm" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
@@ -116,8 +116,8 @@ function RepoHome() {
                       <>
                         <FileText className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13.5px] font-medium">{c.title}</div>
-                          <div className="truncate text-[12px] text-muted-foreground">
+                          <div className="truncate text-[0.84375rem] font-medium">{c.title}</div>
+                          <div className="truncate text-[0.75rem] text-muted-foreground">
                             {first ?? ""}
                             {c.paths.length > 1 && ` +${c.paths.length - 1}`} · <Time iso={c.date} />
                           </div>
@@ -160,7 +160,7 @@ function OpenFeedback() {
   if (!list.length) return null;
   return (
     <section className="mt-8">
-      <h2 className="mb-2 text-[15px] font-semibold">{t("repo.feedback")}</h2>
+      <h2 className="mb-2 text-[0.9375rem] font-semibold">{t("repo.feedback")}</h2>
       <ul className="divide-y rounded-xl border">
         {list.slice(0, 6).map((d) => {
           const first = d.comments[0];
@@ -169,8 +169,8 @@ function OpenFeedback() {
               <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: d.path }} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50">
                 <MessageSquare className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13.5px] font-medium">{first?.body}</div>
-                  <div className="mt-0.5 truncate text-[12.5px] text-muted-foreground">
+                  <div className="truncate text-[0.84375rem] font-medium">{first?.body}</div>
+                  <div className="mt-0.5 truncate text-[0.78125rem] text-muted-foreground">
                     {first?.author_name} · {d.path}
                     {d.comments.length > 1 && ` · ${t("comments.activity", { count: d.comments.length - 1 })}`}
                   </div>
@@ -194,15 +194,15 @@ function FollowedUpdates() {
   if (!list.length) return null;
   return (
     <section className="mt-8">
-      <h2 className="mb-2 text-[15px] font-semibold">{t("follow.updatesTitle")}</h2>
+      <h2 className="mb-2 text-[0.9375rem] font-semibold">{t("follow.updatesTitle")}</h2>
       <ul className="divide-y rounded-xl border">
         {list.map((u) => (
           <li key={u.path}>
             <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: u.path }} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50">
               <Sparkles className="mt-0.5 size-4 shrink-0 text-success" />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-medium">{u.path.split("/").pop()}</div>
-                <div className="mt-0.5 truncate text-[12.5px] text-muted-foreground">
+                <div className="truncate text-[0.84375rem] font-medium">{u.path.split("/").pop()}</div>
+                <div className="mt-0.5 truncate text-[0.78125rem] text-muted-foreground">
                   {u.author_name} · {u.title}
                 </div>
               </div>
@@ -222,11 +222,11 @@ function Card({ title, desc, count, action, children }: { title: string; desc: s
     <section className="overflow-hidden rounded-xl border">
       <div className="flex items-start gap-2 border-b px-3.5 py-3">
         <div className="min-w-0 flex-1">
-          <h2 className="flex items-center gap-2 text-[14px] font-semibold">
+          <h2 className="flex items-center gap-2 text-[0.875rem] font-semibold">
             {title}
-            {!!count && <span className="rounded-full bg-primary/10 px-1.5 text-[11.5px] font-medium text-primary tabular-nums">{count}</span>}
+            {!!count && <span className="rounded-full bg-primary/10 px-1.5 text-[0.71875rem] font-medium text-primary tabular-nums">{count}</span>}
           </h2>
-          <p className="text-[12px] text-muted-foreground">{desc}</p>
+          <p className="text-[0.75rem] text-muted-foreground">{desc}</p>
         </div>
         {action}
       </div>
@@ -236,7 +236,7 @@ function Card({ title, desc, count, action, children }: { title: string; desc: s
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="px-3.5 py-4 text-[13px] text-muted-foreground">{children}</p>;
+  return <p className="px-3.5 py-4 text-[0.8125rem] text-muted-foreground">{children}</p>;
 }
 
 function RevisionRow({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
@@ -246,8 +246,8 @@ function RevisionRow({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
     <Link to="/$owner/$repo/revisions/$number" params={{ owner: repo.owner, repo: repo.name, number: String(rev.number) }} className={rowCls}>
       <StateDot state={rev.state} className="mt-2" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13.5px] font-medium">{rev.title}</div>
-        <div className="flex flex-wrap items-center gap-x-2 text-[12px] text-muted-foreground">
+        <div className="truncate text-[0.84375rem] font-medium">{rev.title}</div>
+        <div className="flex flex-wrap items-center gap-x-2 text-[0.75rem] text-muted-foreground">
           <span>{t(`revision.state.${rev.state}`)}</span>
           {rev.changes_requested && <span className="text-warning">{t("revision.changesRequested")}</span>}
           {rev.has_conflicts && <span className="text-destructive">{t("revision.conflict")}</span>}
@@ -283,7 +283,7 @@ function MineCard({ repo }: { repo: RepoView }) {
       title={t("home.mine")}
       desc={t("home.mineDesc")}
       action={
-        <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-[12.5px]">
+        <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-[0.78125rem]">
           <Link to="/$owner/$repo/revisions" params={{ owner: repo.owner, repo: repo.name }} search={{ filter: "mine" }}>
             {t("home.all")}
           </Link>
@@ -331,7 +331,7 @@ function Ask({ repo, meta }: { repo: RepoView; meta: React.ReactNode }) {
       <>
         {meta}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-[28px] font-semibold tracking-tight">{repo.display_name}</h1>
+          <h1 className="text-[1.75rem] font-semibold tracking-tight">{repo.display_name}</h1>
           {newRevision}
         </div>
       </>
@@ -341,9 +341,9 @@ function Ask({ repo, meta }: { repo: RepoView; meta: React.ReactNode }) {
     if (text.trim() && !ask.isPending) ask.mutate();
   };
   return (
-    <div className="mx-auto mt-4 max-w-[720px]">
+    <div className="mx-auto mt-4 max-w-[45rem]">
       {meta}
-      <h1 className="mt-2 text-[28px] font-semibold tracking-tight">{t("home.ask")}</h1>
+      <h1 className="mt-2 text-[1.75rem] font-semibold tracking-tight">{t("home.ask")}</h1>
       <form
         className="relative mt-4"
         onSubmit={(e) => {
@@ -363,10 +363,10 @@ function Ask({ repo, meta }: { repo: RepoView; meta: React.ReactNode }) {
           }}
           placeholder={t("home.askPlaceholder", { name: repo.display_name })}
           aria-label={t("home.ask")}
-          className="min-h-24 resize-none rounded-2xl pr-12 pb-10 text-[14.5px] shadow-sm"
+          className="min-h-24 resize-none rounded-2xl pr-12 pb-10 text-[0.90625rem] shadow-sm"
         />
         <div className="pointer-events-none absolute inset-x-3 bottom-2.5 flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 text-[12px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1 text-[0.75rem] text-muted-foreground">
             <Sparkles className="size-3.5" />
             {t("home.askHint")}
           </span>

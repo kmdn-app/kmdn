@@ -17,7 +17,7 @@ function Field({ id, label, help, children }: { id: string; label: string; help?
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
       {children}
-      {help && <p className="text-[12.5px] text-muted-foreground">{help}</p>}
+      {help && <p className="text-[0.78125rem] text-muted-foreground">{help}</p>}
     </div>
   );
 }
@@ -61,7 +61,7 @@ export function SmtpForm({ saved, defaultTestTo, onDone, submitLabel }: { saved:
         }}
       >
         <fieldset disabled={locked} className="grid gap-4 px-5 pt-4">
-          {locked && <p className="rounded-lg border bg-muted p-3 text-[13.5px]">{t("setup.email.locked")}</p>}
+          {locked && <p className="rounded-lg border bg-muted p-3 text-[0.84375rem]">{t("setup.email.locked")}</p>}
           <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <Field id="smtp-host" label={t("setup.email.host")}>
               <Input id="smtp-host" placeholder="smtp.postmarkapp.com" value={form.host} onChange={set("host")} />
@@ -102,7 +102,7 @@ export function SmtpForm({ saved, defaultTestTo, onDone, submitLabel }: { saved:
             {t("setup.email.testTo")}
           </Label>
           <div className="flex flex-wrap gap-2">
-            <Input id="smtp-test-to" type="email" className="min-w-[200px] flex-1" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
+            <Input id="smtp-test-to" type="email" className="min-w-[12.5rem] flex-1" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
             <Button type="button" variant="outline" onClick={() => test.mutate()} disabled={test.isPending || (!locked && !form.host)}>
               {test.isPending ? <Loader2 className="animate-spin" /> : <Send />}
               {t("setup.email.test")}
@@ -112,7 +112,7 @@ export function SmtpForm({ saved, defaultTestTo, onDone, submitLabel }: { saved:
             <p
               role="status"
               className={cn(
-                "mt-3 flex items-start gap-2 rounded-lg border p-3 text-[13.5px]",
+                "mt-3 flex items-start gap-2 rounded-lg border p-3 text-[0.84375rem]",
                 test.data.ok ? "border-success/30 bg-success/10" : "border-destructive/30 bg-destructive/10",
               )}
             >
@@ -124,7 +124,7 @@ export function SmtpForm({ saved, defaultTestTo, onDone, submitLabel }: { saved:
             </p>
           )}
           {save.error && (
-            <p role="alert" className="mt-3 text-[13px] text-destructive">
+            <p role="alert" className="mt-3 text-[0.8125rem] text-destructive">
               {errorMessage(save.error, t("errors.generic"))}
             </p>
           )}

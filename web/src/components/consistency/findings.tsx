@@ -58,7 +58,7 @@ export function Excerpt({ text, claim, className }: { text: string; claim?: stri
 function SideCard({ repo, side, claim, label, revisionNumber }: { repo: RepoView; side: Side; claim?: string; label: string; revisionNumber?: number }) {
   return (
     <div className="grid min-w-0 content-start gap-1 rounded-lg bg-muted/40 p-3">
-      <div className="flex min-w-0 items-baseline gap-1.5 text-[11.5px] text-muted-foreground">
+      <div className="flex min-w-0 items-baseline gap-1.5 text-[0.71875rem] text-muted-foreground">
         <span className="shrink-0 font-medium tracking-wide uppercase">{label}</span>
         {side.heading && <span className="truncate">› {side.heading}</span>}
       </div>
@@ -67,12 +67,12 @@ function SideCard({ repo, side, claim, label, revisionNumber }: { repo: RepoView
         params={{ owner: repo.owner, repo: repo.name, _splat: side.path }}
         search={revisionNumber ? { revision: revisionNumber } : {}}
         hash={revisionNumber ? undefined : side.slug || undefined}
-        className="truncate text-[12.5px] font-medium hover:underline"
+        className="truncate text-[0.78125rem] font-medium hover:underline"
         title={side.path}
       >
         {side.path}
       </Link>
-      <Excerpt text={side.text} claim={claim} className="text-[13px] leading-relaxed" />
+      <Excerpt text={side.text} claim={claim} className="text-[0.8125rem] leading-relaxed" />
     </div>
   );
 }
@@ -96,17 +96,17 @@ export function FindingCard({ repo, f, actions, revisionNumber }: { repo: RepoVi
   return (
     <article className={cn("grid gap-3 border-b px-4 py-3.5 last:border-b-0", !open && "opacity-75")}>
       <div className="flex flex-wrap items-start gap-2">
-        <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-medium", f.kind === "contradiction" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground")}>
+        <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[0.71875rem] font-medium", f.kind === "contradiction" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground")}>
           {f.kind === "contradiction" ? <Split className="size-3" /> : <Copy className="size-3" />}
           {t(`consistency.${f.kind}`)}
         </span>
-        <p className="min-w-0 flex-1 text-[13.5px]">{f.explanation}</p>
+        <p className="min-w-0 flex-1 text-[0.84375rem]">{f.explanation}</p>
       </div>
       <div className="grid grid-cols-2 gap-2 max-md:grid-cols-1">
         <SideCard repo={repo} side={f.a} claim={f.claim_a} label={inRevision ? t("consistency.thisPage") : "A"} revisionNumber={inRevision ? revisionNumber : undefined} />
         <SideCard repo={repo} side={f.b} claim={f.claim_b} label={inRevision ? t("consistency.otherPage") : "B"} />
       </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.75rem] text-muted-foreground">
         <span>
           {t("consistency.firstSeen")} <Time iso={f.first_seen} />
         </span>
@@ -123,25 +123,25 @@ export function FindingCard({ repo, f, actions, revisionNumber }: { repo: RepoVi
         {actions.canFix && (
           <span className="ml-auto flex flex-wrap gap-1">
             {open && !fixing && (
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-[12.5px]" disabled={actions.busy} onClick={() => actions.onFix(f, "fix")}>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[0.78125rem]" disabled={actions.busy} onClick={() => actions.onFix(f, "fix")}>
                 <Wand2 />
                 {actions.startsRevision ? t("consistency.startFix") : t("consistency.fix")}
               </Button>
             )}
             {open && !fixing && f.kind === "duplicate" && (
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-[12.5px]" disabled={actions.busy} onClick={() => actions.onFix(f, "link")}>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[0.78125rem]" disabled={actions.busy} onClick={() => actions.onFix(f, "link")}>
                 <Link2 />
                 {t("consistency.link")}
               </Button>
             )}
             {open && (
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-[12.5px]" disabled={actions.busy} onClick={() => actions.onIgnore(f)}>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[0.78125rem]" disabled={actions.busy} onClick={() => actions.onIgnore(f)}>
                 <EyeOff />
                 {t("consistency.ignore")}
               </Button>
             )}
             {f.status === "ignored" && (
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-[12.5px]" disabled={actions.busy} onClick={() => actions.onUnignore(f)}>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[0.78125rem]" disabled={actions.busy} onClick={() => actions.onUnignore(f)}>
                 {t("consistency.unignore")}
               </Button>
             )}
@@ -247,7 +247,7 @@ export function RevisionConsistency({ repo, rev }: { repo: RepoView; rev: Revisi
   return (
     <section>
       <div className="mb-3 flex items-center gap-2">
-        <h2 className="text-[15px] font-semibold">{t("consistency.title")}</h2>
+        <h2 className="text-[0.9375rem] font-semibold">{t("consistency.title")}</h2>
         {canRun && (
           <Button size="sm" variant="ghost" className="ml-auto h-7" disabled={d.pending || run.isPending} onClick={() => run.mutate()}>
             {d.pending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
@@ -257,7 +257,7 @@ export function RevisionConsistency({ repo, rev }: { repo: RepoView; rev: Revisi
       </div>
       <div className="overflow-hidden rounded-xl border">
         {d.findings.length === 0 ? (
-          <p className="px-4 py-3 text-[13.5px] text-muted-foreground">{d.pending ? t("consistency.checking") : t("consistency.nothing")}</p>
+          <p className="px-4 py-3 text-[0.84375rem] text-muted-foreground">{d.pending ? t("consistency.checking") : t("consistency.nothing")}</p>
         ) : (
           d.findings.map((f) => <FindingCard key={f.id} repo={repo} f={f} actions={actions} revisionNumber={rev.number} />)
         )}
@@ -325,13 +325,13 @@ export function ConsistencyHover({ repo, rev, path, findings, children }: { repo
         <div
           role="dialog"
           aria-label={t(`consistency.${f.kind}`)}
-          className="absolute z-30 grid w-[370px] max-w-[calc(100%-8px)] gap-2 rounded-xl border bg-popover p-3 text-[13px] text-popover-foreground shadow-lg"
+          className="absolute z-30 grid w-[23.125rem] max-w-[calc(100%-0.5rem)] gap-2 rounded-xl border bg-popover p-3 text-[0.8125rem] text-popover-foreground shadow-lg"
           style={{ top: shown.top, left: shown.left }}
           onMouseEnter={() => clearTimeout(hideT.current)}
           onMouseLeave={() => (hideT.current = setTimeout(() => setShown(null), 200))}
         >
           <div className="flex items-start gap-2">
-            <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-medium", f.kind === "contradiction" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground")}>
+            <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[0.71875rem] font-medium", f.kind === "contradiction" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground")}>
               {f.kind === "contradiction" ? <Split className="size-3" /> : <Copy className="size-3" />}
               {t(`consistency.${f.kind}`)}
             </span>
@@ -340,17 +340,17 @@ export function ConsistencyHover({ repo, rev, path, findings, children }: { repo
           <SideCard repo={repo} side={other} claim={otherClaim} label={t("consistency.otherPage")} />
           {actions.canFix && (
             <div className="flex flex-wrap justify-end gap-1">
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-[12.5px]" disabled={actions.busy} onClick={() => actions.onFix(f, "fix")}>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[0.78125rem]" disabled={actions.busy} onClick={() => actions.onFix(f, "fix")}>
                 <Wand2 />
                 {t("consistency.fix")}
               </Button>
               {f.kind === "duplicate" && (
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-[12.5px]" disabled={actions.busy} onClick={() => actions.onFix(f, "link")}>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-[0.78125rem]" disabled={actions.busy} onClick={() => actions.onFix(f, "link")}>
                   <Link2 />
                   {t("consistency.link")}
                 </Button>
               )}
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-[12.5px]" disabled={actions.busy} onClick={() => (setShown(null), actions.onIgnore(f))}>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[0.78125rem]" disabled={actions.busy} onClick={() => (setShown(null), actions.onIgnore(f))}>
                 <EyeOff />
                 {t("consistency.ignore")}
               </Button>

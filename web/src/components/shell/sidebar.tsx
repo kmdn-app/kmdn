@@ -32,7 +32,7 @@ import { usePalette } from "./command-palette";
 import { ForgeIcon } from "./forge-icon";
 
 const itemCls =
-  "flex h-[30px] w-full items-center gap-2 rounded-[7px] px-2 text-left text-[13px] whitespace-nowrap text-sidebar-foreground hover:bg-sidebar-accent [&.active]:bg-sidebar-accent [&.active]:font-medium [&_svg]:size-4 [&_svg]:text-muted-foreground";
+  "flex h-[1.875rem] w-full items-center gap-2 rounded-[0.4375rem] px-2 text-left text-[0.8125rem] whitespace-nowrap text-sidebar-foreground hover:bg-sidebar-accent [&.active]:bg-sidebar-accent [&.active]:font-medium [&_svg]:size-4 [&_svg]:text-muted-foreground";
 
 function Section({ title, action, children }: { title: string; action?: ReactNode; children?: ReactNode }) {
   return (
@@ -58,8 +58,8 @@ function RepoSwitcher({ repo }: { repo?: RepoView }) {
         <button className="flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left hover:bg-sidebar-accent" type="button">
           <Logo />
           <span className="min-w-0 flex-1 truncate">
-            <b className="block truncate text-[13px] leading-tight font-semibold">{repo?.display_name ?? setup?.instance_name ?? "kmdn"}</b>
-            <small className="flex items-center gap-1 truncate text-[11.5px] leading-tight text-muted-foreground">
+            <b className="block truncate text-[0.8125rem] leading-tight font-semibold">{repo?.display_name ?? setup?.instance_name ?? "kmdn"}</b>
+            <small className="flex items-center gap-1 truncate text-[0.71875rem] leading-tight text-muted-foreground">
               {repo ? (
                 <>
                   <ForgeIcon kind={repo.forge_kind} className="size-3" />
@@ -112,7 +112,7 @@ function PublishedNav({ repo, currentPath, onNavigate }: { repo: RepoView; curre
         <Section
           title={t("revision.yours")}
           action={
-            <Link to="/$owner/$repo/revisions" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className="text-[11.5px] font-normal hover:text-foreground">
+            <Link to="/$owner/$repo/revisions" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className="text-[0.71875rem] font-normal hover:text-foreground">
               {t("revision.viewAll")}
             </Link>
           }
@@ -125,9 +125,9 @@ function PublishedNav({ repo, currentPath, onNavigate }: { repo: RepoView; curre
               onClick={onNavigate}
               className={itemCls}
             >
-              <StateDot state={r.state} className="mx-[5px]" />
+              <StateDot state={r.state} className="mx-[0.3125rem]" />
               <span className="min-w-0 flex-1 truncate">{r.title}</span>
-              <span className="text-[11px] text-muted-foreground">#{r.number}</span>
+              <span className="text-[0.6875rem] text-muted-foreground">#{r.number}</span>
             </Link>
           ))}
         </Section>
@@ -173,7 +173,7 @@ function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; r
       >
         <StatePill rev={rev} />
         <ApprovalSummary rev={rev} className="mt-1 block" />
-        <div className="mt-1.5 text-[12px] text-muted-foreground">{t("revision.overview")} →</div>
+        <div className="mt-1.5 text-[0.75rem] text-muted-foreground">{t("revision.overview")} →</div>
       </Link>
       <Section title={t("revision.changed")}>
         {(files.data ?? []).length === 0 && <p className="px-2 text-xs text-muted-foreground">{t("revision.noChanges")}</p>}
@@ -182,11 +182,11 @@ function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; r
           const active = f.path === currentPath;
           const body = (
             <>
-              <span className={cn("w-3 shrink-0 text-center font-mono text-[11px] font-semibold", mark?.cls)}>{mark?.letter}</span>
+              <span className={cn("w-3 shrink-0 text-center font-mono text-[0.6875rem] font-semibold", mark?.cls)}>{mark?.letter}</span>
               <span className="min-w-0 flex-1 truncate" title={f.path}>
                 {f.path.split("/").pop()}
               </span>
-              <span className="shrink-0 font-mono text-[10.5px] tabular-nums">
+              <span className="shrink-0 font-mono text-[0.65625rem] tabular-nums">
                 {f.additions > 0 && <span className="text-success">+{f.additions}</span>}
                 {f.deletions > 0 && <span className="ml-1 text-destructive">−{f.deletions}</span>}
               </span>
@@ -219,14 +219,14 @@ function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; r
               {online.has(m.user_id) && <span className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-success ring-2 ring-sidebar" title={t("presence.online")} />}
             </span>
             <span className="min-w-0 flex-1 truncate">{m.name}</span>
-            {m.label && <span className="text-[11px] text-muted-foreground">{t(m.label)}</span>}
+            {m.label && <span className="text-[0.6875rem] text-muted-foreground">{t(m.label)}</span>}
           </div>
         ))}
       </Section>
       <Section
         title={t("revision.allFiles")}
         action={
-          <button type="button" className="text-[11.5px] font-normal hover:text-foreground" onClick={() => setAllOpen((v) => !v)} aria-expanded={allOpen}>
+          <button type="button" className="text-[0.71875rem] font-normal hover:text-foreground" onClick={() => setAllOpen((v) => !v)} aria-expanded={allOpen}>
             {allOpen ? t("revision.hide") : t("revision.show")}
           </button>
         }
@@ -257,7 +257,7 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
     await navigate({ to: "/signin" });
   };
   return (
-    <aside aria-label="Sidebar" className="flex h-full flex-col text-[13px] text-sidebar-foreground">
+    <aside aria-label="Sidebar" className="flex h-full flex-col text-[0.8125rem] text-sidebar-foreground">
       <div className="flex flex-col gap-1.5 px-2.5 pt-2.5 pb-1">
         <RepoSwitcher repo={repo} />
         {repo && <RevisionPicker repo={repo} revision={revision} currentPath={currentPath} onNew={() => setNewOpen(true)} />}
@@ -285,7 +285,7 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
           <button type="button" className={itemCls} onClick={() => palette.open()}>
             <Search />
             <span className="flex-1">{t("shell.search")}</span>
-            <kbd className="rounded border bg-background px-1 text-[10.5px] text-muted-foreground">⌘K</kbd>
+            <kbd className="rounded border bg-background px-1 text-[0.65625rem] text-muted-foreground">⌘K</kbd>
           </button>
         )}
         <InboxLink className={itemCls} onNavigate={onNavigate} />
@@ -312,11 +312,11 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
       <div className="flex items-center gap-1 border-t border-sidebar-border px-2.5 py-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="flex min-w-0 flex-1 items-center gap-2 rounded-[7px] px-1.5 py-1 text-left hover:bg-sidebar-accent">
+            <button type="button" className="flex min-w-0 flex-1 items-center gap-2 rounded-[0.4375rem] px-1.5 py-1 text-left hover:bg-sidebar-accent">
               {me && <Avatar name={me.name} id={me.id} size="md" />}
               <span className="min-w-0 truncate">
-                <b className="block text-[13px] leading-tight font-medium">{me?.name}</b>
-                <small className="block text-[11.5px] text-muted-foreground">{me?.is_instance_admin ? "Admin" : me?.email}</small>
+                <b className="block text-[0.8125rem] leading-tight font-medium">{me?.name}</b>
+                <small className="block text-[0.71875rem] text-muted-foreground">{me?.is_instance_admin ? "Admin" : me?.email}</small>
               </span>
             </button>
           </DropdownMenuTrigger>
@@ -375,7 +375,7 @@ function InboxLink({ className, onNavigate }: { className: string; onNavigate?: 
     <Link to="/inbox" onClick={onNavigate} className={className}>
       <Bell />
       <span className="flex-1">{t("shell.inbox")}</span>
-      {unread > 0 && <span className="rounded-full bg-primary px-1.5 text-[10.5px] leading-4 font-semibold text-primary-foreground tabular-nums">{unread > 99 ? "99+" : unread}</span>}
+      {unread > 0 && <span className="rounded-full bg-primary px-1.5 text-[0.65625rem] leading-4 font-semibold text-primary-foreground tabular-nums">{unread > 99 ? "99+" : unread}</span>}
     </Link>
   );
 }

@@ -74,7 +74,7 @@ function FrontmatterView({ node, updateAttributes, editor }: ReactNodeViewProps)
     <NodeViewWrapper className="props" contentEditable={false} data-drag-handle>
       <div className="props-head">
         {t("editor.properties")} <span className="font-normal">· {rows ? rows.length : format}</span>
-        <button type="button" className="ml-auto font-mono text-[11.5px] hover:text-foreground" onClick={() => setRaw((v) => !v)} aria-pressed={raw}>
+        <button type="button" className="ml-auto font-mono text-[0.71875rem] hover:text-foreground" onClick={() => setRaw((v) => !v)} aria-pressed={raw}>
           {raw || !rows ? format : t("editor.editYaml")}
         </button>
       </div>
@@ -85,13 +85,13 @@ function FrontmatterView({ node, updateAttributes, editor }: ReactNodeViewProps)
           disabled={!editable}
           onBlur={(e) => e.target.value !== value && updateAttributes({ value: e.target.value })}
           rows={Math.min(12, value.split("\n").length + 1)}
-          className="w-full resize-y bg-transparent px-3 py-2 font-mono text-[13px] focus:outline-none"
+          className="w-full resize-y bg-transparent px-3 py-2 font-mono text-[0.8125rem] focus:outline-none"
         />
       ) : (
         <>
           {rows.map((r) => (
             <div key={r.key} className="props-row group">
-              <div className="text-[13px] text-muted-foreground">{r.key}</div>
+              <div className="text-[0.8125rem] text-muted-foreground">{r.key}</div>
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                 {r.kind === "scalar" && (
                   <CommitInput label={r.key} value={r.text} disabled={!editable} className="w-full" onCommit={(v) => write((d) => d.set(r.key, v))} />
@@ -111,7 +111,7 @@ function FrontmatterView({ node, updateAttributes, editor }: ReactNodeViewProps)
                     {editable && <CommitInput label={t("editor.addItem", { key: r.key })} value="" placeholder="+" className="w-20" onCommit={(v) => v.trim() && write((d) => d.addIn([r.key], v.trim()))} />}
                   </>
                 )}
-                {r.kind === "other" && <code className="text-[12px] whitespace-pre-wrap">{r.text}</code>}
+                {r.kind === "other" && <code className="text-[0.75rem] whitespace-pre-wrap">{r.text}</code>}
               </div>
               {editable && (
                 <button type="button" className="opacity-0 group-hover:opacity-100" aria-label={t("editor.removeProperty", { key: r.key })} onClick={() => write((d) => d.delete(r.key))}>
@@ -133,7 +133,7 @@ function FrontmatterView({ node, updateAttributes, editor }: ReactNodeViewProps)
                   }
                 }}
                 placeholder={t("editor.newProperty")}
-                className="min-w-0 bg-transparent px-1.5 text-[13px] focus:outline-none"
+                className="min-w-0 bg-transparent px-1.5 text-[0.8125rem] focus:outline-none"
               />
               <Button
                 type="button"
@@ -179,7 +179,7 @@ function MathInlineView({ node, updateAttributes, editor, selected }: ReactNodeV
         <CommitInput
           label="TeX"
           value={source}
-          className="font-mono text-[13px]"
+          className="font-mono text-[0.8125rem]"
           onCommit={(v) => {
             updateAttributes({ source: v });
             setEditing(false);
@@ -221,12 +221,12 @@ function RawBlockView({ node, updateAttributes, editor }: ReactNodeViewProps) {
           autoFocus
           onBlur={(e) => e.target.value !== raw && updateAttributes({ raw: e.target.value })}
           rows={Math.min(16, raw.split("\n").length + 1)}
-          className="w-full resize-y bg-transparent px-3 py-2 font-mono text-[13px] focus:outline-none"
+          className="w-full resize-y bg-transparent px-3 py-2 font-mono text-[0.8125rem] focus:outline-none"
         />
       ) : previewable ? (
         <DocView markdown={raw} ctx={ctx} className="!m-0 !max-w-none !p-3" />
       ) : (
-        <pre className="px-3 py-2 font-mono text-[13px] whitespace-pre-wrap">{raw}</pre>
+        <pre className="px-3 py-2 font-mono text-[0.8125rem] whitespace-pre-wrap">{raw}</pre>
       )}
     </NodeViewWrapper>
   );

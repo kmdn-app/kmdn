@@ -68,7 +68,7 @@ export function PresenceStack({ repo, rev, path }: { repo: RepoView; rev: Revisi
           </Tooltip>
         );
       })}
-      {others.length > shown.length && <span className="grid size-7 place-items-center rounded-full bg-muted text-[11px] font-medium ring-2 ring-background">+{others.length - shown.length}</span>}
+      {others.length > shown.length && <span className="grid size-7 place-items-center rounded-full bg-muted text-[0.6875rem] font-medium ring-2 ring-background">+{others.length - shown.length}</span>}
     </div>
   );
 }

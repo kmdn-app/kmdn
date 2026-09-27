@@ -39,7 +39,7 @@ function Invite() {
           </h1>
           {d.role && <p className="mt-1.5 text-center text-muted-foreground">{t("invite.asRole", { role: t(`roles.${d.role}`) })}</p>}
           {d.role && (
-            <div className="mt-5 grid gap-2 rounded-lg border p-3.5 text-[13.5px]">
+            <div className="mt-5 grid gap-2 rounded-lg border p-3.5 text-[0.84375rem]">
               <div className="flex items-center gap-2">
                 <Eye className="size-4 text-muted-foreground" />
                 {t("invite.canRead")}
@@ -69,7 +69,7 @@ function Invite() {
               accept.mutate();
             }}
           >
-            <div className="rounded-lg border px-3 py-2 text-[13.5px]">
+            <div className="rounded-lg border px-3 py-2 text-[0.84375rem]">
               <div className="text-xs text-muted-foreground">{t("invite.signingInAs")}</div>
               <div className="font-medium">{d.email}</div>
             </div>
@@ -79,7 +79,7 @@ function Invite() {
                 <Input id="inv-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
               </div>
             )}
-            {accept.error && <p className="text-[13px] text-destructive">{errorMessage(accept.error, t("errors.generic"))}</p>}
+            {accept.error && <p className="text-[0.8125rem] text-destructive">{errorMessage(accept.error, t("errors.generic"))}</p>}
             <Button type="submit" className="w-full" disabled={accept.isPending || (!d.has_account && !name.trim())}>
               {accept.isPending && <Loader2 className="animate-spin" />}
               {t("invite.accept")}

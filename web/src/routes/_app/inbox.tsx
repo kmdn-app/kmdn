@@ -58,7 +58,7 @@ function Inbox() {
             }
           />
           <div className="min-h-0 flex-1 overflow-auto">
-            <div className="mx-auto grid max-w-[760px] gap-5 px-6 pt-7 pb-20 max-md:px-4">
+            <div className="mx-auto grid max-w-[47.5rem] gap-5 px-6 pt-7 pb-20 max-md:px-4">
               {q.isLoading && <Skeleton className="h-24 w-full" />}
               {q.data && groups.length === 0 && (
                 <div className="flex flex-col items-center py-20 text-center text-muted-foreground">
@@ -69,9 +69,9 @@ function Inbox() {
               {groups.map((g) => (
                 <section key={g.key} className="overflow-hidden rounded-xl border">
                   <header className="flex items-baseline gap-2 border-b bg-muted/40 px-4 py-2.5">
-                    <h2 className="truncate text-[13.5px] font-semibold">{g.title}</h2>
-                    <span className="shrink-0 text-[12px] text-muted-foreground">{g.subtitle}</span>
-                    {g.items.length > 1 && <span className="ml-auto shrink-0 text-[12px] text-muted-foreground">{t("inbox.updates", { count: g.items.length })}</span>}
+                    <h2 className="truncate text-[0.84375rem] font-semibold">{g.title}</h2>
+                    <span className="shrink-0 text-[0.75rem] text-muted-foreground">{g.subtitle}</span>
+                    {g.items.length > 1 && <span className="ml-auto shrink-0 text-[0.75rem] text-muted-foreground">{t("inbox.updates", { count: g.items.length })}</span>}
                   </header>
                   <ul className="divide-y">
                     {g.items.map((n) => (
@@ -80,8 +80,8 @@ function Inbox() {
                           <span className={cn("mt-2 size-1.5 shrink-0 rounded-full", n.read_at ? "bg-transparent" : "bg-primary")} aria-label={n.read_at ? undefined : t("inbox.unread")} />
                           {n.actor_id ? <Avatar name={n.actor_name ?? "?"} id={n.actor_id} size="sm" /> : <Bell className="mt-0.5 size-4 text-muted-foreground" />}
                           <span className="min-w-0 flex-1">
-                            <span className={cn("block text-[13.5px]", !n.read_at && "font-medium")}>{t(`inbox.kinds.${n.kind}`, { defaultValue: n.kind, actor: n.actor_name || t("revision.someone"), ...n.data })}</span>
-                            {n.data.excerpt && <span className="mt-0.5 line-clamp-2 block text-[12.5px] text-muted-foreground">{n.data.excerpt}</span>}
+                            <span className={cn("block text-[0.84375rem]", !n.read_at && "font-medium")}>{t(`inbox.kinds.${n.kind}`, { defaultValue: n.kind, actor: n.actor_name || t("revision.someone"), ...n.data })}</span>
+                            {n.data.excerpt && <span className="mt-0.5 line-clamp-2 block text-[0.78125rem] text-muted-foreground">{n.data.excerpt}</span>}
                           </span>
                           <Time iso={n.created_at} className="shrink-0 text-xs whitespace-nowrap text-muted-foreground" />
                         </button>

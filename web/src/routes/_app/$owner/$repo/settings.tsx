@@ -116,7 +116,7 @@ function General({ repo }: { repo: RepoView }) {
   });
   const locked = (k: string) =>
     fromFile.has(k) ? (
-      <span className="mt-1 flex items-center gap-1 text-[12.5px] text-muted-foreground">
+      <span className="mt-1 flex items-center gap-1 text-[0.78125rem] text-muted-foreground">
         <FileCode className="size-3" />
         {t("settings.fromFile")}
       </span>
@@ -132,13 +132,13 @@ function General({ repo }: { repo: RepoView }) {
         }
       >
         {fromFile.size > 0 && (
-          <p className="flex gap-2 rounded-lg border border-info/30 bg-info/5 p-3 text-[13.5px]">
+          <p className="flex gap-2 rounded-lg border border-info/30 bg-info/5 p-3 text-[0.84375rem]">
             <FileCode className="mt-0.5 size-4 text-info" />
             <span>{t("settings.kmdnYml", { fields: [...fromFile].join(", ") })}</span>
           </p>
         )}
         {repo.kmdn_yml?.error ? (
-          <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[13.5px]">{t("settings.kmdnYmlError", { error: String(repo.kmdn_yml.error) })}</p>
+          <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[0.84375rem]">{t("settings.kmdnYmlError", { error: String(repo.kmdn_yml.error) })}</p>
         ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-1.5">
@@ -148,23 +148,23 @@ function General({ repo }: { repo: RepoView }) {
           <div className="grid gap-1.5">
             <Label htmlFor="rs-branch">{t("settings.targetBranch")}</Label>
             <Input id="rs-branch" className="font-mono" value={form.target_branch} onChange={(e) => setForm({ ...form, target_branch: e.target.value })} />
-            <span className="text-[12.5px] text-muted-foreground">{t("settings.targetBranchHelp")}</span>
+            <span className="text-[0.78125rem] text-muted-foreground">{t("settings.targetBranchHelp")}</span>
           </div>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="rs-root">{t("settings.contentRoot")}</Label>
           <Input id="rs-root" className="font-mono" placeholder="docs/" disabled={fromFile.has("root")} value={fromFile.has("root") ? repo.scope.root : form.content_root} onChange={(e) => setForm({ ...form, content_root: e.target.value })} />
-          {locked("root") ?? <span className="text-[12.5px] text-muted-foreground">{t("settings.contentRootHelp")}</span>}
+          {locked("root") ?? <span className="text-[0.78125rem] text-muted-foreground">{t("settings.contentRootHelp")}</span>}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-1.5">
             <Label htmlFor="rs-inc">{t("settings.include")}</Label>
-            <Textarea id="rs-inc" rows={3} className="font-mono text-[13px]" placeholder={"**/*.md"} disabled={fromFile.has("include")} value={fromFile.has("include") ? repo.scope.include.join("\n") : form.include} onChange={(e) => setForm({ ...form, include: e.target.value })} />
+            <Textarea id="rs-inc" rows={3} className="font-mono text-[0.8125rem]" placeholder={"**/*.md"} disabled={fromFile.has("include")} value={fromFile.has("include") ? repo.scope.include.join("\n") : form.include} onChange={(e) => setForm({ ...form, include: e.target.value })} />
             {locked("include")}
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="rs-exc">{t("settings.exclude")}</Label>
-            <Textarea id="rs-exc" rows={3} className="font-mono text-[13px]" disabled={fromFile.has("exclude")} value={fromFile.has("exclude") ? repo.scope.exclude.join("\n") : form.exclude} onChange={(e) => setForm({ ...form, exclude: e.target.value })} />
+            <Textarea id="rs-exc" rows={3} className="font-mono text-[0.8125rem]" disabled={fromFile.has("exclude")} value={fromFile.has("exclude") ? repo.scope.exclude.join("\n") : form.exclude} onChange={(e) => setForm({ ...form, exclude: e.target.value })} />
             {locked("exclude")}
           </div>
         </div>
@@ -172,7 +172,7 @@ function General({ repo }: { repo: RepoView }) {
           <Switch checked={form.allow_self_approval} onCheckedChange={(v) => setForm({ ...form, allow_self_approval: v })} aria-label={t("settings.selfApproval")} />
         </Row>
         {save.error && (
-          <p role="alert" className="text-[13px] text-destructive">
+          <p role="alert" className="text-[0.8125rem] text-destructive">
             {errorMessage(save.error, t("errors.generic"))}
           </p>
         )}
@@ -180,7 +180,7 @@ function General({ repo }: { repo: RepoView }) {
       <Card>
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 size-4 text-muted-foreground" />
-          <div className="text-[13.5px]">
+          <div className="text-[0.84375rem]">
             <div className="font-medium">{repo.protection.protected ? t("settings.protected") : t("settings.notProtected")}</div>
             <div className="text-muted-foreground">{repo.protection.detail || t("settings.protectionUnknown")}</div>
           </div>
@@ -190,7 +190,7 @@ function General({ repo }: { repo: RepoView }) {
         <Card>
           <div className="flex items-start gap-3">
             <Webhook className="mt-0.5 size-4 text-muted-foreground" />
-            <div className="grid min-w-0 flex-1 gap-2 text-[13.5px]">
+            <div className="grid min-w-0 flex-1 gap-2 text-[0.84375rem]">
               <div className="font-medium">{t("settings.webhook")}</div>
               <div className="text-muted-foreground">{repo.forge_kind === "gitlab" ? t("settings.webhookGitlab") : t("settings.webhookGit")}</div>
               <CopyField label="URL" value={webhook.data.url} />
@@ -206,7 +206,7 @@ function General({ repo }: { repo: RepoView }) {
 function CopyField({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
   const [show, setShow] = useState(!secret);
   return (
-    <div className="flex items-center gap-2 rounded-lg border bg-muted/50 py-1 pr-1 pl-3 font-mono text-[12.5px]">
+    <div className="flex items-center gap-2 rounded-lg border bg-muted/50 py-1 pr-1 pl-3 font-mono text-[0.78125rem]">
       <span className="shrink-0 text-muted-foreground">{label}</span>
       <span className="min-w-0 flex-1 truncate">{show ? value : "•".repeat(24)}</span>
       {secret && (
@@ -233,7 +233,7 @@ function RoleSelect({ value, onChange, disabled }: { value: Role; onChange: (r: 
   const { t } = useTranslation();
   return (
     <Select value={value} onValueChange={(v) => onChange(v as Exclude<Role, "">)} disabled={disabled}>
-      <SelectTrigger className="h-8 w-[150px] text-[13px]" aria-label={t("settings.role")}>
+      <SelectTrigger className="h-8 w-[9.375rem] text-[0.8125rem]" aria-label={t("settings.role")}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -266,8 +266,8 @@ function Members({ repo }: { repo: RepoView }) {
     <Panel title={t("settings.members")} desc={t("settings.membersDesc")}>
       <AddMember repo={repo} onAdded={() => void qc.invalidateQueries({ queryKey: key })} />
       <div className="overflow-hidden rounded-xl border">
-        <table className="w-full text-[13.5px]">
-          <thead className="text-left text-[13px] text-muted-foreground">
+        <table className="w-full text-[0.84375rem]">
+          <thead className="text-left text-[0.8125rem] text-muted-foreground">
             <tr className="border-b">
               <th className="px-3 py-2.5 font-medium">{t("settings.member")}</th>
               <th className="px-3 py-2.5 font-medium">{t("settings.role")}</th>
@@ -312,7 +312,7 @@ function Members({ repo }: { repo: RepoView }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[12.5px] text-muted-foreground">{t("settings.rolesHelp")}</p>
+      <p className="text-[0.78125rem] text-muted-foreground">{t("settings.rolesHelp")}</p>
     </Panel>
   );
 }
@@ -345,31 +345,31 @@ function AddMember({ repo, onAdded }: { repo: RepoView; onAdded: () => void }) {
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[220px] flex-1">
+        <div className="relative min-w-[13.75rem] flex-1">
           <Input placeholder={t("settings.addPlaceholder")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t("settings.addPlaceholder")} />
           {q.trim().length > 1 && (
             <div className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-lg border bg-popover shadow-md">
               {(users.data ?? []).map((u) => (
-                <button key={u.id} type="button" className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13.5px] hover:bg-accent" onClick={() => grant.mutate({ type: "user", id: u.id })}>
+                <button key={u.id} type="button" className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[0.84375rem] hover:bg-accent" onClick={() => grant.mutate({ type: "user", id: u.id })}>
                   <Avatar name={u.name} id={u.id} size="sm" />
                   <span className="font-medium">{u.name}</span>
                   <span className="truncate text-muted-foreground">{u.email}</span>
                 </button>
               ))}
               {matchedGroups.map((g) => (
-                <button key={g.id} type="button" className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13.5px] hover:bg-accent" onClick={() => grant.mutate({ type: "group", id: g.id })}>
+                <button key={g.id} type="button" className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[0.84375rem] hover:bg-accent" onClick={() => grant.mutate({ type: "group", id: g.id })}>
                   <Users className="size-4 text-muted-foreground" />
                   <span className="font-medium">{g.name}</span>
                   <span className="text-muted-foreground">{t("settings.groupMembers", { count: g.members })}</span>
                 </button>
               ))}
               {looksLikeEmail && !(users.data ?? []).some((u) => u.email === q.trim().toLowerCase()) && (
-                <button type="button" className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13.5px] hover:bg-accent" onClick={() => invite.mutate()}>
+                <button type="button" className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[0.84375rem] hover:bg-accent" onClick={() => invite.mutate()}>
                   <UserPlus className="size-4 text-muted-foreground" />
                   {t("settings.inviteEmail", { email: q.trim() })}
                 </button>
               )}
-              {!users.isFetching && (users.data?.length ?? 0) === 0 && matchedGroups.length === 0 && !looksLikeEmail && <div className="px-3 py-2 text-[13px] text-muted-foreground">{t("settings.noMatch")}</div>}
+              {!users.isFetching && (users.data?.length ?? 0) === 0 && matchedGroups.length === 0 && !looksLikeEmail && <div className="px-3 py-2 text-[0.8125rem] text-muted-foreground">{t("settings.noMatch")}</div>}
             </div>
           )}
         </div>
@@ -478,26 +478,26 @@ function Hooks({ repo }: { repo: RepoView }) {
     >
       {secret && (
         <Card>
-          <p className="text-[13.5px] font-medium">{t("hooks.secretOnce")}</p>
+          <p className="text-[0.84375rem] font-medium">{t("hooks.secretOnce")}</p>
           <CopyField label="secret" value={secret} secret />
-          <p className="text-[12.5px] text-muted-foreground">{t("hooks.secretHint")}</p>
+          <p className="text-[0.78125rem] text-muted-foreground">{t("hooks.secretHint")}</p>
           <Button size="sm" variant="outline" className="justify-self-start" onClick={() => setSecret(null)}>
             {t("hooks.secretSaved")}
           </Button>
         </Card>
       )}
-      {q.data && hooks.length === 0 && <p className="text-[13.5px] text-muted-foreground">{t("hooks.empty")}</p>}
+      {q.data && hooks.length === 0 && <p className="text-[0.84375rem] text-muted-foreground">{t("hooks.empty")}</p>}
       {hooks.map((h) => (
         <Card key={h.id}>
           <div className="flex flex-wrap items-center gap-3">
             <Webhook className="size-4 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium">
-                {t(`hooks.kinds.${h.kind}`)} · <span className="font-mono text-[12.5px]">{h.url_host}</span>
+                {t(`hooks.kinds.${h.kind}`)} · <span className="font-mono text-[0.78125rem]">{h.url_host}</span>
               </div>
               <div className="mt-0.5 flex flex-wrap gap-1">
                 {h.events.map((e) => (
-                  <span key={e} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                  <span key={e} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.6875rem] text-muted-foreground">
                     {e}
                   </span>
                 ))}
@@ -505,7 +505,7 @@ function Hooks({ repo }: { repo: RepoView }) {
             </div>
             <Switch checked={h.active} onCheckedChange={(v) => patch.mutate({ h, active: v })} aria-label={t("hooks.active")} />
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-[0.78125rem] text-muted-foreground">
             {h.last_delivery ? (
               <span className={cn(h.last_delivery.status === "failed" && "text-destructive", h.last_delivery.status === "delivered" && "text-success")}>
                 {t(`hooks.status.${h.last_delivery.status}`)} · {h.last_delivery.event}
@@ -581,10 +581,10 @@ function AddHook({ repo, events, open, onOpenChange, onCreated }: { repo: RepoVi
           <fieldset className="grid gap-2">
             <legend className="mb-1 text-sm font-medium">{t("hooks.events")}</legend>
             {events.map((e) => (
-              <label key={e} className="flex items-center gap-2 text-[13.5px]">
+              <label key={e} className="flex items-center gap-2 text-[0.84375rem]">
                 <input type="checkbox" className="accent-primary" checked={picked.includes(e)} onChange={(x) => setPicked((p) => (x.target.checked ? [...p, e] : p.filter((y) => y !== e)))} />
                 <span>{t(`hooks.eventNames.${e.replace(".", "_")}`, { defaultValue: e })}</span>
-                <span className="font-mono text-[11px] text-muted-foreground">{e}</span>
+                <span className="font-mono text-[0.6875rem] text-muted-foreground">{e}</span>
               </label>
             ))}
           </fieldset>
@@ -618,23 +618,23 @@ function DeliveryLog({ repo, hook, onClose }: { repo: RepoView; hook: Hook; onCl
   });
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[720px]">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[45rem]">
         <DialogHeader>
           <DialogTitle>{t("hooks.deliveries")}</DialogTitle>
-          <DialogDescription className="font-mono text-[12.5px]">{hook.url_host}</DialogDescription>
+          <DialogDescription className="font-mono text-[0.78125rem]">{hook.url_host}</DialogDescription>
         </DialogHeader>
-        {q.data && q.data.length === 0 && <p className="text-[13.5px] text-muted-foreground">{t("hooks.noDeliveries")}</p>}
-        <ul className="divide-y rounded-lg border text-[13px]">
+        {q.data && q.data.length === 0 && <p className="text-[0.84375rem] text-muted-foreground">{t("hooks.noDeliveries")}</p>}
+        <ul className="divide-y rounded-lg border text-[0.8125rem]">
           {(q.data ?? []).map((d) => (
             <li key={d.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
               <span className={cn("size-2 shrink-0 rounded-full", d.status === "delivered" ? "bg-success" : d.status === "failed" ? "bg-destructive" : "bg-warning")} />
-              <span className="font-mono text-[12px]">{d.event}</span>
+              <span className="font-mono text-[0.75rem]">{d.event}</span>
               <span className="text-muted-foreground">
                 {t(`hooks.status.${d.status}`)}
                 {d.response_code ? ` · ${d.response_code}` : ""} · {t("hooks.attempts", { count: d.attempts })}
               </span>
-              {d.error && <span className="w-full truncate text-[12px] text-destructive">{d.error}</span>}
-              <Time iso={d.created_at} className="ml-auto text-[12px] text-muted-foreground" />
+              {d.error && <span className="w-full truncate text-[0.75rem] text-destructive">{d.error}</span>}
+              <Time iso={d.created_at} className="ml-auto text-[0.75rem] text-muted-foreground" />
               <Button size="sm" variant="ghost" className="h-7" onClick={() => redeliver.mutate(d.id)} disabled={redeliver.isPending}>
                 {t("hooks.redeliver")}
               </Button>

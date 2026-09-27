@@ -47,7 +47,7 @@ function RevisionsList() {
           />
           <NewRevisionDialog repo={repo} open={newOpen} onOpenChange={setNewOpen} />
           <div className="min-h-0 flex-1 overflow-auto">
-            <div className="mx-auto max-w-[880px] px-8 pt-7 pb-20 max-md:px-4">
+            <div className="mx-auto max-w-[55rem] px-8 pt-7 pb-20 max-md:px-4">
               <div role="tablist" aria-label={t("revision.filter")} className="mb-4 flex flex-wrap gap-1">
                 {FILTERS.map((f) => (
                   <button
@@ -56,7 +56,7 @@ function RevisionsList() {
                     type="button"
                     aria-selected={filter === f}
                     onClick={() => void navigate({ search: f === "open" ? {} : { filter: f }, replace: true })}
-                    className={cn("h-8 rounded-full px-3 text-[13px] text-muted-foreground hover:bg-accent", filter === f && "bg-accent font-medium text-foreground")}
+                    className={cn("h-8 rounded-full px-3 text-[0.8125rem] text-muted-foreground hover:bg-accent", filter === f && "bg-accent font-medium text-foreground")}
                   >
                     {t(`revision.filters.${f}`)}
                   </button>
@@ -70,7 +70,7 @@ function RevisionsList() {
                       <Skeleton className="mt-2 h-3 w-1/3" />
                     </div>
                   ))}
-                {list.data?.length === 0 && <p className="p-8 text-center text-[13.5px] text-muted-foreground">{t("revision.none")}</p>}
+                {list.data?.length === 0 && <p className="p-8 text-center text-[0.84375rem] text-muted-foreground">{t("revision.none")}</p>}
                 {list.data?.map((r) => (
                   <Link
                     key={r.id}
@@ -80,10 +80,10 @@ function RevisionsList() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-[14.5px] font-medium">{r.title}</span>
+                        <span className="truncate text-[0.90625rem] font-medium">{r.title}</span>
                         <StatePill rev={r} />
                       </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted-foreground">
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.78125rem] text-muted-foreground">
                         <span>#{r.number}</span>
                         <span className="inline-flex items-center gap-1">
                           <Files className="size-3.5" />

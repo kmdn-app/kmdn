@@ -154,7 +154,9 @@ export function GraphCanvas({
         }
       }
       // Labels: when zoomed in, and for the focused page and its neighbours or search hits.
-      ctx.font = `${12 / view.k}px ui-sans-serif, system-ui, sans-serif`;
+      // Labels follow the UI scale (the root font size), like the rest of the app.
+      const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      ctx.font = `${(12 * rootPx) / 16 / view.k}px ui-sans-serif, system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       for (const n of simNodes) {

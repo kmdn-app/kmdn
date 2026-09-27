@@ -135,7 +135,7 @@ export function SourceDiff({ hunks }: { hunks: Hunk[] }) {
   const { t } = useTranslation();
   if (hunks.length === 0) return <p className="doc text-muted-foreground">{t("diff.noChanges")}</p>;
   return (
-    <div className="mx-auto my-6 max-w-[960px] overflow-hidden rounded-xl border font-mono text-[12.5px] max-md:mx-2">
+    <div className="mx-auto my-6 max-w-[60rem] overflow-hidden rounded-xl border font-mono text-[0.78125rem] max-md:mx-2">
       {hunks.map((h, i) => (
         <div key={i}>
           <div className="border-y bg-muted px-3 py-1 text-muted-foreground first:border-t-0">

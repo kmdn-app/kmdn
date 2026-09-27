@@ -82,7 +82,7 @@ function Frame({ step, total, children }: { step: Step; total: number; children:
   const idx = STEPS.indexOf(step);
   return (
     <div className="min-h-full bg-sidebar px-4 py-12">
-      <div className="mx-auto w-full max-w-[880px]">
+      <div className="mx-auto w-full max-w-[55rem]">
         <div className="mb-6 flex items-center gap-2.5">
           <Logo />
           <div>
@@ -93,7 +93,7 @@ function Frame({ step, total, children }: { step: Step; total: number; children:
             {t("setup.step", { n: idx + 1, total })}
           </Badge>
         </div>
-        <div className="grid gap-6 md:grid-cols-[200px_minmax(0,1fr)]">
+        <div className="grid gap-6 md:grid-cols-[12.5rem_minmax(0,1fr)]">
           <ol className="flex flex-wrap gap-0.5 md:flex-col" aria-label="Setup steps">
             {STEPS.map((s, i) => {
               const done = i < idx;
@@ -103,14 +103,14 @@ function Frame({ step, total, children }: { step: Step; total: number; children:
                   key={s}
                   aria-current={cur ? "step" : undefined}
                   className={cn(
-                    "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] text-muted-foreground",
+                    "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.84375rem] text-muted-foreground",
                     done && "text-foreground",
                     cur && "bg-accent font-medium text-foreground",
                   )}
                 >
                   <span
                     className={cn(
-                      "grid size-[22px] place-items-center rounded-full border bg-background text-[11.5px] font-semibold",
+                      "grid size-[1.375rem] place-items-center rounded-full border bg-background text-[0.71875rem] font-semibold",
                       done && "border-primary bg-primary text-primary-foreground",
                       cur && "border-foreground",
                     )}
@@ -133,11 +133,11 @@ function Panel({ title, desc, icon, children }: { title: string; desc: string; i
   return (
     <div>
       <div className="px-5 pt-4.5">
-        <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
+        <h2 className="flex items-center gap-2 text-[0.9375rem] font-semibold tracking-tight">
           {icon}
           {title}
         </h2>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">{desc}</p>
+        <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">{desc}</p>
       </div>
       {children}
     </div>
@@ -164,7 +164,7 @@ function Field({ id, label, help, children }: { id: string; label: string; help?
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
       {children}
-      {help && <p className="text-[12.5px] text-muted-foreground">{help}</p>}
+      {help && <p className="text-[0.78125rem] text-muted-foreground">{help}</p>}
     </div>
   );
 }
@@ -191,7 +191,7 @@ function AdminStep({ onDone }: { onDone: () => void }) {
       <form onSubmit={submit}>
         <div className="grid gap-4 px-5 pt-4">
           {!token && (
-            <p role="alert" className="flex gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-[13.5px]">
+            <p role="alert" className="flex gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-[0.84375rem]">
               <AlertCircle className="mt-0.5 size-4 shrink-0 text-warning" />
               {t("setup.admin.missingToken")}
             </p>
@@ -208,7 +208,7 @@ function AdminStep({ onDone }: { onDone: () => void }) {
             <Input id="setup-instance" value={form.instance_name} onChange={(e) => setForm({ ...form, instance_name: e.target.value })} />
           </Field>
           {create.error && (
-            <p role="alert" className="text-[13px] text-destructive">
+            <p role="alert" className="text-[0.8125rem] text-destructive">
               {errorMessage(create.error, t("errors.generic"))}
             </p>
           )}
@@ -250,7 +250,7 @@ function DoneStep({ onBack }: { onBack: () => void }) {
   return (
     <Panel title={t("setup.done.title")} desc={t("setup.done.desc")} icon={<CheckCircle2 className="size-4 text-success" />}>
       {finish.error && (
-        <p role="alert" className="px-5 pt-3 text-[13px] text-destructive">
+        <p role="alert" className="px-5 pt-3 text-[0.8125rem] text-destructive">
           {errorMessage(finish.error, t("errors.generic"))}
         </p>
       )}

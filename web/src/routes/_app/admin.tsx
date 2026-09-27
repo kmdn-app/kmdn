@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Activity, CheckCircle2, GitBranch, Grid2x2, KeyRound, Loader2, Mail, Plus, ScrollText, Server, Shield, Sparkles, Trash2, TriangleAlert, UserPlus, Users } from "lucide-react";
+import { Activity, CheckCircle2, GitBranch, Grid2x2, KeyRound, Loader2, Mail, MoreHorizontal, Plus, ScrollText, Server, Shield, Sparkles, Trash2, TriangleAlert, UserCheck, UserPlus, UserX, Users } from "lucide-react";
 import type { components, paths } from "@kmdn/api-client";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
@@ -15,6 +15,7 @@ import { ForgeIcon } from "@/components/shell/forge-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -69,7 +70,7 @@ function Admin() {
                 linkProps={(key) => ({ to: "/admin", search: { section: key as Section } })}
               >
                 {forge_error && (
-                  <p role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[13.5px]">
+                  <p role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[0.84375rem]">
                     {t("admin.forgeError", { code: forge_error })}
                   </p>
                 )}
@@ -114,8 +115,8 @@ function UsersPanel() {
     >
       <Input placeholder={t("admin.searchUsers")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t("admin.searchUsers")} />
       <div className="overflow-x-auto rounded-xl border">
-        <table className="w-full text-[13.5px]">
-          <thead className="text-left text-[13px] text-muted-foreground">
+        <table className="w-full text-[0.84375rem]">
+          <thead className="text-left text-[0.8125rem] text-muted-foreground">
             <tr className="border-b">
               <th className="px-3 py-2.5 font-medium">{t("admin.user")}</th>
               <th className="px-3 py-2.5 font-medium max-md:hidden">{t("admin.repositories")}</th>
@@ -131,7 +132,7 @@ function UsersPanel() {
                   <div className="flex items-center gap-2.5">
                     <Avatar name={u.name} id={u.id} size="md" />
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 font-medium">
+                      <div className="flex items-center gap-1.5 font-medium whitespace-nowrap">
                         {u.name}
                         {u.is_instance_admin && <Badge>{t("admin.instanceAdmin")}</Badge>}
                       </div>
@@ -144,14 +145,27 @@ function UsersPanel() {
                   <Badge variant={u.status === "active" ? "secondary" : "outline"}>{t(`admin.status_${u.status}`)}</Badge>
                 </td>
                 <td className="px-3 py-2.5 text-muted-foreground max-md:hidden">{u.last_active_at ? <Time iso={u.last_active_at} /> : "—"}</td>
-                <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                  <Button variant="ghost" size="sm" onClick={() => update.mutate({ id: u.id, body: { is_instance_admin: !u.is_instance_admin } })}>
-                    <Shield />
-                    {u.is_instance_admin ? t("admin.removeAdmin") : t("admin.makeAdmin")}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => update.mutate({ id: u.id, body: { status: u.status === "active" ? "deactivated" : "active" } })}>
-                    {u.status === "active" ? t("admin.deactivate") : t("admin.reactivate")}
-                  </Button>
+                <td className="w-10 px-2 py-2.5 text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="size-8" aria-label={t("admin.userActions", { name: u.name })}>
+                        <MoreHorizontal />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => update.mutate({ id: u.id, body: { is_instance_admin: !u.is_instance_admin } })}>
+                        <Shield />
+                        {u.is_instance_admin ? t("admin.removeAdmin") : t("admin.makeAdmin")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant={u.status === "active" ? "destructive" : "default"}
+                        onSelect={() => update.mutate({ id: u.id, body: { status: u.status === "active" ? "deactivated" : "active" } })}
+                      >
+                        {u.status === "active" ? <UserX /> : <UserCheck />}
+                        {u.status === "active" ? t("admin.deactivate") : t("admin.reactivate")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </td>
               </tr>
             ))}
@@ -222,7 +236,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
               </Select>
             </div>
           </div>
-          {invite.error && <p className="text-[13px] text-destructive">{errorMessage(invite.error, t("errors.generic"))}</p>}
+          {invite.error && <p className="text-[0.8125rem] text-destructive">{errorMessage(invite.error, t("errors.generic"))}</p>}
         </div>
         <DialogFooter>
           <Button onClick={() => invite.mutate()} disabled={!email || invite.isPending}>
@@ -317,7 +331,7 @@ function GroupMembers({ groupID }: { groupID: string }) {
   return (
     <div className="grid gap-2 border-t bg-muted/30 px-4 py-3">
       {(members.data ?? []).map((u) => (
-        <div key={u.id} className="flex items-center gap-2.5 text-[13.5px]">
+        <div key={u.id} className="flex items-center gap-2.5 text-[0.84375rem]">
           <Avatar name={u.name} id={u.id} size="sm" />
           <span className="font-medium">{u.name}</span>
           <span className="truncate text-muted-foreground">{u.email}</span>
@@ -331,7 +345,7 @@ function GroupMembers({ groupID }: { groupID: string }) {
         {(found.data?.length ?? 0) > 0 && (
           <div className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-lg border bg-popover shadow-md">
             {found.data!.map((u) => (
-              <button key={u.id} type="button" className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13.5px] hover:bg-accent" onClick={() => add.mutate(u.id)}>
+              <button key={u.id} type="button" className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[0.84375rem] hover:bg-accent" onClick={() => add.mutate(u.id)}>
                 <Avatar name={u.name} id={u.id} size="sm" />
                 {u.name} <span className="text-muted-foreground">{u.email}</span>
               </button>
@@ -378,8 +392,8 @@ function ReposPanel() {
         </Button>
       </div>
       <div className="overflow-x-auto rounded-xl border">
-        <table className="w-full text-[13.5px]">
-          <thead className="text-left text-[13px] text-muted-foreground">
+        <table className="w-full text-[0.84375rem]">
+          <thead className="text-left text-[0.8125rem] text-muted-foreground">
             <tr className="border-b">
               <th className="px-3 py-2.5 font-medium">{t("admin.repository")}</th>
               <th className="px-3 py-2.5 font-medium max-md:hidden">{t("settings.contentRoot")}</th>
@@ -396,7 +410,7 @@ function ReposPanel() {
                     {r.display_name}
                   </Link>
                 </td>
-                <td className="px-3 py-2.5 font-mono text-[12.5px] max-md:hidden">{r.scope.root ? `${r.scope.root}/` : "/"}</td>
+                <td className="px-3 py-2.5 font-mono text-[0.78125rem] max-md:hidden">{r.scope.root ? `${r.scope.root}/` : "/"}</td>
                 <td className="px-3 py-2.5 max-md:hidden">{r.protection.protected ? t("admin.viaPR") : t("admin.direct")}</td>
                 <td className="px-3 py-2.5">
                   <Badge variant={r.health === "ok" ? "secondary" : "outline"} className={cn(r.health !== "ok" && r.health !== "pending" && "border-destructive/40 text-destructive")}>
@@ -450,7 +464,7 @@ function GitHubAppButton() {
               <Label htmlFor="gh-base">{t("admin.githubBase")}</Label>
               <Input id="gh-base" placeholder="https://github.com" value={base} onChange={(e) => setBase(e.target.value)} />
             </div>
-            {start.error && <p className="text-[13px] text-destructive">{errorMessage(start.error, t("errors.generic"))}</p>}
+            {start.error && <p className="text-[0.8125rem] text-destructive">{errorMessage(start.error, t("errors.generic"))}</p>}
           </div>
           <DialogFooter>
             <Button onClick={() => start.mutate()} disabled={start.isPending}>
@@ -494,14 +508,14 @@ function AddGitLabDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             <Input id="gl-url" value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} placeholder="https://gitlab.com · https://gitlab.example.com" />
           </div>
           <div className="grid gap-1.5 border-t pt-3">
-            <div className="text-[13.5px] font-medium">{t("admin.gitlabOAuth")}</div>
-            <p className="text-[12.5px] text-muted-foreground">{t("admin.gitlabOAuthHint")}</p>
+            <div className="text-[0.84375rem] font-medium">{t("admin.gitlabOAuth")}</div>
+            <p className="text-[0.78125rem] text-muted-foreground">{t("admin.gitlabOAuthHint")}</p>
           </div>
           {callback.data && (
             <div className="grid gap-1.5">
               <Label htmlFor="gl-callback">{t("admin.gitlabCallback")}</Label>
               <div className="flex gap-2">
-                <Input id="gl-callback" readOnly value={callback.data} className="font-mono text-[12.5px]" onFocus={(e) => e.currentTarget.select()} />
+                <Input id="gl-callback" readOnly value={callback.data} className="font-mono text-[0.78125rem]" onFocus={(e) => e.currentTarget.select()} />
                 <CopyButton text={callback.data} label={t("admin.copy")} />
               </div>
             </div>
@@ -514,7 +528,7 @@ function AddGitLabDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             <Label htmlFor="gl-secret">{t("admin.oauthClientSecret")}</Label>
             <Input id="gl-secret" type="password" value={form.client_secret} onChange={(e) => setForm({ ...form, client_secret: e.target.value })} />
           </div>
-          {add.error && <p className="text-[13px] text-destructive">{errorMessage(add.error, t("errors.generic"))}</p>}
+          {add.error && <p className="text-[0.8125rem] text-destructive">{errorMessage(add.error, t("errors.generic"))}</p>}
         </div>
         <DialogFooter>
           <Button onClick={() => add.mutate()} disabled={add.isPending}>
@@ -606,7 +620,7 @@ function ConnectDialog({ host, onClose }: { host: ForgeHost; onClose: () => void
               <div className="grid gap-1.5">
                 <Label htmlFor="cr-gltok">{t("admin.accessToken")}</Label>
                 <Input id="cr-gltok" type="password" value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} />
-                <span className="text-[12.5px] text-muted-foreground">{t("admin.accessTokenHelp")}</span>
+                <span className="text-[0.78125rem] text-muted-foreground">{t("admin.accessTokenHelp")}</span>
               </div>
             </>
           )}
@@ -627,7 +641,7 @@ function ConnectDialog({ host, onClose }: { host: ForgeHost; onClose: () => void
                   </SelectContent>
                 </Select>
                 {installs.data && (
-                  <a href={installs.data.install_url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] text-muted-foreground underline underline-offset-4">
+                  <a href={installs.data.install_url} target="_blank" rel="noopener noreferrer" className="text-[0.78125rem] text-muted-foreground underline underline-offset-4">
                     {t("admin.installOnAccount")}
                   </a>
                 )}
@@ -635,7 +649,7 @@ function ConnectDialog({ host, onClose }: { host: ForgeHost; onClose: () => void
               {install && (
                 <div className="max-h-56 divide-y overflow-auto rounded-lg border">
                   {(ghRepos.data ?? []).map((r) => (
-                    <label key={r.external_id} className={cn("flex cursor-pointer items-center gap-2.5 px-3 py-2 text-[13.5px] hover:bg-accent", form.name === r.name && form.owner === r.owner && "bg-accent")}>
+                    <label key={r.external_id} className={cn("flex cursor-pointer items-center gap-2.5 px-3 py-2 text-[0.84375rem] hover:bg-accent", form.name === r.name && form.owner === r.owner && "bg-accent")}>
                       <input type="radio" name="gh-repo" className="accent-primary" checked={form.name === r.name && form.owner === r.owner} onChange={() => setForm({ ...form, owner: r.owner!, name: r.name! })} />
                       <GitBranch className="size-3.5 text-muted-foreground" />
                       <span className="font-medium">
@@ -644,7 +658,7 @@ function ConnectDialog({ host, onClose }: { host: ForgeHost; onClose: () => void
                       {r.private && <Badge variant="outline">{t("admin.private")}</Badge>}
                     </label>
                   ))}
-                  {ghRepos.isLoading && <p className="p-3 text-[13px] text-muted-foreground">{t("admin.loading")}</p>}
+                  {ghRepos.isLoading && <p className="p-3 text-[0.8125rem] text-muted-foreground">{t("admin.loading")}</p>}
                 </div>
               )}
             </>
@@ -660,7 +674,7 @@ function ConnectDialog({ host, onClose }: { host: ForgeHost; onClose: () => void
             </div>
           </div>
           {connect.error && (
-            <p role="alert" className="text-[13px] text-destructive">
+            <p role="alert" className="text-[0.8125rem] text-destructive">
               {errorMessage(connect.error, t("errors.generic"))}
             </p>
           )}
@@ -746,8 +760,8 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
   const fmt = (n: number) => n.toLocaleString();
   return (
     <Panel title={t("ai.title")} desc={t("ai.desc")}>
-      {st.disabled && <p className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-[13.5px]">{t("ai.disabledByConfig")}</p>}
-      {st.managed && <p className="rounded-lg border bg-muted/40 p-3 text-[13.5px]">{t("ai.managedByConfig")}</p>}
+      {st.disabled && <p className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-[0.84375rem]">{t("ai.disabledByConfig")}</p>}
+      {st.managed && <p className="rounded-lg border bg-muted/40 p-3 text-[0.84375rem]">{t("ai.managedByConfig")}</p>}
       <Card
         footer={
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
@@ -782,9 +796,9 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
             <div className="grid gap-2">
               <Label>{t("ai.models")}</Label>
               {st.tasks.map((task) => (
-                <div key={task} className="grid grid-cols-[160px_1fr] items-center gap-3 max-sm:grid-cols-1">
-                  <span className="text-[13px] text-muted-foreground">{t(`ai.tasks.${task}`)}</span>
-                  <Input disabled={st.managed} aria-label={t(`ai.tasks.${task}`)} value={models[task] ?? ""} onChange={(e) => setModels((m) => ({ ...m, [task]: e.target.value }))} placeholder={defaults[task] ?? (task === "chat" ? t("ai.modelRequired") : t("ai.sameAsChat"))} className="font-mono text-[12.5px]" />
+                <div key={task} className="grid grid-cols-[10rem_1fr] items-center gap-3 max-sm:grid-cols-1">
+                  <span className="text-[0.8125rem] text-muted-foreground">{t(`ai.tasks.${task}`)}</span>
+                  <Input disabled={st.managed} aria-label={t(`ai.tasks.${task}`)} value={models[task] ?? ""} onChange={(e) => setModels((m) => ({ ...m, [task]: e.target.value }))} placeholder={defaults[task] ?? (task === "chat" ? t("ai.modelRequired") : t("ai.sameAsChat"))} className="font-mono text-[0.78125rem]" />
                 </div>
               ))}
             </div>
@@ -798,13 +812,13 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
                 <Input id="ai-monthly" inputMode="numeric" value={monthly} onChange={(e) => setMonthly(e.target.value.replace(/\D/g, ""))} />
               </div>
             </div>
-            <p className="text-[12.5px] text-muted-foreground">{t("ai.budgetHint")}</p>
+            <p className="text-[0.78125rem] text-muted-foreground">{t("ai.budgetHint")}</p>
             <div className="grid gap-3 border-t pt-4">
               <div>
-                <div className="text-[13.5px] font-medium">{t("ai.consistency")}</div>
-                <p className="text-[12.5px] text-muted-foreground">{t("ai.consistencyHint")}</p>
+                <div className="text-[0.84375rem] font-medium">{t("ai.consistency")}</div>
+                <p className="text-[0.78125rem] text-muted-foreground">{t("ai.consistencyHint")}</p>
               </div>
-              {st.embeddings.managed && <p className="text-[12.5px] text-muted-foreground">{t("ai.embeddingsManaged")}</p>}
+              {st.embeddings.managed && <p className="text-[0.78125rem] text-muted-foreground">{t("ai.embeddingsManaged")}</p>}
               <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
                 <div className="grid gap-1.5">
                   <Label htmlFor="ai-emb-url">{t("ai.embeddingsURL")}</Label>
@@ -812,7 +826,7 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="ai-emb-model">{t("ai.embeddingsModel")}</Label>
-                  <Input id="ai-emb-model" disabled={st.embeddings.managed} value={embModel} onChange={(e) => setEmbModel(e.target.value)} placeholder="text-embedding-3-small · nomic-embed-text" className="font-mono text-[12.5px]" />
+                  <Input id="ai-emb-model" disabled={st.embeddings.managed} value={embModel} onChange={(e) => setEmbModel(e.target.value)} placeholder="text-embedding-3-small · nomic-embed-text" className="font-mono text-[0.78125rem]" />
                 </div>
               </div>
               <div className="grid gap-1.5">
@@ -833,7 +847,7 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
           </>
         )}
         {st.check && (
-          <p className={cn("flex items-start gap-2 text-[13px]", st.check.ok ? "text-success" : "text-destructive")}>
+          <p className={cn("flex items-start gap-2 text-[0.8125rem]", st.check.ok ? "text-success" : "text-destructive")}>
             {st.check.ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : <TriangleAlert className="mt-0.5 size-4 shrink-0" />}
             <span>
               {st.check.message} <span className="text-muted-foreground">· <Time iso={st.check.at} /></span>
@@ -843,20 +857,20 @@ function AIForm({ st, usage, onSaved }: { st: AISettings; usage?: AIUsage; onSav
       </Card>
       {usage && (
         <Card>
-          <div className="flex flex-wrap gap-6 text-[13.5px]">
+          <div className="flex flex-wrap gap-6 text-[0.84375rem]">
             <div>
-              <div className="text-[12px] text-muted-foreground">{t("ai.today")}</div>
+              <div className="text-[0.75rem] text-muted-foreground">{t("ai.today")}</div>
               <div className="text-lg font-semibold tabular-nums">{fmt(usage.today_tokens)}</div>
             </div>
             <div>
-              <div className="text-[12px] text-muted-foreground">{t("ai.month")}</div>
+              <div className="text-[0.75rem] text-muted-foreground">{t("ai.month")}</div>
               <div className="text-lg font-semibold tabular-nums">{fmt(usage.month_tokens)}</div>
             </div>
           </div>
           {usage.by_user.length > 0 && (
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[0.8125rem]">
               <thead>
-                <tr className="text-left text-[12px] text-muted-foreground">
+                <tr className="text-left text-[0.75rem] text-muted-foreground">
                   <th className="py-1 font-medium">{t("ai.byUser")}</th>
                   <th className="py-1 text-right font-medium">{t("ai.runs")}</th>
                   <th className="py-1 text-right font-medium">{t("ai.tokens")}</th>

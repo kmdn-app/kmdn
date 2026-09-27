@@ -533,14 +533,19 @@ func (s *Service) deleteBranch(ctx context.Context, repo repos.Repo, branch stri
 }
 
 func (s *Service) finish(ctx context.Context, repo repos.Repo, rev revisions.Revision, by, sha string) error {
+	// Sync first, so a Published revision's content is on the published
+	// pages (the forge made the merge commit; the mirror hasn't seen it).
+	// The mirror, indexes and other revisions catch up with the new head.
+	if err := s.Repos.Sync(ctx, repo.ID); err != nil {
+		s.Log.Warn("sync after publish", "err", err, "repo", repo.ID)
+		if _, err := s.Repos.EnqueueSync(ctx, repo.ID); err != nil {
+			s.Log.Warn("queue sync after publish", "err", err, "repo", repo.ID)
+		}
+	}
 	if err := s.Revisions.MarkPublished(ctx, rev.ID, by, sha); err != nil {
 		return err
 	}
 	_ = audit.Write(ctx, s.DB, audit.Entry{ActorType: "user", ActorID: by, Action: "revision.published", TargetType: "revision", TargetID: rev.ID, RepoID: repo.ID, Data: map[string]any{"sha": sha}})
-	// The mirror, indexes and other revisions catch up with the new head.
-	if _, err := s.Repos.EnqueueSync(ctx, repo.ID); err != nil {
-		s.Log.Warn("sync after publish", "err", err, "repo", repo.ID)
-	}
 	return nil
 }
 

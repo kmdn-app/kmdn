@@ -24,7 +24,7 @@ type AgentKey = components["schemas"]["AgentKey"];
 function Sparkline({ values, label }: { values: number[]; label: string }) {
   const top = Math.max(1, ...values);
   return (
-    <svg viewBox={`0 0 ${values.length * 5} 20`} className="h-5 w-[70px] text-primary" role="img" aria-label={label}>
+    <svg viewBox={`0 0 ${values.length * 5} 20`} className="h-5 w-[4.375rem] text-primary" role="img" aria-label={label}>
       {values.map((v, i) => {
         const h = v === 0 ? 1 : Math.max(2, (v / top) * 20);
         return <rect key={i} x={i * 5} y={20 - h} width={3.5} height={h} rx={0.75} className={v === 0 ? "fill-muted-foreground/25" : "fill-current"} />;
@@ -73,7 +73,7 @@ function CreateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpen
               <div className="grid gap-1.5">
                 <Label>{t("agentKeys.token")}</Label>
                 <div className="flex gap-2">
-                  <Input readOnly value={shown.token} className="font-mono text-[12px]" onFocus={(e) => e.currentTarget.select()} />
+                  <Input readOnly value={shown.token} className="font-mono text-[0.75rem]" onFocus={(e) => e.currentTarget.select()} />
                   <CopyButton text={shown.token} label={t("agentKeys.copy")} />
                 </div>
               </div>
@@ -82,7 +82,7 @@ function CreateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpen
                   <Label>{t("agentKeys.config")}</Label>
                   <CopyButton text={shown.config} label={t("agentKeys.copyConfig")} />
                 </div>
-                <pre className="max-h-56 overflow-auto rounded-lg bg-muted p-3 font-mono text-[11.5px] leading-relaxed">{shown.config}</pre>
+                <pre className="max-h-56 overflow-auto rounded-lg bg-muted p-3 font-mono text-[0.71875rem] leading-relaxed">{shown.config}</pre>
               </div>
             </div>
             <DialogFooter>
@@ -113,14 +113,14 @@ function CreateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpen
               </div>
               <div className="grid gap-2">
                 <Label>{t("agentKeys.scope")}</Label>
-                <label className="flex items-center gap-2 text-[13.5px]">
+                <label className="flex items-center gap-2 text-[0.84375rem]">
                   <Checkbox checked={all} onCheckedChange={(v) => setAll(v === true)} />
                   {t("agentKeys.allRepos")}
                 </label>
                 {!all && (
                   <div className="grid max-h-44 gap-1.5 overflow-auto rounded-lg border p-2.5">
                     {(repos ?? []).map((r) => (
-                      <label key={r.id} className="flex items-center gap-2 text-[13.5px]">
+                      <label key={r.id} className="flex items-center gap-2 text-[0.84375rem]">
                         <Checkbox checked={picked.includes(r.id)} onCheckedChange={(v) => setPicked((p) => (v === true ? [...p, r.id] : p.filter((x) => x !== r.id)))} />
                         <span className="truncate">{r.slug}</span>
                       </label>
@@ -164,9 +164,9 @@ function Calls({ id }: { id: string }) {
   const { t } = useTranslation();
   const q = useQuery({ queryKey: ["agent-key-calls", id], queryFn: async () => (await unwrap(api.GET("/admin/agent-keys/{id}/calls", { params: { path: { id } } }))).items });
   if (!q.data) return <Loader2 className="m-3 size-4 animate-spin text-muted-foreground" />;
-  if (q.data.length === 0) return <p className="px-4 py-3 text-[13px] text-muted-foreground">{t("agentKeys.noCalls")}</p>;
+  if (q.data.length === 0) return <p className="px-4 py-3 text-[0.8125rem] text-muted-foreground">{t("agentKeys.noCalls")}</p>;
   return (
-    <ul className="grid gap-1 px-4 py-3 text-[12.5px]">
+    <ul className="grid gap-1 px-4 py-3 text-[0.78125rem]">
       {q.data.map((e) => {
         const d = (e.data ?? {}) as Record<string, unknown>;
         const what = [d.repo, d.path, d.query && `“${String(d.query)}”`, d.uri].filter(Boolean).join(" · ");
@@ -175,7 +175,7 @@ function Calls({ id }: { id: string }) {
             <span className="shrink-0 text-muted-foreground tabular-nums">
               <Time iso={e.at} />
             </span>
-            <code className="shrink-0 rounded bg-muted px-1 font-mono text-[11.5px]">{e.action.replace(/^mcp\./, "")}</code>
+            <code className="shrink-0 rounded bg-muted px-1 font-mono text-[0.71875rem]">{e.action.replace(/^mcp\./, "")}</code>
             <span className={cn("truncate", d.error || d.tool_error ? "text-destructive" : "text-muted-foreground")}>{what}</span>
           </li>
         );
@@ -205,7 +205,7 @@ export function AgentKeysPanel() {
       title={t("agentKeys.title")}
       desc={
         <>
-          {t("agentKeys.desc")} {q.data && <code className="rounded bg-muted px-1 font-mono text-[12px]">{q.data.endpoint}</code>}
+          {t("agentKeys.desc")} {q.data && <code className="rounded bg-muted px-1 font-mono text-[0.75rem]">{q.data.endpoint}</code>}
         </>
       }
       actions={
@@ -235,7 +235,7 @@ export function AgentKeysPanel() {
       </Dialog>
       {q.data && q.data.items.length === 0 && (
         <Card>
-          <div className="flex items-start gap-3 text-[13.5px]">
+          <div className="flex items-start gap-3 text-[0.84375rem]">
             <KeyRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <p className="text-muted-foreground">{t("agentKeys.none")}</p>
           </div>
@@ -251,23 +251,23 @@ export function AgentKeysPanel() {
                     <span className="font-medium">{k.name}</span>
                     <span
                       className={cn(
-                        "rounded-full px-2 py-0.5 text-[11.5px] font-medium",
+                        "rounded-full px-2 py-0.5 text-[0.71875rem] font-medium",
                         k.status === "active" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground",
                       )}
                     >
                       {t(`agentKeys.status.${k.status}`)}
                     </span>
                     {k.all_repos ? (
-                      <span className="rounded-md border px-1.5 py-0.5 text-[11.5px]">{t("agentKeys.allRepos")}</span>
+                      <span className="rounded-md border px-1.5 py-0.5 text-[0.71875rem]">{t("agentKeys.allRepos")}</span>
                     ) : (
                       k.repo_ids.map((id) => (
-                        <span key={id} className="rounded-md border px-1.5 py-0.5 text-[11.5px]">
+                        <span key={id} className="rounded-md border px-1.5 py-0.5 text-[0.71875rem]">
                           {repoName(id)}
                         </span>
                       ))
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-x-3 text-[12px] text-muted-foreground">
+                  <div className="mt-1 flex flex-wrap gap-x-3 text-[0.75rem] text-muted-foreground">
                     <span>
                       {t("agentKeys.createdBy", { name: k.created_by_name || "—" })} <Time iso={k.created_at} />
                     </span>
