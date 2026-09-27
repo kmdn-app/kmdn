@@ -199,7 +199,27 @@ function Header({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
               </button>
             )
           )}
-          {rev.access.reason && rev.state !== "closed" && <p className="mt-4 rounded-lg border bg-muted/40 px-3 py-2 text-[13px]">{t(`revision.readOnly.${rev.access.reason}`, { defaultValue: t("revision.readOnly.generic"), editors: rev.members.map((m) => m.name.split(" ")[0]).join(", ") })}</p>}
+          {rev.state === "published" && rev.published_sha && (
+            <p className="mt-4 rounded-lg border border-success/30 bg-success/5 px-3 py-2 text-[13px]">
+              {t("publish.done", { branch: repo.target_branch })}{" "}
+              {commitURL(repo, rev.published_sha) ? (
+                <a href={commitURL(repo, rev.published_sha)!} target="_blank" rel="noreferrer" className="font-mono underline">
+                  {rev.published_sha.slice(0, 8)}
+                </a>
+              ) : (
+                <code>{rev.published_sha.slice(0, 8)}</code>
+              )}
+            </p>
+          )}
+          {rev.state === "publishing" && rev.change_request_url && (
+            <p className="mt-4 rounded-lg border px-3 py-2 text-[13px]">
+              {t("publish.waitingForMerge")}{" "}
+              <a href={rev.change_request_url} target="_blank" rel="noreferrer" className="underline">
+                {t("publish.openThePR")}
+              </a>
+            </p>
+          )}
+          {rev.access.reason && rev.state !== "closed" && rev.state !== "published" && rev.state !== "publishing" && <p className="mt-4 rounded-lg border bg-muted/40 px-3 py-2 text-[13px]">{t(`revision.readOnly.${rev.access.reason}`, { defaultValue: t("revision.readOnly.generic"), editors: rev.members.map((m) => m.name.split(" ")[0]).join(", ") })}</p>}
         </>
       )}
     </section>
@@ -717,4 +737,12 @@ function Checks({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
       </div>
     </section>
   );
+}
+
+/** Link to a commit on the forge (none for plain git remotes). */
+function commitURL(repo: RepoView, sha: string): string | null {
+  if (!repo.web_url) return null;
+  if (repo.forge_kind === "github") return `${repo.web_url}/commit/${sha}`;
+  if (repo.forge_kind === "gitlab") return `${repo.web_url}/-/commit/${sha}`;
+  return null;
 }

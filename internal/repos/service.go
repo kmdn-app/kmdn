@@ -45,6 +45,8 @@ type Service struct {
 	Log      *slog.Logger
 
 	OnHeadChanged []HeadChanged
+	// OnChangeRequest runs when a pull/merge request is merged or closed.
+	OnChangeRequest []ChangeRequestHook
 }
 
 // Register adds the service's job handlers.

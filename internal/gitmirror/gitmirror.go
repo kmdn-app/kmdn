@@ -104,6 +104,10 @@ func (g *Git) CheckVersion(ctx context.Context) error {
 }
 
 func (g *Git) run(ctx context.Context, dir string, cred *Credential, stdin io.Reader, args ...string) ([]byte, error) {
+	return g.runEnv(ctx, dir, cred, stdin, nil, args...)
+}
+
+func (g *Git) runEnv(ctx context.Context, dir string, cred *Credential, stdin io.Reader, env []string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, g.bin(), args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
@@ -112,6 +116,7 @@ func (g *Git) run(ctx context.Context, dir string, cred *Credential, stdin io.Re
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"LC_ALL=C",
 	)
+	cmd.Env = append(cmd.Env, env...)
 	if cred != nil && cred.Password != "" {
 		cmd.Env = append(cmd.Env,
 			"GIT_ASKPASS="+g.askpass(),

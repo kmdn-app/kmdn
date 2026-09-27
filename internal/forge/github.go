@@ -414,6 +414,14 @@ func (g *GitHubApp) ParseWebhook(r *http.Request, body []byte, secret string) (E
 				Login string `json:"login"`
 			} `json:"account"`
 		} `json:"installation"`
+		PullRequest *struct {
+			Number         int64  `json:"number"`
+			Merged         bool   `json:"merged"`
+			MergeCommitSHA string `json:"merge_commit_sha"`
+			Head           struct {
+				Ref string `json:"ref"`
+			} `json:"head"`
+		} `json:"pull_request"`
 	}
 	if err := json.Unmarshal(body, &p); err != nil {
 		return ev, err
@@ -444,8 +452,25 @@ func (g *GitHubApp) ParseWebhook(r *http.Request, body []byte, secret string) (E
 	case "repository":
 		ev.Type = "repository"
 		ev.Removed = p.Action == "deleted"
+	case "pull_request":
+		if p.PullRequest != nil && p.Action == "closed" {
+			ev.Type = "change_request"
+			ev.ChangeRequest = &ChangeRequestEvent{Ref: strconv.FormatInt(p.PullRequest.Number, 10), Head: p.PullRequest.Head.Ref,
+				Merged: p.PullRequest.Merged, Closed: !p.PullRequest.Merged, MergeSHA: p.PullRequest.MergeCommitSHA}
+		}
 	}
 	return ev, nil
+}
+
+// OpenChangeRequest opens a pull request from head into base.
+func (g *GitHubApp) OpenChangeRequest(ctx context.Context, repo Repo, head, base, title, body string) (ChangeRequest, error) {
+	var pr struct {
+		Number  int64  `json:"number"`
+		HTMLURL string `json:"html_url"`
+	}
+	err := g.asInstall(ctx, repo, http.MethodPost, "/repos/"+url.PathEscape(repo.Owner)+"/"+url.PathEscape(repo.Name)+"/pulls",
+		map[string]any{"title": title, "head": head, "base": base, "body": body, "maintainer_can_modify": true}, &pr)
+	return ChangeRequest{URL: pr.HTMLURL, Ref: strconv.FormatInt(pr.Number, 10)}, err
 }
 
 // ManifestConversion is the result of the GitHub App manifest flow.

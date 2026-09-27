@@ -24,6 +24,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/linking"
 	"github.com/kmdn-app/kmdn/internal/links"
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/publish"
 	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/revisions"
@@ -53,6 +54,7 @@ type App struct {
 	Realtime  *realtime.Hub
 	Collab    *collab.Hub
 	Links     *links.Service
+	Publish   *publish.Service
 	Invites   *invites.Service
 }
 
@@ -128,6 +130,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Collab = &collab.Hub{DB: db, Engine: eng, Revisions: a.Revisions, Log: log, Publish: a.Realtime.Publish}
 	a.Realtime.Rooms = a.Collab
 	a.Collab.Routes(r)
+	a.Publish = &publish.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Docs: collabDocs{a}, Engine: eng, Jobs: a.Jobs, BaseURL: a.Repos.BaseURL, DataDir: cfg.DataDir, Log: log}
+	a.Publish.Register()
+	a.Publish.Routes(r)
 	a.Links = &links.Service{DB: db, Repos: a.Repos, Revisions: a.Revisions, Engine: eng, Jobs: a.Jobs, Log: log}
 	a.Links.Register()
 	a.Links.Routes(r, links.ApplierFunc(func(ctx context.Context, repo repos.Repo, rev revisions.Revision, c revisions.Caller, p, md, kind string) error {
@@ -194,6 +199,16 @@ func (a *App) catchUpIndexes(ctx context.Context) {
 			a.Log.Error("enqueue link index", "repo", r.ID, "error", err)
 		}
 	}
+}
+
+// collabDocs lets publishing reach the current hub (tests swap it).
+type collabDocs struct{ a *App }
+
+func (d collabDocs) FlushRevision(ctx context.Context, revID string) {
+	d.a.Collab.FlushRevision(ctx, revID)
+}
+func (d collabDocs) StateOf(ctx context.Context, revID, p string) (string, []byte, error) {
+	return d.a.Collab.StateOf(ctx, revID, p)
 }
 
 // originOf returns scheme://host of the base URL (the only allowed WebSocket Origin).

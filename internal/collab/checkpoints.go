@@ -164,6 +164,22 @@ func (h *Hub) stateOf(ctx context.Context, revID, p string) (docID string, state
 	return docID, state, err
 }
 
+// FlushRevision persists and materializes the revision's open rooms, so
+// revision_files has every edit (before checkpoints and publishing).
+func (h *Hub) FlushRevision(ctx context.Context, revID string) {
+	h.init()
+	for _, r := range h.liveRooms(revID) {
+		r.flush(ctx)
+		r.materialize(ctx)
+	}
+}
+
+// StateOf returns a page document's current state (nil when it has none).
+func (h *Hub) StateOf(ctx context.Context, revID, p string) (docID string, state []byte, err error) {
+	h.init()
+	return h.stateOf(ctx, revID, p)
+}
+
 // CheckpointView is a checkpoint in listings.
 type CheckpointView struct {
 	ID            string    `json:"id"`

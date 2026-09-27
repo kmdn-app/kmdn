@@ -1399,6 +1399,31 @@ paths:
                 required: [items]
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/ReviewerCandidate" } }
+  /revisions/{revision}/commit-preview:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { name: title, in: query, schema: { type: string } }
+      - { name: body, in: query, schema: { type: string } }
+    get:
+      tags: [revisions]
+      operationId: commitPreview
+      summary: The commit publishing would make (message, co-authors, reviewers)
+      responses:
+        "200": { description: Preview, content: { application/json: { schema: { $ref: "#/components/schemas/CommitPreview" } } } }
+  /revisions/{revision}/publish:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    post:
+      tags: [revisions]
+      operationId: publishRevision
+      summary: Publish an approved revision (a job; a pull/merge request on protected branches)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { title: { type: string }, body: { type: string } } } } }
+      responses:
+        "202": { description: Queued, content: { application/json: { schema: { type: object, required: [job_id], properties: { job_id: { type: string } } } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 components:
   parameters:
     RepoID:
@@ -1429,6 +1454,26 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    CommitPerson:
+      type: object
+      required: [name, email]
+      properties:
+        user_id: { type: string }
+        name: { type: string }
+        email: { type: string }
+    CommitPreview:
+      type: object
+      required: [title, body, co_authors, reviewers, assisted, message, target_branch, protected]
+      properties:
+        title: { type: string }
+        body: { type: string }
+        co_authors: { type: array, items: { $ref: "#/components/schemas/CommitPerson" } }
+        reviewers: { type: array, items: { $ref: "#/components/schemas/CommitPerson" } }
+        assisted: { type: boolean }
+        message: { type: string }
+        target_branch: { type: string }
+        protected: { type: boolean }
+        blocked: { type: string }
     SubmitInput:
       type: object
       required: [reviewers]

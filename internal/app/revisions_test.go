@@ -14,11 +14,19 @@ import (
 // caller must be signed in as an instance admin.
 func connectLocal(t *testing.T, a *App, admin *tc, files map[string]string) string {
 	t.Helper()
+	id, _ := connectLocalRemote(t, a, admin, files)
+	return id
+}
+
+// connectLocalRemote also returns the remote's directory.
+func connectLocalRemote(t *testing.T, a *App, admin *tc, files map[string]string) (string, string) {
+	t.Helper()
 	ctx := context.Background()
 	remote := t.TempDir()
 	gitIn(t, remote, "init", "--quiet", "-b", "main")
 	gitIn(t, remote, "config", "uploadpack.allowFilter", "true")
 	gitIn(t, remote, "config", "uploadpack.allowAnySHA1InWant", "true")
+	gitIn(t, remote, "config", "receive.denyCurrentBranch", "updateInstead") // publishing pushes here
 	for p, c := range files {
 		writeFile(t, remote, p, c)
 	}
@@ -39,7 +47,7 @@ func connectLocal(t *testing.T, a *App, admin *tc, files map[string]string) stri
 			break
 		}
 	}
-	return body["repo"].(map[string]any)["id"].(string)
+	return body["repo"].(map[string]any)["id"].(string), remote
 }
 
 func paths(v any) []string {

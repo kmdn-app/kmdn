@@ -80,6 +80,20 @@ const api = {
     const map = JSON.parse(mapJSON) as Record<string, string>;
     return rewriteLinks(markdown, (u) => map[u] ?? null);
   },
+  /**
+   * Surviving content per Yjs client (characters and embedded nodes that are
+   * still in the document): who wrote what, for Co-authored-by.
+   */
+  yContributions: (update: ArrayBuffer): string => {
+    const d = load(update);
+    const counts: Record<string, number> = {};
+    d.store.clients.forEach((structs, client) => {
+      let n = 0;
+      for (const s of structs) if (s instanceof Y.Item && !s.deleted && s.countable) n += s.length;
+      if (n > 0) counts[String(client)] = n;
+    });
+    return JSON.stringify(counts);
+  },
   /** merge updates into one (compaction) */
   yMerge: (updates: ArrayBuffer[]): ArrayBuffer => buf(Y.mergeUpdates(updates.map(u8))),
   /** what a peer with state vector sv is missing */
