@@ -4,9 +4,18 @@ import { ChevronDown, ChevronRight, FileText, Folder, Image as ImageIcon } from 
 import type { RepoView, TreeNode } from "@/lib/repos";
 import { cn } from "@/lib/utils";
 
-type Dir = { name: string; path: string; dirs: Map<string, Dir>; files: TreeNode[] };
+type Node = TreeNode & { op?: string };
+type Dir = { name: string; path: string; dirs: Map<string, Dir>; files: Node[] };
 
-function build(nodes: TreeNode[], root: string): Dir {
+/** One-letter marks for files a revision touches. */
+export const OP_MARK: Record<string, { letter: string; cls: string }> = {
+  modify: { letter: "M", cls: "text-warning" },
+  add: { letter: "A", cls: "text-success" },
+  rename: { letter: "R", cls: "text-sky-500" },
+  delete: { letter: "D", cls: "text-destructive" },
+};
+
+function build(nodes: Node[], root: string): Dir {
   const top: Dir = { name: "", path: root, dirs: new Map(), files: [] };
   for (const n of nodes) {
     if (n.type !== "file") continue;
@@ -29,7 +38,22 @@ function build(nodes: TreeNode[], root: string): Dir {
 }
 
 /** Content tree of the repo in the sidebar. Markdown first; images shown muted. */
-export function FileTree({ repo, nodes, root, current, onNavigate }: { repo: RepoView; nodes: TreeNode[]; root: string; current?: string; onNavigate?: () => void }) {
+export function FileTree({
+  repo,
+  nodes,
+  root,
+  current,
+  revision,
+  onNavigate,
+}: {
+  repo: RepoView;
+  nodes: Node[];
+  root: string;
+  current?: string;
+  /** Links open pages in this revision. */
+  revision?: number;
+  onNavigate?: () => void;
+}) {
   const tree = useMemo(() => build(nodes, root), [nodes, root]);
   const [open, setOpen] = useState<Set<string>>(() => {
     const s = new Set<string>();
@@ -83,9 +107,19 @@ export function FileTree({ repo, nodes, root, current, onNavigate }: { repo: Rep
           );
           const style = { paddingLeft: 8 + depth * 14 + 18 };
           return f.markdown ? (
-            <Link key={f.path} to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: f.path }} onClick={onNavigate} className={cls} style={style} aria-current={active ? "page" : undefined}>
+            <Link
+              key={f.path}
+              to="/$owner/$repo/$"
+              params={{ owner: repo.owner, repo: repo.name, _splat: f.path }}
+              search={revision ? { revision } : {}}
+              onClick={onNavigate}
+              className={cls}
+              style={style}
+              aria-current={active ? "page" : undefined}
+            >
               <Icon className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="truncate">{f.name}</span>
+              {f.op && OP_MARK[f.op] && <span className={cn("ml-auto font-mono text-[11px] font-semibold", OP_MARK[f.op]!.cls)}>{OP_MARK[f.op]!.letter}</span>}
             </Link>
           ) : (
             <div key={f.path} className={cls} style={style} title={f.path}>

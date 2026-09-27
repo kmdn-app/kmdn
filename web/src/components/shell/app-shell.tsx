@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { Sidebar } from "./sidebar";
 import { useRepos } from "@/lib/repos";
 import { lastRepo } from "@/lib/last-repo";
+import type { RevisionView } from "@/lib/revisions";
 import { CommandPaletteProvider } from "./command-palette";
 import type { RepoView } from "@/lib/repos";
 import { RightPanel, type PanelTabs } from "./right-panel";
@@ -29,7 +30,20 @@ function persist(key: string, v: boolean) {
 export type ShellControls = { panelOpen: boolean; togglePanel: () => void; toggleSidebar: () => void };
 
 /** Docs-first shell: sidebar, main column, docked right panel. See docs/specs/02-ux.md#app-shell. */
-export function AppShell({ children, repo, currentPath, panel }: { children: (c: ShellControls) => ReactNode; repo?: RepoView; currentPath?: string; panel?: ReactNode | PanelTabs }) {
+export function AppShell({
+  children,
+  repo,
+  revision,
+  currentPath,
+  panel,
+}: {
+  children: (c: ShellControls) => ReactNode;
+  repo?: RepoView;
+  /** The selected revision: the sidebar switches to its context. */
+  revision?: RevisionView;
+  currentPath?: string;
+  panel?: ReactNode | PanelTabs;
+}) {
   const [panelOpen, setPanelOpen] = useState(() => stored(PANEL_KEY, false));
   const [sidebarOpen, setSidebarOpen] = useState(() => stored(SIDEBAR_KEY, true));
   const [mobileNav, setMobileNav] = useState(false);
@@ -78,7 +92,7 @@ export function AppShell({ children, repo, currentPath, panel }: { children: (c:
           !mobileNav && "max-md:hidden",
         )}
       >
-        <Sidebar repo={ctxRepo} currentPath={currentPath} onNavigate={() => setMobileNav(false)} />
+        <Sidebar repo={ctxRepo} revision={revision} currentPath={currentPath} onNavigate={() => setMobileNav(false)} />
       </div>
       {mobileNav && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} aria-hidden />}
       <main className="flex min-w-0 flex-1 flex-col">{children({ panelOpen, togglePanel, toggleSidebar })}</main>

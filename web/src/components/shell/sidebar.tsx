@@ -1,8 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronsUpDown, FilePen, GitBranch, Home, LogOut, Monitor, Moon, Plus, Search, Settings, Shield, Sun, UserRound } from "lucide-react";
-import type { ReactNode } from "react";
+import { Check, ChevronsUpDown, FilePen, Home, LayoutList, LogOut, Monitor, Moon, Plus, Search, Settings, Shield, Sun, UserRound } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/logo";
 import { Avatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,10 @@ import { api, meQuery, unwrap, useMe, useSetupStatus } from "@/lib/api";
 import { atLeast, useRepos, useTree, type RepoView } from "@/lib/repos";
 import { useTheme } from "@/lib/theme";
 import type { ThemeChoice } from "@/theme";
-import { FileTree } from "./file-tree";
+import { FileTree, OP_MARK } from "./file-tree";
+import { NewRevisionDialog, RevisionPicker, StateDot, StatePill } from "@/components/revision/revision-ui";
+import { useRevisionFiles, useRevisions, useRevisionTree, type RevisionView } from "@/lib/revisions";
+import { cn } from "@/lib/utils";
 import { usePalette } from "./command-palette";
 import { ForgeIcon } from "./forge-icon";
 
@@ -96,12 +99,146 @@ function RepoSwitcher({ repo }: { repo?: RepoView }) {
   );
 }
 
-export function Sidebar({ repo, currentPath, onNavigate }: { repo?: RepoView; currentPath?: string; onNavigate?: () => void }) {
+function PublishedNav({ repo, currentPath, onNavigate }: { repo: RepoView; currentPath?: string; onNavigate?: () => void }) {
+  const { t } = useTranslation();
+  const { data: tree, isLoading } = useTree(repo);
+  const mine = useRevisions(repo, { mine: true });
+  return (
+    <>
+      {(mine.data?.length ?? 0) > 0 && (
+        <Section
+          title={t("revision.yours")}
+          action={
+            <Link to="/$owner/$repo/revisions" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className="text-[11.5px] font-normal hover:text-foreground">
+              {t("revision.viewAll")}
+            </Link>
+          }
+        >
+          {mine.data!.slice(0, 5).map((r) => (
+            <Link
+              key={r.id}
+              to="/$owner/$repo/revisions/$number"
+              params={{ owner: repo.owner, repo: repo.name, number: String(r.number) }}
+              onClick={onNavigate}
+              className={itemCls}
+            >
+              <StateDot state={r.state} className="mx-[5px]" />
+              <span className="min-w-0 flex-1 truncate">{r.title}</span>
+              <span className="text-[11px] text-muted-foreground">#{r.number}</span>
+            </Link>
+          ))}
+        </Section>
+      )}
+      <Section title={t("shell.files")}>
+        {isLoading || repo.health === "pending" ? (
+          <TreeSkeleton />
+        ) : tree && tree.items.length > 0 ? (
+          <FileTree repo={repo} nodes={tree.items} root={tree.root} current={currentPath} onNavigate={onNavigate} />
+        ) : (
+          <p className="px-2 text-xs text-muted-foreground">{t("shell.noFiles")}</p>
+        )}
+      </Section>
+    </>
+  );
+}
+
+function TreeSkeleton() {
+  return (
+    <div className="grid gap-1.5 px-2 pt-1">
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-4 w-1/2" />
+      <Skeleton className="h-4 w-2/3" />
+    </div>
+  );
+}
+
+/** Sidebar while a revision is selected (docs/specs/02-ux.md#contextual-sidebar). */
+function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; rev: RevisionView; currentPath?: string; onNavigate?: () => void }) {
+  const { t } = useTranslation();
+  const files = useRevisionFiles(rev);
+  const tree = useRevisionTree(rev);
+  const [allOpen, setAllOpen] = useState(false);
+  return (
+    <>
+      <Link
+        to="/$owner/$repo/revisions/$number"
+        params={{ owner: repo.owner, repo: repo.name, number: String(rev.number) }}
+        onClick={onNavigate}
+        className="mt-1 block rounded-lg border bg-background p-2.5 hover:bg-accent"
+      >
+        <StatePill rev={rev} />
+        <div className="mt-1.5 text-[12px] text-muted-foreground">{t("revision.overview")} →</div>
+      </Link>
+      <Section title={t("revision.changed")}>
+        {(files.data ?? []).length === 0 && <p className="px-2 text-xs text-muted-foreground">{t("revision.noChanges")}</p>}
+        {(files.data ?? []).map((f) => {
+          const mark = OP_MARK[f.op];
+          const active = f.path === currentPath;
+          const body = (
+            <>
+              <span className={cn("w-3 shrink-0 text-center font-mono text-[11px] font-semibold", mark?.cls)}>{mark?.letter}</span>
+              <span className="min-w-0 flex-1 truncate" title={f.path}>
+                {f.path.split("/").pop()}
+              </span>
+              <span className="shrink-0 font-mono text-[10.5px] tabular-nums">
+                {f.additions > 0 && <span className="text-success">+{f.additions}</span>}
+                {f.deletions > 0 && <span className="ml-1 text-destructive">−{f.deletions}</span>}
+              </span>
+            </>
+          );
+          return f.op === "delete" ? (
+            <div key={f.id} className={cn(itemCls, "text-muted-foreground line-through decoration-muted-foreground/50")}>
+              {body}
+            </div>
+          ) : (
+            <Link
+              key={f.id}
+              to="/$owner/$repo/$"
+              params={{ owner: repo.owner, repo: repo.name, _splat: f.path }}
+              search={{ revision: rev.number }}
+              onClick={onNavigate}
+              className={cn(itemCls, active && "bg-sidebar-accent font-medium")}
+              aria-current={active ? "page" : undefined}
+            >
+              {body}
+            </Link>
+          );
+        })}
+      </Section>
+      <Section title={t("revision.people")}>
+        {rev.members.map((m) => (
+          <div key={m.user_id} className={itemCls}>
+            <Avatar name={m.name} id={m.user_id} size="sm" />
+            <span className="min-w-0 flex-1 truncate">{m.name}</span>
+            {m.role === "owner" && <span className="text-[11px] text-muted-foreground">{t("revision.owner")}</span>}
+          </div>
+        ))}
+      </Section>
+      <Section
+        title={t("revision.allFiles")}
+        action={
+          <button type="button" className="text-[11.5px] font-normal hover:text-foreground" onClick={() => setAllOpen((v) => !v)} aria-expanded={allOpen}>
+            {allOpen ? t("revision.hide") : t("revision.show")}
+          </button>
+        }
+      >
+        {allOpen &&
+          (tree.data ? (
+            <FileTree repo={repo} nodes={tree.data.items} root={tree.data.root} current={currentPath} revision={rev.number} onNavigate={onNavigate} />
+          ) : (
+            <TreeSkeleton />
+          ))}
+      </Section>
+    </>
+  );
+}
+
+export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: RepoView; revision?: RevisionView; currentPath?: string; onNavigate?: () => void }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
   const { choice, setChoice } = useTheme();
-  const { data: tree, isLoading } = useTree(repo);
   const palette = usePalette();
+  const [newOpen, setNewOpen] = useState(false);
   const qc = useQueryClient();
   const navigate = useNavigate();
   const signOut = async () => {
@@ -113,20 +250,14 @@ export function Sidebar({ repo, currentPath, onNavigate }: { repo?: RepoView; cu
     <aside aria-label="Sidebar" className="flex h-full flex-col text-[13px] text-sidebar-foreground">
       <div className="flex flex-col gap-1.5 px-2.5 pt-2.5 pb-1">
         <RepoSwitcher repo={repo} />
-        {repo && (
-          <div className="flex h-8 items-center gap-2 rounded-lg border bg-background px-2.5 text-[13px] font-medium shadow-xs" title={t("shell.publishedHint")}>
-            <span className="size-1.5 rounded-full bg-success" />
-            <span className="truncate">
-              {t("shell.published")} <span className="font-normal text-muted-foreground">· {repo.target_branch}</span>
-            </span>
-            <GitBranch className="ml-auto size-3.5 text-muted-foreground" />
-          </div>
+        {repo && <RevisionPicker repo={repo} revision={revision} currentPath={currentPath} onNew={() => setNewOpen(true)} />}
+        {repo && atLeast(repo.role, "contributor") && (
+          <Button variant="outline" size="sm" className="w-full justify-start bg-background" onClick={() => setNewOpen(true)}>
+            <FilePen />
+            {t("shell.newRevision")}
+          </Button>
         )}
-        <Button variant="outline" size="sm" className="w-full justify-start bg-background" disabled title={t("shell.revisionsSoon")}>
-          <FilePen />
-          {t("shell.newRevision")}
-          <kbd className="ml-auto rounded border px-1 text-[10.5px] text-muted-foreground">N</kbd>
-        </Button>
+        {repo && <NewRevisionDialog repo={repo} open={newOpen} onOpenChange={setNewOpen} />}
       </div>
       <nav className="min-h-0 flex-1 overflow-auto px-2.5 pb-3">
         {repo ? (
@@ -147,21 +278,13 @@ export function Sidebar({ repo, currentPath, onNavigate }: { repo?: RepoView; cu
             <kbd className="rounded border bg-background px-1 text-[10.5px] text-muted-foreground">⌘K</kbd>
           </button>
         )}
-        {repo && (
-          <Section title={t("shell.files")}>
-            {isLoading || repo.health === "pending" ? (
-              <div className="grid gap-1.5 px-2 pt-1">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="h-4 w-2/3" />
-              </div>
-            ) : tree && tree.items.length > 0 ? (
-              <FileTree repo={repo} nodes={tree.items} root={tree.root} current={currentPath} onNavigate={onNavigate} />
-            ) : (
-              <p className="px-2 text-xs text-muted-foreground">{t("shell.noFiles")}</p>
-            )}
-          </Section>
+        {repo && !revision && (
+          <Link to="/$owner/$repo/revisions" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
+            <LayoutList />
+            {t("revision.list")}
+          </Link>
         )}
+        {repo && (revision ? <RevisionNav repo={repo} rev={revision} currentPath={currentPath} onNavigate={onNavigate} /> : <PublishedNav repo={repo} currentPath={currentPath} onNavigate={onNavigate} />)}
       </nav>
       <div className="flex items-center gap-1 border-t border-sidebar-border px-2.5 py-2">
         <DropdownMenu>

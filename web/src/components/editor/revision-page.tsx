@@ -55,7 +55,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
     );
   }
   return (
-    <AppShell repo={repo} currentPath={path}>
+    <AppShell repo={repo} revision={rev.data} currentPath={path}>
       {(controls) => (
         <>
           <TopBar
