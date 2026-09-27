@@ -196,10 +196,14 @@ func (s *Service) pushMessage(n Notification) Message {
 		who = "Someone"
 	}
 	m := Message{URL: s.BaseURL, Tag: n.RevisionID}
+	repo := "/" + d.Owner + "/" + d.Repo
+	if d.Org != "" {
+		repo = "/" + d.Org + repo
+	}
 	if d.Owner != "" && d.Number > 0 {
-		m.URL = s.BaseURL + "/" + d.Owner + "/" + d.Repo + "/revisions/" + itoa(d.Number)
+		m.URL = s.BaseURL + repo + "/revisions/" + itoa(d.Number)
 	} else if d.Owner != "" && d.Path != "" {
-		m.URL = s.BaseURL + "/" + d.Owner + "/" + d.Repo + "/" + d.Path
+		m.URL = s.BaseURL + repo + "/" + d.Path
 	}
 	switch n.Kind {
 	case KindReviewRequested:

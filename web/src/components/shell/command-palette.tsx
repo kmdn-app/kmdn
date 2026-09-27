@@ -4,6 +4,7 @@ import { FileText, Hash, Settings, Shield, UserRound } from "lucide-react";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useMe } from "@/lib/api";
 import { useSearch, useTree, type RepoView } from "@/lib/repos";
+import { useCurrentOrg } from "@/lib/orgs";
 
 type PaletteState = { open: () => void };
 const PaletteContext = createContext<PaletteState>({ open: () => {} });
@@ -41,6 +42,8 @@ export function CommandPaletteProvider({ repo, children }: { repo?: RepoView; ch
   const [picked, setPicked] = useState("");
   const navigate = useNavigate();
   const { data: me } = useMe();
+  const org = useCurrentOrg();
+  const canAdmin = !!me?.is_instance_admin || org?.role === "admin" || org?.role === "owner";
   const { data: tree } = useTree(repo);
   const { data: hits, isFetching } = useSearch(repo, q);
 
@@ -61,7 +64,7 @@ export function CommandPaletteProvider({ repo, children }: { repo?: RepoView; ch
     return (needle ? files.filter((f) => f.path.toLowerCase().includes(needle)) : files).slice(0, 8);
   }, [tree, q]);
 
-  const actions = [...(repo ? ["action:settings"] : []), "action:profile", ...(me?.is_instance_admin ? ["action:admin"] : [])];
+  const actions = [...(repo ? ["action:settings"] : []), "action:profile", ...(canAdmin ? ["action:admin"] : [])];
   const values = [
     ...(repo ? pages.map((p) => "page:" + p.path) : []),
     ...(repo ? (hits ?? []).map((h) => "hit:" + h.path + h.heading_slug) : []),
@@ -77,7 +80,7 @@ export function CommandPaletteProvider({ repo, children }: { repo?: RepoView; ch
     },
     [navigate],
   );
-  const openPage = (path: string, hash?: string) => repo && go(`/${repo.owner}/${repo.name}/${path}${hash ? `#${hash}` : ""}`);
+  const openPage = (path: string, hash?: string) => repo && go(`/${repo.org_slug}/${repo.owner}/${repo.name}/${path}${hash ? `#${hash}` : ""}`);
 
   return (
     <PaletteContext.Provider value={{ open: () => setOpen(true) }}>
@@ -123,7 +126,7 @@ export function CommandPaletteProvider({ repo, children }: { repo?: RepoView; ch
           )}
           <CommandGroup heading="Actions">
             {repo && (
-              <CommandItem value="action:settings" onSelect={() => go(`/${repo.owner}/${repo.name}/settings`)}>
+              <CommandItem value="action:settings" onSelect={() => go(`/${repo.org_slug}/${repo.owner}/${repo.name}/settings`)}>
                 <Settings />
                 Repository settings
               </CommandItem>
@@ -132,7 +135,7 @@ export function CommandPaletteProvider({ repo, children }: { repo?: RepoView; ch
               <UserRound />
               Your account
             </CommandItem>
-            {me?.is_instance_admin && (
+            {canAdmin && (
               <CommandItem value="action:admin" onSelect={() => go("/admin")}>
                 <Shield />
                 Admin console

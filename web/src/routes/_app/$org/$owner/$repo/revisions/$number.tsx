@@ -52,7 +52,7 @@ import { commitURL, fileHref, rawUrl } from "@/lib/repos";
 import { DocView } from "@/components/doc/doc-view";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/$owner/$repo/revisions/$number")({
+export const Route = createFileRoute("/_app/$org/$owner/$repo/revisions/$number")({
   component: Overview,
 });
 
@@ -299,8 +299,8 @@ function Pages({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
                   <span className="truncate text-[0.84375rem] text-muted-foreground line-through">{f.path}</span>
                 ) : (
                   <Link
-                    to="/$owner/$repo/$"
-                    params={{ owner: repo.owner, repo: repo.name, _splat: f.path }}
+                    to="/$org/$owner/$repo/$"
+                    params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: f.path }}
                     search={{ revision: rev.number }}
                     className="truncate text-[0.84375rem] font-medium hover:underline"
                   >
@@ -744,7 +744,7 @@ function Checks({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
   const { broken_links: broken, breaks_inbound: inbound } = checks.data;
   const conflicted = (files.data ?? []).filter((f) => f.has_conflicts);
   const page = (p: string, line: number) => (
-    <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: p }} search={{ revision: rev.number }} className="font-medium hover:underline">
+    <Link to="/$org/$owner/$repo/$" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: p }} search={{ revision: rev.number }} className="font-medium hover:underline">
       {p}:{line}
     </Link>
   );
@@ -764,7 +764,7 @@ function Checks({ repo, rev }: { repo: RepoView; rev: RevisionView }) {
           <p key={"c" + f.path} className="flex items-start gap-2 border-b px-4 py-2.5">
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
             <span>
-              <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: f.path }} search={{ revision: rev.number }} className="font-medium hover:underline">
+              <Link to="/$org/$owner/$repo/$" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: f.path }} search={{ revision: rev.number }} className="font-medium hover:underline">
                 {f.path}
               </Link>{" "}
               {f.conflict === "deleted_upstream" ? (f.op === "delete" ? t("updates.conflict.deletedLocally") : t("updates.conflict.pageDeleted")) : t("revision.hasConflicts")}

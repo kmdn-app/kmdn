@@ -17,7 +17,7 @@ import { useRepo } from "@/lib/use-repo";
 
 type Search = { revision?: number };
 
-export const Route = createFileRoute("/_app/$owner/$repo/graph")({
+export const Route = createFileRoute("/_app/$org/$owner/$repo/graph")({
   validateSearch: (s: Record<string, unknown>): Search => (Number.isInteger(Number(s.revision)) && Number(s.revision) > 0 ? { revision: Number(s.revision) } : {}),
   component: GraphPage,
 });
@@ -61,7 +61,7 @@ function GraphPage() {
   const dupCount = edges.filter((e) => e.duplicate).length;
   const hasDups = (graph.data?.duplicates.length ?? 0) > 0;
   const node = selected ? nodes.find((n) => n.path === selected) : undefined;
-  const pageLink = (p: string) => ({ to: "/$owner/$repo/$" as const, params: { owner: repo.owner, repo: repo.name, _splat: p }, search: scopeRev ? { revision: scopeRev.number } : {} });
+  const pageLink = (p: string) => ({ to: "/$org/$owner/$repo/$" as const, params: { org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: p }, search: scopeRev ? { revision: scopeRev.number } : {} });
 
   return (
     <AppShell repo={repo}>

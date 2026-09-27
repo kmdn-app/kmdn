@@ -13,19 +13,22 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppOrgRouteRouteImport } from './routes/_app/$org/route'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AuthVerifyRouteImport } from './routes/auth.verify'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
-import { Route as AppOwnerRepoRouteRouteImport } from './routes/_app/$owner/$repo/route'
+import { Route as AppOrgIndexRouteImport } from './routes/_app/$org/index'
+import { Route as AppOrgAdminRouteImport } from './routes/_app/$org/admin'
 import { Route as AppSettingsProfileRouteImport } from './routes/_app/settings/profile'
-import { Route as AppOwnerRepoIndexRouteImport } from './routes/_app/$owner/$repo/index'
-import { Route as AppOwnerRepoSplatRouteImport } from './routes/_app/$owner/$repo/$'
-import { Route as AppOwnerRepoConsistencyRouteImport } from './routes/_app/$owner/$repo/consistency'
-import { Route as AppOwnerRepoGraphRouteImport } from './routes/_app/$owner/$repo/graph'
-import { Route as AppOwnerRepoSettingsRouteImport } from './routes/_app/$owner/$repo/settings'
-import { Route as AppOwnerRepoRevisionsIndexRouteImport } from './routes/_app/$owner/$repo/revisions/index'
-import { Route as AppOwnerRepoRevisionsNumberRouteImport } from './routes/_app/$owner/$repo/revisions/$number'
+import { Route as AppOrgOwnerRepoRouteRouteImport } from './routes/_app/$org/$owner/$repo/route'
+import { Route as AppOrgOwnerRepoIndexRouteImport } from './routes/_app/$org/$owner/$repo/index'
+import { Route as AppOrgOwnerRepoSplatRouteImport } from './routes/_app/$org/$owner/$repo/$'
+import { Route as AppOrgOwnerRepoConsistencyRouteImport } from './routes/_app/$org/$owner/$repo/consistency'
+import { Route as AppOrgOwnerRepoGraphRouteImport } from './routes/_app/$org/$owner/$repo/graph'
+import { Route as AppOrgOwnerRepoSettingsRouteImport } from './routes/_app/$org/$owner/$repo/settings'
+import { Route as AppOrgOwnerRepoRevisionsIndexRouteImport } from './routes/_app/$org/$owner/$repo/revisions/index'
+import { Route as AppOrgOwnerRepoRevisionsNumberRouteImport } from './routes/_app/$org/$owner/$repo/revisions/$number'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -44,6 +47,11 @@ const SigninRoute = SigninRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgRouteRoute = AppOrgRouteRouteImport.update({
+  id: '/$org',
+  path: '/$org',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminRoute = AppAdminRouteImport.update({
@@ -66,71 +74,85 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
   path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppOwnerRepoRouteRoute = AppOwnerRepoRouteRouteImport.update({
-  id: '/$owner/$repo',
-  path: '/$owner/$repo',
-  getParentRoute: () => AppRoute,
+const AppOrgIndexRoute = AppOrgIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppOrgRouteRoute,
+} as any)
+const AppOrgAdminRoute = AppOrgAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AppOrgRouteRoute,
 } as any)
 const AppSettingsProfileRoute = AppSettingsProfileRouteImport.update({
   id: '/settings/profile',
   path: '/settings/profile',
   getParentRoute: () => AppRoute,
 } as any)
-const AppOwnerRepoIndexRoute = AppOwnerRepoIndexRouteImport.update({
+const AppOrgOwnerRepoRouteRoute = AppOrgOwnerRepoRouteRouteImport.update({
+  id: '/$owner/$repo',
+  path: '/$owner/$repo',
+  getParentRoute: () => AppOrgRouteRoute,
+} as any)
+const AppOrgOwnerRepoIndexRoute = AppOrgOwnerRepoIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppOwnerRepoRouteRoute,
+  getParentRoute: () => AppOrgOwnerRepoRouteRoute,
 } as any)
-const AppOwnerRepoSplatRoute = AppOwnerRepoSplatRouteImport.update({
+const AppOrgOwnerRepoSplatRoute = AppOrgOwnerRepoSplatRouteImport.update({
   id: '/$',
   path: '/$',
-  getParentRoute: () => AppOwnerRepoRouteRoute,
+  getParentRoute: () => AppOrgOwnerRepoRouteRoute,
 } as any)
-const AppOwnerRepoConsistencyRoute = AppOwnerRepoConsistencyRouteImport.update({
-  id: '/consistency',
-  path: '/consistency',
-  getParentRoute: () => AppOwnerRepoRouteRoute,
-} as any)
-const AppOwnerRepoGraphRoute = AppOwnerRepoGraphRouteImport.update({
+const AppOrgOwnerRepoConsistencyRoute =
+  AppOrgOwnerRepoConsistencyRouteImport.update({
+    id: '/consistency',
+    path: '/consistency',
+    getParentRoute: () => AppOrgOwnerRepoRouteRoute,
+  } as any)
+const AppOrgOwnerRepoGraphRoute = AppOrgOwnerRepoGraphRouteImport.update({
   id: '/graph',
   path: '/graph',
-  getParentRoute: () => AppOwnerRepoRouteRoute,
+  getParentRoute: () => AppOrgOwnerRepoRouteRoute,
 } as any)
-const AppOwnerRepoSettingsRoute = AppOwnerRepoSettingsRouteImport.update({
+const AppOrgOwnerRepoSettingsRoute = AppOrgOwnerRepoSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => AppOwnerRepoRouteRoute,
+  getParentRoute: () => AppOrgOwnerRepoRouteRoute,
 } as any)
-const AppOwnerRepoRevisionsIndexRoute =
-  AppOwnerRepoRevisionsIndexRouteImport.update({
+const AppOrgOwnerRepoRevisionsIndexRoute =
+  AppOrgOwnerRepoRevisionsIndexRouteImport.update({
     id: '/revisions/',
     path: '/revisions/',
-    getParentRoute: () => AppOwnerRepoRouteRoute,
+    getParentRoute: () => AppOrgOwnerRepoRouteRoute,
   } as any)
-const AppOwnerRepoRevisionsNumberRoute =
-  AppOwnerRepoRevisionsNumberRouteImport.update({
+const AppOrgOwnerRepoRevisionsNumberRoute =
+  AppOrgOwnerRepoRevisionsNumberRouteImport.update({
     id: '/revisions/$number',
     path: '/revisions/$number',
-    getParentRoute: () => AppOwnerRepoRouteRoute,
+    getParentRoute: () => AppOrgOwnerRepoRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/$org': typeof AppOrgRouteRouteWithChildren
   '/admin': typeof AppAdminRoute
   '/inbox': typeof AppInboxRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/invite/$token': typeof InviteTokenRoute
-  '/$owner/$repo': typeof AppOwnerRepoRouteRouteWithChildren
+  '/$org/admin': typeof AppOrgAdminRoute
   '/settings/profile': typeof AppSettingsProfileRoute
-  '/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
-  '/$owner/$repo/consistency': typeof AppOwnerRepoConsistencyRoute
-  '/$owner/$repo/graph': typeof AppOwnerRepoGraphRoute
-  '/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
-  '/$owner/$repo/': typeof AppOwnerRepoIndexRoute
-  '/$owner/$repo/revisions/$number': typeof AppOwnerRepoRevisionsNumberRoute
-  '/$owner/$repo/revisions/': typeof AppOwnerRepoRevisionsIndexRoute
+  '/$org/': typeof AppOrgIndexRoute
+  '/$org/$owner/$repo': typeof AppOrgOwnerRepoRouteRouteWithChildren
+  '/$org/$owner/$repo/$': typeof AppOrgOwnerRepoSplatRoute
+  '/$org/$owner/$repo/consistency': typeof AppOrgOwnerRepoConsistencyRoute
+  '/$org/$owner/$repo/graph': typeof AppOrgOwnerRepoGraphRoute
+  '/$org/$owner/$repo/settings': typeof AppOrgOwnerRepoSettingsRoute
+  '/$org/$owner/$repo/': typeof AppOrgOwnerRepoIndexRoute
+  '/$org/$owner/$repo/revisions/$number': typeof AppOrgOwnerRepoRevisionsNumberRoute
+  '/$org/$owner/$repo/revisions/': typeof AppOrgOwnerRepoRevisionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
@@ -140,34 +162,39 @@ export interface FileRoutesByTo {
   '/auth/verify': typeof AuthVerifyRoute
   '/invite/$token': typeof InviteTokenRoute
   '/': typeof AppIndexRoute
+  '/$org/admin': typeof AppOrgAdminRoute
   '/settings/profile': typeof AppSettingsProfileRoute
-  '/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
-  '/$owner/$repo/consistency': typeof AppOwnerRepoConsistencyRoute
-  '/$owner/$repo/graph': typeof AppOwnerRepoGraphRoute
-  '/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
-  '/$owner/$repo': typeof AppOwnerRepoIndexRoute
-  '/$owner/$repo/revisions/$number': typeof AppOwnerRepoRevisionsNumberRoute
-  '/$owner/$repo/revisions': typeof AppOwnerRepoRevisionsIndexRoute
+  '/$org': typeof AppOrgIndexRoute
+  '/$org/$owner/$repo/$': typeof AppOrgOwnerRepoSplatRoute
+  '/$org/$owner/$repo/consistency': typeof AppOrgOwnerRepoConsistencyRoute
+  '/$org/$owner/$repo/graph': typeof AppOrgOwnerRepoGraphRoute
+  '/$org/$owner/$repo/settings': typeof AppOrgOwnerRepoSettingsRoute
+  '/$org/$owner/$repo': typeof AppOrgOwnerRepoIndexRoute
+  '/$org/$owner/$repo/revisions/$number': typeof AppOrgOwnerRepoRevisionsNumberRoute
+  '/$org/$owner/$repo/revisions': typeof AppOrgOwnerRepoRevisionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/_app/$org': typeof AppOrgRouteRouteWithChildren
   '/_app/admin': typeof AppAdminRoute
   '/_app/inbox': typeof AppInboxRoute
   '/auth/verify': typeof AuthVerifyRoute
   '/invite/$token': typeof InviteTokenRoute
   '/_app/': typeof AppIndexRoute
-  '/_app/$owner/$repo': typeof AppOwnerRepoRouteRouteWithChildren
+  '/_app/$org/admin': typeof AppOrgAdminRoute
   '/_app/settings/profile': typeof AppSettingsProfileRoute
-  '/_app/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
-  '/_app/$owner/$repo/consistency': typeof AppOwnerRepoConsistencyRoute
-  '/_app/$owner/$repo/graph': typeof AppOwnerRepoGraphRoute
-  '/_app/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
-  '/_app/$owner/$repo/': typeof AppOwnerRepoIndexRoute
-  '/_app/$owner/$repo/revisions/$number': typeof AppOwnerRepoRevisionsNumberRoute
-  '/_app/$owner/$repo/revisions/': typeof AppOwnerRepoRevisionsIndexRoute
+  '/_app/$org/': typeof AppOrgIndexRoute
+  '/_app/$org/$owner/$repo': typeof AppOrgOwnerRepoRouteRouteWithChildren
+  '/_app/$org/$owner/$repo/$': typeof AppOrgOwnerRepoSplatRoute
+  '/_app/$org/$owner/$repo/consistency': typeof AppOrgOwnerRepoConsistencyRoute
+  '/_app/$org/$owner/$repo/graph': typeof AppOrgOwnerRepoGraphRoute
+  '/_app/$org/$owner/$repo/settings': typeof AppOrgOwnerRepoSettingsRoute
+  '/_app/$org/$owner/$repo/': typeof AppOrgOwnerRepoIndexRoute
+  '/_app/$org/$owner/$repo/revisions/$number': typeof AppOrgOwnerRepoRevisionsNumberRoute
+  '/_app/$org/$owner/$repo/revisions/': typeof AppOrgOwnerRepoRevisionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -175,19 +202,22 @@ export interface FileRouteTypes {
     | '/'
     | '/setup'
     | '/signin'
+    | '/$org'
     | '/admin'
     | '/inbox'
     | '/auth/verify'
     | '/invite/$token'
-    | '/$owner/$repo'
+    | '/$org/admin'
     | '/settings/profile'
-    | '/$owner/$repo/$'
-    | '/$owner/$repo/consistency'
-    | '/$owner/$repo/graph'
-    | '/$owner/$repo/settings'
-    | '/$owner/$repo/'
-    | '/$owner/$repo/revisions/$number'
-    | '/$owner/$repo/revisions/'
+    | '/$org/'
+    | '/$org/$owner/$repo'
+    | '/$org/$owner/$repo/$'
+    | '/$org/$owner/$repo/consistency'
+    | '/$org/$owner/$repo/graph'
+    | '/$org/$owner/$repo/settings'
+    | '/$org/$owner/$repo/'
+    | '/$org/$owner/$repo/revisions/$number'
+    | '/$org/$owner/$repo/revisions/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/setup'
@@ -197,33 +227,38 @@ export interface FileRouteTypes {
     | '/auth/verify'
     | '/invite/$token'
     | '/'
+    | '/$org/admin'
     | '/settings/profile'
-    | '/$owner/$repo/$'
-    | '/$owner/$repo/consistency'
-    | '/$owner/$repo/graph'
-    | '/$owner/$repo/settings'
-    | '/$owner/$repo'
-    | '/$owner/$repo/revisions/$number'
-    | '/$owner/$repo/revisions'
+    | '/$org'
+    | '/$org/$owner/$repo/$'
+    | '/$org/$owner/$repo/consistency'
+    | '/$org/$owner/$repo/graph'
+    | '/$org/$owner/$repo/settings'
+    | '/$org/$owner/$repo'
+    | '/$org/$owner/$repo/revisions/$number'
+    | '/$org/$owner/$repo/revisions'
   id:
     | '__root__'
     | '/_app'
     | '/setup'
     | '/signin'
+    | '/_app/$org'
     | '/_app/admin'
     | '/_app/inbox'
     | '/auth/verify'
     | '/invite/$token'
     | '/_app/'
-    | '/_app/$owner/$repo'
+    | '/_app/$org/admin'
     | '/_app/settings/profile'
-    | '/_app/$owner/$repo/$'
-    | '/_app/$owner/$repo/consistency'
-    | '/_app/$owner/$repo/graph'
-    | '/_app/$owner/$repo/settings'
-    | '/_app/$owner/$repo/'
-    | '/_app/$owner/$repo/revisions/$number'
-    | '/_app/$owner/$repo/revisions/'
+    | '/_app/$org/'
+    | '/_app/$org/$owner/$repo'
+    | '/_app/$org/$owner/$repo/$'
+    | '/_app/$org/$owner/$repo/consistency'
+    | '/_app/$org/$owner/$repo/graph'
+    | '/_app/$org/$owner/$repo/settings'
+    | '/_app/$org/$owner/$repo/'
+    | '/_app/$org/$owner/$repo/revisions/$number'
+    | '/_app/$org/$owner/$repo/revisions/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -264,6 +299,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/$org': {
+      id: '/_app/$org'
+      path: '/$org'
+      fullPath: '/$org'
+      preLoaderRoute: typeof AppOrgRouteRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin': {
       id: '/_app/admin'
       path: '/admin'
@@ -292,12 +334,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/$owner/$repo': {
-      id: '/_app/$owner/$repo'
-      path: '/$owner/$repo'
-      fullPath: '/$owner/$repo'
-      preLoaderRoute: typeof AppOwnerRepoRouteRouteImport
-      parentRoute: typeof AppRoute
+    '/_app/$org/': {
+      id: '/_app/$org/'
+      path: '/'
+      fullPath: '/$org/'
+      preLoaderRoute: typeof AppOrgIndexRouteImport
+      parentRoute: typeof AppOrgRouteRoute
+    }
+    '/_app/$org/admin': {
+      id: '/_app/$org/admin'
+      path: '/admin'
+      fullPath: '/$org/admin'
+      preLoaderRoute: typeof AppOrgAdminRouteImport
+      parentRoute: typeof AppOrgRouteRoute
     }
     '/_app/settings/profile': {
       id: '/_app/settings/profile'
@@ -306,94 +355,117 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsProfileRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/$owner/$repo/': {
-      id: '/_app/$owner/$repo/'
+    '/_app/$org/$owner/$repo': {
+      id: '/_app/$org/$owner/$repo'
+      path: '/$owner/$repo'
+      fullPath: '/$org/$owner/$repo'
+      preLoaderRoute: typeof AppOrgOwnerRepoRouteRouteImport
+      parentRoute: typeof AppOrgRouteRoute
+    }
+    '/_app/$org/$owner/$repo/': {
+      id: '/_app/$org/$owner/$repo/'
       path: '/'
-      fullPath: '/$owner/$repo/'
-      preLoaderRoute: typeof AppOwnerRepoIndexRouteImport
-      parentRoute: typeof AppOwnerRepoRouteRoute
+      fullPath: '/$org/$owner/$repo/'
+      preLoaderRoute: typeof AppOrgOwnerRepoIndexRouteImport
+      parentRoute: typeof AppOrgOwnerRepoRouteRoute
     }
-    '/_app/$owner/$repo/$': {
-      id: '/_app/$owner/$repo/$'
+    '/_app/$org/$owner/$repo/$': {
+      id: '/_app/$org/$owner/$repo/$'
       path: '/$'
-      fullPath: '/$owner/$repo/$'
-      preLoaderRoute: typeof AppOwnerRepoSplatRouteImport
-      parentRoute: typeof AppOwnerRepoRouteRoute
+      fullPath: '/$org/$owner/$repo/$'
+      preLoaderRoute: typeof AppOrgOwnerRepoSplatRouteImport
+      parentRoute: typeof AppOrgOwnerRepoRouteRoute
     }
-    '/_app/$owner/$repo/consistency': {
-      id: '/_app/$owner/$repo/consistency'
+    '/_app/$org/$owner/$repo/consistency': {
+      id: '/_app/$org/$owner/$repo/consistency'
       path: '/consistency'
-      fullPath: '/$owner/$repo/consistency'
-      preLoaderRoute: typeof AppOwnerRepoConsistencyRouteImport
-      parentRoute: typeof AppOwnerRepoRouteRoute
+      fullPath: '/$org/$owner/$repo/consistency'
+      preLoaderRoute: typeof AppOrgOwnerRepoConsistencyRouteImport
+      parentRoute: typeof AppOrgOwnerRepoRouteRoute
     }
-    '/_app/$owner/$repo/graph': {
-      id: '/_app/$owner/$repo/graph'
+    '/_app/$org/$owner/$repo/graph': {
+      id: '/_app/$org/$owner/$repo/graph'
       path: '/graph'
-      fullPath: '/$owner/$repo/graph'
-      preLoaderRoute: typeof AppOwnerRepoGraphRouteImport
-      parentRoute: typeof AppOwnerRepoRouteRoute
+      fullPath: '/$org/$owner/$repo/graph'
+      preLoaderRoute: typeof AppOrgOwnerRepoGraphRouteImport
+      parentRoute: typeof AppOrgOwnerRepoRouteRoute
     }
-    '/_app/$owner/$repo/settings': {
-      id: '/_app/$owner/$repo/settings'
+    '/_app/$org/$owner/$repo/settings': {
+      id: '/_app/$org/$owner/$repo/settings'
       path: '/settings'
-      fullPath: '/$owner/$repo/settings'
-      preLoaderRoute: typeof AppOwnerRepoSettingsRouteImport
-      parentRoute: typeof AppOwnerRepoRouteRoute
+      fullPath: '/$org/$owner/$repo/settings'
+      preLoaderRoute: typeof AppOrgOwnerRepoSettingsRouteImport
+      parentRoute: typeof AppOrgOwnerRepoRouteRoute
     }
-    '/_app/$owner/$repo/revisions/': {
-      id: '/_app/$owner/$repo/revisions/'
+    '/_app/$org/$owner/$repo/revisions/': {
+      id: '/_app/$org/$owner/$repo/revisions/'
       path: '/revisions'
-      fullPath: '/$owner/$repo/revisions/'
-      preLoaderRoute: typeof AppOwnerRepoRevisionsIndexRouteImport
-      parentRoute: typeof AppOwnerRepoRouteRoute
+      fullPath: '/$org/$owner/$repo/revisions/'
+      preLoaderRoute: typeof AppOrgOwnerRepoRevisionsIndexRouteImport
+      parentRoute: typeof AppOrgOwnerRepoRouteRoute
     }
-    '/_app/$owner/$repo/revisions/$number': {
-      id: '/_app/$owner/$repo/revisions/$number'
+    '/_app/$org/$owner/$repo/revisions/$number': {
+      id: '/_app/$org/$owner/$repo/revisions/$number'
       path: '/revisions/$number'
-      fullPath: '/$owner/$repo/revisions/$number'
-      preLoaderRoute: typeof AppOwnerRepoRevisionsNumberRouteImport
-      parentRoute: typeof AppOwnerRepoRouteRoute
+      fullPath: '/$org/$owner/$repo/revisions/$number'
+      preLoaderRoute: typeof AppOrgOwnerRepoRevisionsNumberRouteImport
+      parentRoute: typeof AppOrgOwnerRepoRouteRoute
     }
   }
 }
 
-interface AppOwnerRepoRouteRouteChildren {
-  AppOwnerRepoSplatRoute: typeof AppOwnerRepoSplatRoute
-  AppOwnerRepoConsistencyRoute: typeof AppOwnerRepoConsistencyRoute
-  AppOwnerRepoGraphRoute: typeof AppOwnerRepoGraphRoute
-  AppOwnerRepoSettingsRoute: typeof AppOwnerRepoSettingsRoute
-  AppOwnerRepoIndexRoute: typeof AppOwnerRepoIndexRoute
-  AppOwnerRepoRevisionsNumberRoute: typeof AppOwnerRepoRevisionsNumberRoute
-  AppOwnerRepoRevisionsIndexRoute: typeof AppOwnerRepoRevisionsIndexRoute
+interface AppOrgOwnerRepoRouteRouteChildren {
+  AppOrgOwnerRepoSplatRoute: typeof AppOrgOwnerRepoSplatRoute
+  AppOrgOwnerRepoConsistencyRoute: typeof AppOrgOwnerRepoConsistencyRoute
+  AppOrgOwnerRepoGraphRoute: typeof AppOrgOwnerRepoGraphRoute
+  AppOrgOwnerRepoSettingsRoute: typeof AppOrgOwnerRepoSettingsRoute
+  AppOrgOwnerRepoIndexRoute: typeof AppOrgOwnerRepoIndexRoute
+  AppOrgOwnerRepoRevisionsNumberRoute: typeof AppOrgOwnerRepoRevisionsNumberRoute
+  AppOrgOwnerRepoRevisionsIndexRoute: typeof AppOrgOwnerRepoRevisionsIndexRoute
 }
 
-const AppOwnerRepoRouteRouteChildren: AppOwnerRepoRouteRouteChildren = {
-  AppOwnerRepoSplatRoute: AppOwnerRepoSplatRoute,
-  AppOwnerRepoConsistencyRoute: AppOwnerRepoConsistencyRoute,
-  AppOwnerRepoGraphRoute: AppOwnerRepoGraphRoute,
-  AppOwnerRepoSettingsRoute: AppOwnerRepoSettingsRoute,
-  AppOwnerRepoIndexRoute: AppOwnerRepoIndexRoute,
-  AppOwnerRepoRevisionsNumberRoute: AppOwnerRepoRevisionsNumberRoute,
-  AppOwnerRepoRevisionsIndexRoute: AppOwnerRepoRevisionsIndexRoute,
+const AppOrgOwnerRepoRouteRouteChildren: AppOrgOwnerRepoRouteRouteChildren = {
+  AppOrgOwnerRepoSplatRoute: AppOrgOwnerRepoSplatRoute,
+  AppOrgOwnerRepoConsistencyRoute: AppOrgOwnerRepoConsistencyRoute,
+  AppOrgOwnerRepoGraphRoute: AppOrgOwnerRepoGraphRoute,
+  AppOrgOwnerRepoSettingsRoute: AppOrgOwnerRepoSettingsRoute,
+  AppOrgOwnerRepoIndexRoute: AppOrgOwnerRepoIndexRoute,
+  AppOrgOwnerRepoRevisionsNumberRoute: AppOrgOwnerRepoRevisionsNumberRoute,
+  AppOrgOwnerRepoRevisionsIndexRoute: AppOrgOwnerRepoRevisionsIndexRoute,
 }
 
-const AppOwnerRepoRouteRouteWithChildren =
-  AppOwnerRepoRouteRoute._addFileChildren(AppOwnerRepoRouteRouteChildren)
+const AppOrgOwnerRepoRouteRouteWithChildren =
+  AppOrgOwnerRepoRouteRoute._addFileChildren(AppOrgOwnerRepoRouteRouteChildren)
+
+interface AppOrgRouteRouteChildren {
+  AppOrgAdminRoute: typeof AppOrgAdminRoute
+  AppOrgIndexRoute: typeof AppOrgIndexRoute
+  AppOrgOwnerRepoRouteRoute: typeof AppOrgOwnerRepoRouteRouteWithChildren
+}
+
+const AppOrgRouteRouteChildren: AppOrgRouteRouteChildren = {
+  AppOrgAdminRoute: AppOrgAdminRoute,
+  AppOrgIndexRoute: AppOrgIndexRoute,
+  AppOrgOwnerRepoRouteRoute: AppOrgOwnerRepoRouteRouteWithChildren,
+}
+
+const AppOrgRouteRouteWithChildren = AppOrgRouteRoute._addFileChildren(
+  AppOrgRouteRouteChildren,
+)
 
 interface AppRouteChildren {
+  AppOrgRouteRoute: typeof AppOrgRouteRouteWithChildren
   AppAdminRoute: typeof AppAdminRoute
   AppInboxRoute: typeof AppInboxRoute
   AppIndexRoute: typeof AppIndexRoute
-  AppOwnerRepoRouteRoute: typeof AppOwnerRepoRouteRouteWithChildren
   AppSettingsProfileRoute: typeof AppSettingsProfileRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppOrgRouteRoute: AppOrgRouteRouteWithChildren,
   AppAdminRoute: AppAdminRoute,
   AppInboxRoute: AppInboxRoute,
   AppIndexRoute: AppIndexRoute,
-  AppOwnerRepoRouteRoute: AppOwnerRepoRouteRouteWithChildren,
   AppSettingsProfileRoute: AppSettingsProfileRoute,
 }
 

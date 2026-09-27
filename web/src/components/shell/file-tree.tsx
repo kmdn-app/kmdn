@@ -112,8 +112,8 @@ export function FileTree({
             <li key={f.path}>
               {f.markdown ? (
             <Link
-              to="/$owner/$repo/$"
-              params={{ owner: repo.owner, repo: repo.name, _splat: f.path }}
+              to="/$org/$owner/$repo/$"
+              params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: f.path }}
               search={revision ? { revision } : {}}
               onClick={onNavigate}
               className={cls}

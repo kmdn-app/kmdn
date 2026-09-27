@@ -95,7 +95,8 @@ type Notification struct {
 type Data struct {
 	Title   string `json:"title,omitempty"` // revision title
 	Number  int    `json:"number,omitempty"`
-	Owner   string `json:"owner,omitempty"` // repo slug parts, for links
+	Org     string `json:"org,omitempty"`   // repo slug parts, for links
+	Owner   string `json:"owner,omitempty"` // (Org is absent in items from before orgs)
 	Repo    string `json:"repo,omitempty"`
 	Path    string `json:"path,omitempty"`
 	Quote   string `json:"quote,omitempty"`
@@ -301,7 +302,7 @@ func (s *Service) revisionEvent(ctx context.Context, revID, actor, kind string, 
 		Note      string `json:"note"`
 	}
 	_ = json.Unmarshal(raw, &data)
-	d := Data{Title: rev.Title, Number: rev.Number, Owner: repo.Owner, Repo: repo.Name}
+	d := Data{Title: rev.Title, Number: rev.Number, Org: repo.OrgSlug, Owner: repo.Owner, Repo: repo.Name}
 	n := Notification{RepoID: repo.ID, RevisionID: rev.ID, ActorID: actor}
 	send := func(k string, to ...[]string) {
 		n.Kind, n.Data = k, mustJSON(d)
@@ -414,7 +415,7 @@ func (s *Service) Comment(ctx context.Context, t threads.Thread, c threads.Comme
 	_ = json.Unmarshal(t.Anchor, &a)
 	d.Quote = excerpt(a.Quote)
 	if repo, err := repos.Get(ctx, s.DB, t.RepoID); err == nil {
-		d.Owner, d.Repo = repo.Owner, repo.Name
+		d.Org, d.Owner, d.Repo = repo.OrgSlug, repo.Owner, repo.Name
 	}
 	if t.RevisionID != "" {
 		if rev, err := revisions.Get(ctx, s.DB, t.RevisionID); err == nil {

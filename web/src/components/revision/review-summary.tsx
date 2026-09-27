@@ -101,7 +101,7 @@ export function ReviewSummary({ repo, rev }: { repo: RepoView; rev: RevisionView
               <li key={i} className="flex items-start gap-2">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
                 <span className="min-w-0 flex-1">
-                  <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: f.path }} search={{ revision: rev.number }} className="font-medium hover:underline">
+                  <Link to="/$org/$owner/$repo/$" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: f.path }} search={{ revision: rev.number }} className="font-medium hover:underline">
                     {f.path}
                     {f.line ? `:${f.line}` : ""}
                   </Link>{" "}

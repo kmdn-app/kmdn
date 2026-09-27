@@ -31,9 +31,11 @@ export function useMarkRead() {
 export function notificationHref(n: Notification): string | null {
   const d = n.data;
   if (!d.owner || !d.repo) return null;
-  if (d.number && (n.kind === "mention" || n.kind === "reply") && d.path) return `/${d.owner}/${d.repo}/${d.path}?revision=${d.number}`;
-  if (d.number) return `/${d.owner}/${d.repo}/revisions/${d.number}`;
-  if (d.path) return `/${d.owner}/${d.repo}/${d.path}`;
+  // Items from before orgs have no org: those addresses open in the current org.
+  const repo = d.org ? `/${d.org}/${d.owner}/${d.repo}` : `/${d.owner}/${d.repo}`;
+  if (d.number && (n.kind === "mention" || n.kind === "reply") && d.path) return `${repo}/${d.path}?revision=${d.number}`;
+  if (d.number) return `${repo}/revisions/${d.number}`;
+  if (d.path) return `${repo}/${d.path}`;
   return null;
 }
 

@@ -32,7 +32,7 @@ export function LinksPanel({ repo, path, revision }: { repo: RepoView; path: str
   const { outgoing, incoming } = q.data;
   const broken = outgoing.filter((o) => o.broken).length;
   const target = (p: string) => (
-    <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: p }} search={search} className="truncate hover:underline">
+    <Link to="/$org/$owner/$repo/$" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: p }} search={search} className="truncate hover:underline">
       {p}
     </Link>
   );
@@ -153,13 +153,13 @@ function LocalGraph({
     const b = p.split("/").pop()!.replace(/\.mdx?$/, "");
     return b.length > 16 ? b.slice(0, 15) + "…" : b;
   };
-  const go = (p: string) => void navigate({ to: "/$owner/$repo/$", params: { owner: repo.owner, repo: repo.name, _splat: p }, search });
+  const go = (p: string) => void navigate({ to: "/$org/$owner/$repo/$", params: { org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: p }, search });
   return (
     <section>
       <h3 className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Waypoints className="size-3.5" />
         {t("graph.local")}
-        <Link to="/$owner/$repo/graph" params={{ owner: repo.owner, repo: repo.name }} search={search} className="ml-auto hover:text-foreground">
+        <Link to="/$org/$owner/$repo/graph" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name }} search={search} className="ml-auto hover:text-foreground">
           {t("graph.openGraph")}
         </Link>
       </h3>

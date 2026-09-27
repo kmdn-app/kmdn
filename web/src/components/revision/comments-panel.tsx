@@ -130,7 +130,7 @@ function ThreadCard({ t, active, onFocus, onFix }: { t: Thread; active: boolean;
       </div>
       {t.fix_revision && (
         <p className="mt-2 text-[0.75rem]">
-          <Link to="/$owner/$repo/revisions/$number" params={{ owner: repo.owner, repo: repo.name, number: String(t.fix_revision.number) }} className="font-medium text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+          <Link to="/$org/$owner/$repo/revisions/$number" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, number: String(t.fix_revision.number) }} className="font-medium text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
             {t.fix_revision.state === "published" ? tr("comments.fixedIn", { number: t.fix_revision.number }) : tr("comments.fixingIn", { number: t.fix_revision.number })}
           </Link>
         </p>

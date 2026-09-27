@@ -19,7 +19,7 @@ const KINDS = ["contradiction", "duplicate"] as const;
 const STATUSES = ["open", "ignored", "closed"] as const;
 type Search = { kind?: (typeof KINDS)[number]; status?: (typeof STATUSES)[number] };
 
-export const Route = createFileRoute("/_app/$owner/$repo/consistency")({
+export const Route = createFileRoute("/_app/$org/$owner/$repo/consistency")({
   validateSearch: (s: Record<string, unknown>): Search => ({
     ...(KINDS.includes(s.kind as never) ? { kind: s.kind as Search["kind"] } : {}),
     ...(STATUSES.includes(s.status as never) ? { status: s.status as Search["status"] } : {}),

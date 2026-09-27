@@ -8,7 +8,8 @@ import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { api, unwrap } from "@/lib/api";
+import { api, unwrap, useMe } from "@/lib/api";
+import { currentOrg } from "@/lib/orgs";
 import { useRepos } from "@/lib/repos";
 
 type Entry = components["schemas"]["AuditEntry"];
@@ -47,12 +48,25 @@ function details(e: Entry): string {
 export function AuditLogPanel() {
   const { t } = useTranslation();
   const { data: repos } = useRepos();
-  const people = useQuery({ queryKey: ["admin-users", ""], queryFn: async () => (await unwrap(api.GET("/admin/users", { params: { query: {} } }))).items });
+  const { data: me } = useMe();
+  const instance = !!me?.is_instance_admin;
+  const people = useQuery({
+    queryKey: ["audit-people", instance, currentOrg()],
+    queryFn: async () =>
+      instance
+        ? (await unwrap(api.GET("/admin/users", { params: { query: {} } }))).items
+        : (await unwrap(api.GET("/orgs/{org}/members", { params: { path: { org: currentOrg() } } }))).items,
+    enabled: !!me,
+  });
   const [f, setF] = useState<Filters>({ action: ANY, actor: ANY, repo: ANY, from: "", to: "" });
   const query = useMemo(() => toQuery(f), [f]);
   const list = useInfiniteQuery({
-    queryKey: ["audit", query],
-    queryFn: ({ pageParam }) => unwrap(api.GET("/admin/audit", { params: { query: { ...query, ...(pageParam ? { cursor: pageParam } : {}) } } })),
+    queryKey: ["audit", instance, currentOrg(), query],
+    // Instance admins read the whole log; org admins their org's.
+    queryFn: ({ pageParam }) => {
+      const q = { ...query, ...(pageParam ? { cursor: pageParam } : {}) };
+      return unwrap(instance ? api.GET("/admin/audit", { params: { query: q } }) : api.GET("/orgs/{org}/admin/audit", { params: { path: { org: currentOrg() }, query: q } }));
+    },
     initialPageParam: "",
     getNextPageParam: (last) => last.next_cursor || undefined,
   });
@@ -62,7 +76,8 @@ export function AuditLogPanel() {
   if (first && first.some((a) => !actions.includes(a))) setActions([...new Set([...actions, ...first])].sort());
   const families = [...new Set(actions.map((a) => a.split(".")[0] + "."))];
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
-  const exportHref = (format: "csv" | "ndjson") => "/api/v1/admin/audit/export?" + new URLSearchParams({ format, ...query }).toString();
+  const exportHref = (format: "csv" | "ndjson") =>
+    (instance ? "/api/v1/admin/audit/export?" : `/api/v1/orgs/${currentOrg()}/admin/audit/export?`) + new URLSearchParams({ format, ...query }).toString();
   const set = (k: keyof Filters) => (v: string) => setF((x) => ({ ...x, [k]: v }));
   const filtered = f.action !== ANY || f.actor !== ANY || f.repo !== ANY || f.from || f.to;
   return (

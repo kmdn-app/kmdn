@@ -327,7 +327,13 @@ paths:
           description: Organizations
           content:
             application/json:
-              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/OrgView" } } } }
+              schema:
+                type: object
+                required: [items, mode, can_create]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/OrgView" } }
+                  mode: { type: string, enum: [single, multi] }
+                  can_create: { type: boolean, description: "The caller may create an organization" }
     post:
       tags: [orgs]
       operationId: createOrg
@@ -3277,6 +3283,7 @@ components:
           properties:
             title: { type: string }
             number: { type: integer }
+            org: { type: string, description: "The org's slug (absent before orgs)" }
             owner: { type: string }
             repo: { type: string }
             path: { type: string }
@@ -4046,10 +4053,11 @@ components:
             convert_to_webp: { type: boolean }
     RepoView:
       type: object
-      required: [id, org_id, forge_host_id, forge_kind, owner, name, slug, display_name, target_branch, content_root, include, exclude, settings, protection, head_sha, health, health_detail, role, scope, created_at]
+      required: [id, org_id, org_slug, forge_host_id, forge_kind, owner, name, slug, display_name, target_branch, content_root, include, exclude, settings, protection, head_sha, health, health_detail, role, scope, created_at]
       properties:
         id: { type: string }
         org_id: { type: string }
+        org_slug: { type: string, description: "The org's address in app URLs: /{org_slug}/{owner}/{name}" }
         forge_host_id: { type: string }
         forge_kind: { type: string, enum: [github, gitlab, git] }
         external_id: { type: string }

@@ -102,12 +102,15 @@ func (s *Service) resumeClaim(ctx context.Context, repo repos.Repo, rev revision
 	}
 	// A trailer is only a candidate. Completion separately checks the exact
 	// source parent and that the commit is reachable from the target.
-	trailer := "Kmdn-Revision: " + s.Branches.RevisionURL(repo, rev)
-	if sha, found, err := m.FindTrailer(ctx, c.BaseSHA, head, trailer); err != nil {
-		return "", "", err
-	} else if found {
-		if err := s.verifyClaimMerge(ctx, repo, c, sha); err == nil {
-			return sha, "", s.finishClaim(ctx, repo, rev, c, sha)
+	for _, u := range []string{s.Branches.RevisionURL(repo, rev), s.Branches.LegacyRevisionURL(repo, rev)} {
+		sha, found, err := m.FindTrailer(ctx, c.BaseSHA, head, "Kmdn-Revision: "+u)
+		if err != nil {
+			return "", "", err
+		}
+		if found {
+			if err := s.verifyClaimMerge(ctx, repo, c, sha); err == nil {
+				return sha, "", s.finishClaim(ctx, repo, rev, c, sha)
+			}
 		}
 	}
 	if c.Phase != "claimed" {

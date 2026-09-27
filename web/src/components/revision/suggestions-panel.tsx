@@ -198,7 +198,7 @@ export function RevisionSuggestions({ repo, rev }: { repo: RepoView; rev: Revisi
                 <p className="break-words">{describeSuggestion(t, s)}</p>
                 <p className="text-[0.75rem] text-muted-foreground">
                   {name(s.author, s.author_name)} ·{" "}
-                  <Link to="/$owner/$repo/$" params={{ owner: repo.owner, repo: repo.name, _splat: s.path }} search={{ revision: rev.number }} className="font-mono hover:text-foreground hover:underline">
+                  <Link to="/$org/$owner/$repo/$" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: s.path }} search={{ revision: rev.number }} className="font-mono hover:text-foreground hover:underline">
                     {s.path}
                   </Link>
                   {s.at ? (

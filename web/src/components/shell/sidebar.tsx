@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Scale, Waypoints } from "lucide-react";
+import { Building2, Scale, Waypoints } from "lucide-react";
 import { Bell, Check, ChevronsUpDown, FilePen, Home, LayoutList, LogOut, Monitor, Moon, Plus, Search, Settings, Shield, Sun, UserRound } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/logo";
@@ -30,7 +30,7 @@ import { usePresence, useRevisionFiles, useRevisions, useRevisionTree, type Revi
 import { cn } from "@/lib/utils";
 import { usePalette } from "./command-palette";
 import { ForgeIcon } from "./forge-icon";
-import { useAssistantStatus } from "@/lib/orgs";
+import { currentOrg, useAssistantStatus, useCurrentOrg, useOrgs } from "@/lib/orgs";
 
 const itemCls =
   "flex h-[1.875rem] w-full items-center gap-2 rounded-[0.4375rem] px-2 text-left text-[0.8125rem] whitespace-nowrap text-sidebar-foreground hover:bg-sidebar-accent [&.active]:bg-sidebar-accent [&.active]:font-medium [&_svg]:size-4 [&_svg]:text-muted-foreground";
@@ -50,6 +50,8 @@ function Section({ title, action, children }: { title: string; action?: ReactNod
 function RepoSwitcher({ repo }: { repo?: RepoView }) {
   const { t } = useTranslation();
   const { data: repos } = useRepos();
+  const { data: orgs } = useOrgs();
+  const org = useCurrentOrg();
   const { data: me } = useMe();
   const { data: setup } = useSetupStatus();
   const navigate = useNavigate();
@@ -59,7 +61,7 @@ function RepoSwitcher({ repo }: { repo?: RepoView }) {
         <button className="flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left hover:bg-sidebar-accent" type="button">
           <Logo />
           <span className="min-w-0 flex-1 truncate">
-            <b className="block truncate text-[0.8125rem] leading-tight font-semibold">{repo?.display_name ?? setup?.instance_name ?? "kmdn"}</b>
+            <b className="block truncate text-[0.8125rem] leading-tight font-semibold">{repo?.display_name ?? (orgs && orgs.length > 1 ? org?.name : setup?.instance_name) ?? "kmdn"}</b>
             <small className="flex items-center gap-1 truncate text-[0.71875rem] leading-tight text-muted-foreground">
               {repo ? (
                 <>
@@ -76,9 +78,22 @@ function RepoSwitcher({ repo }: { repo?: RepoView }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
+        {orgs && orgs.length > 1 && (
+          <>
+            <DropdownMenuLabel className="text-xs text-muted-foreground">{t("orgs.switch")}</DropdownMenuLabel>
+            {orgs.map((o) => (
+              <DropdownMenuItem key={o.id} onSelect={() => void navigate({ to: "/$org", params: { org: o.slug } })}>
+                <Building2 />
+                <span className="truncate">{o.name}</span>
+                {o.slug === org?.slug && <Check className="ml-auto" />}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuLabel className="text-xs text-muted-foreground">{t("shell.repositories")}</DropdownMenuLabel>
         {(repos ?? []).map((r) => (
-          <DropdownMenuItem key={r.id} onSelect={() => void navigate({ to: "/$owner/$repo", params: { owner: r.owner, repo: r.name } })}>
+          <DropdownMenuItem key={r.id} onSelect={() => void navigate({ to: "/$org/$owner/$repo", params: { org: r.org_slug, owner: r.owner, repo: r.name } })}>
             <ForgeIcon kind={r.forge_kind} />
             <span className="truncate">{r.display_name}</span>
             {r.id === repo?.id && <Check className="ml-auto" />}
@@ -86,14 +101,14 @@ function RepoSwitcher({ repo }: { repo?: RepoView }) {
         ))}
         {(repos ?? []).length === 0 && <DropdownMenuItem disabled>{t("home.noRepos")}</DropdownMenuItem>}
         <DropdownMenuSeparator />
-        {me?.is_instance_admin && (
-          <DropdownMenuItem onSelect={() => void navigate({ to: "/admin", search: { section: "repositories" } })}>
+        {(me?.is_instance_admin || org?.role === "admin" || org?.role === "owner") && (
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/$org/admin", params: { org: currentOrg() }, search: { section: "repositories" } })}>
             <Plus />
             {t("home.connect")}
           </DropdownMenuItem>
         )}
         {repo && atLeast(repo.role, "admin") && (
-          <DropdownMenuItem onSelect={() => void navigate({ to: "/$owner/$repo/settings", params: { owner: repo.owner, repo: repo.name } })}>
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/$org/$owner/$repo/settings", params: { org: repo.org_slug, owner: repo.owner, repo: repo.name } })}>
             <Settings />
             {t("shell.repoSettings")}
           </DropdownMenuItem>
@@ -113,7 +128,7 @@ function PublishedNav({ repo, currentPath, onNavigate }: { repo: RepoView; curre
         <Section
           title={t("revision.yours")}
           action={
-            <Link to="/$owner/$repo/revisions" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className="text-[0.71875rem] font-normal hover:text-foreground">
+            <Link to="/$org/$owner/$repo/revisions" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name }} onClick={onNavigate} className="text-[0.71875rem] font-normal hover:text-foreground">
               {t("revision.viewAll")}
             </Link>
           }
@@ -121,8 +136,8 @@ function PublishedNav({ repo, currentPath, onNavigate }: { repo: RepoView; curre
           {mine.data!.slice(0, 5).map((r) => (
             <Link
               key={r.id}
-              to="/$owner/$repo/revisions/$number"
-              params={{ owner: repo.owner, repo: repo.name, number: String(r.number) }}
+              to="/$org/$owner/$repo/revisions/$number"
+              params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, number: String(r.number) }}
               onClick={onNavigate}
               className={itemCls}
             >
@@ -167,8 +182,8 @@ function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; r
   return (
     <>
       <Link
-        to="/$owner/$repo/revisions/$number"
-        params={{ owner: repo.owner, repo: repo.name, number: String(rev.number) }}
+        to="/$org/$owner/$repo/revisions/$number"
+        params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, number: String(rev.number) }}
         onClick={onNavigate}
         className="mt-1 block rounded-lg border bg-background p-2.5 hover:bg-accent"
       >
@@ -200,8 +215,8 @@ function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; r
           ) : (
             <Link
               key={f.id}
-              to="/$owner/$repo/$"
-              params={{ owner: repo.owner, repo: repo.name, _splat: f.path }}
+              to="/$org/$owner/$repo/$"
+              params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name, _splat: f.path }}
               search={{ revision: rev.number }}
               onClick={onNavigate}
               className={cn(itemCls, active && "bg-sidebar-accent font-medium")}
@@ -246,6 +261,8 @@ function RevisionNav({ repo, rev, currentPath, onNavigate }: { repo: RepoView; r
 export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: RepoView; revision?: RevisionView; currentPath?: string; onNavigate?: () => void }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
+  const org = useCurrentOrg();
+  const canAdmin = !!me?.is_instance_admin || org?.role === "admin" || org?.role === "owner";
   const { choice, setChoice } = useTheme();
   const palette = usePalette();
   const assistant = useAssistantStatus();
@@ -272,7 +289,7 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
       </div>
       <nav className="min-h-0 flex-1 overflow-auto px-2.5 pb-3">
         {repo ? (
-          <Link to="/$owner/$repo" params={{ owner: repo.owner, repo: repo.name }} activeOptions={{ exact: true }} onClick={onNavigate} className={itemCls}>
+          <Link to="/$org/$owner/$repo" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name }} activeOptions={{ exact: true }} onClick={onNavigate} className={itemCls}>
             <Home />
             {t("shell.home")}
           </Link>
@@ -291,19 +308,19 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
         )}
         <InboxLink className={itemCls} onNavigate={onNavigate} />
         {repo && !revision && (
-          <Link to="/$owner/$repo/revisions" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
+          <Link to="/$org/$owner/$repo/revisions" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
             <LayoutList />
             {t("revision.list")}
           </Link>
         )}
         {repo && !revision && (
-          <Link to="/$owner/$repo/graph" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
+          <Link to="/$org/$owner/$repo/graph" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
             <Waypoints />
             {t("graph.title")}
           </Link>
         )}
         {repo && !revision && assistant.data?.consistency && (
-          <Link to="/$owner/$repo/consistency" params={{ owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
+          <Link to="/$org/$owner/$repo/consistency" params={{ org: repo.org_slug, owner: repo.owner, repo: repo.name }} onClick={onNavigate} className={itemCls}>
             <Scale />
             {t("consistency.title")}
           </Link>
@@ -327,8 +344,8 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
               <UserRound />
               {t("shell.profile")}
             </DropdownMenuItem>
-            {me?.is_instance_admin && (
-              <DropdownMenuItem onSelect={() => void navigate({ to: "/admin" })}>
+            {canAdmin && (
+              <DropdownMenuItem onSelect={() => void navigate({ to: "/$org/admin", params: { org: currentOrg() } })}>
                 <Shield />
                 {t("shell.admin")}
               </DropdownMenuItem>
@@ -356,9 +373,9 @@ export function Sidebar({ repo, revision, currentPath, onNavigate }: { repo?: Re
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        {me?.is_instance_admin && (
+        {canAdmin && (
           <Button asChild variant="ghost" size="icon" className="size-8" aria-label={t("shell.admin")}>
-            <Link to="/admin">
+            <Link to="/$org/admin" params={{ org: currentOrg() }}>
               <Shield />
             </Link>
           </Button>

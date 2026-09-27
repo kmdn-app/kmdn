@@ -10,6 +10,16 @@ export const orgsQuery = queryOptions({
   staleTime: 60_000,
 });
 
+/** The mode (single or multi) and whether the caller may create an org. */
+export const orgsInfoQuery = queryOptions({
+  queryKey: ["orgs", "info"],
+  queryFn: async () => {
+    const { mode, can_create } = await unwrap(api.GET("/orgs"));
+    return { mode, can_create };
+  },
+  staleTime: 60_000,
+});
+
 const KEY = "kmdn-org";
 let current = "";
 

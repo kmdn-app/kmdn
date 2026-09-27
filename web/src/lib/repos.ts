@@ -25,8 +25,7 @@ export function useRepos() {
   return useQuery(reposQuery());
 }
 
-export const repoBySlugQuery = (owner: string, name: string) => {
-  const org = currentOrg();
+export const repoBySlugQuery = (org: string, owner: string, name: string) => {
   return queryOptions({
     queryKey: ["repo", org, owner, name],
     queryFn: () => unwrap(api.GET("/orgs/{org}/repos/by-slug/{owner}/{name}", { params: { path: { org, owner, name } } })),
@@ -95,7 +94,7 @@ export function rawUrl(repo: RepoView, path: string, sha?: string) {
 
 /** App route for a file in a repo. */
 export function fileHref(repo: RepoView, path: string) {
-  return `/${repo.owner}/${repo.name}/${path}`;
+  return `/${repo.org_slug}/${repo.owner}/${repo.name}/${path}`;
 }
 
 const RANK: Record<string, number> = { "": 0, viewer: 1, contributor: 2, maintainer: 3, admin: 4 };
