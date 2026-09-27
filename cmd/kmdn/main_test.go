@@ -39,3 +39,18 @@ func TestUnknownCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMigrateStatusAndUp(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KMDN_DATA_DIR", dir)
+	t.Setenv("KMDN_DB_URL", "sqlite://"+filepath.Join(dir, "kmdn.db"))
+	t.Chdir(dir)
+	var out bytes.Buffer
+	if err := run([]string{"migrate", "status"}, &out, &out); err != nil || !bytes.Contains(out.Bytes(), []byte("pending")) {
+		t.Fatalf("status: %v %s", err, out.String())
+	}
+	out.Reset()
+	if err := run([]string{"migrate", "up"}, &out, &out); err != nil || !bytes.Contains(out.Bytes(), []byte("Applied 1")) {
+		t.Fatalf("up: %v %s", err, out.String())
+	}
+}

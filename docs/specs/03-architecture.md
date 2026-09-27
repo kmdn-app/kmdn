@@ -33,7 +33,7 @@ One Go binary. No Node at runtime.
 - **Static SPA in the binary**: one artifact to ship and run, trivial self-hosting. SSR buys little for an authenticated editor.
 - **Server-side doc engine in an embedded JS runtime**: the WYSIWYG model and the fidelity serializer are TypeScript. Running the same bundle in Go keeps one serializer, lets the server be authoritative (merge, persist, materialize markdown, diff, auto-sync) even with nobody online. See [04](04-doc-engine.md).
 - **Bare mirrors**: fast local reads (tree, history, blame, diff), one code path for both forges, cheap auto-sync. Writes to GitHub go through the Git Data API for signed commits ([06](06-git-and-forges.md)).
-- **SQLite default**: zero-config install. Postgres for teams that want managed DB/backups. Same schema via migrations and `sqlc`.
+- **SQLite default**: zero-config install. Postgres for teams that want managed DB/backups. Same schema via portable migrations.
 - **Single node**: collab rooms, JS runtime pool and job queue live in-process. No Redis. Scaling out is a non-goal for v1; the code keeps rooms behind an interface so a pub/sub backend can be added later.
 
 ## Tech stack
@@ -45,7 +45,7 @@ One Go binary. No Node at runtime.
 | HTTP | `net/http` + `chi` router |
 | API | OpenAPI 3.1 spec (`api/openapi.yaml`) → `oapi-codegen` strict server |
 | WebSocket | `github.com/coder/websocket` |
-| DB | `database/sql` + `sqlc`; drivers `modernc.org/sqlite` (pure Go, keeps CGO off) and `pgx/v5`; migrations with `goose` |
+| DB | `database/sql` with hand-written SQL (`?` placeholders, rebound to `$n` for Postgres), drivers `modernc.org/sqlite` (pure Go, keeps CGO off) and `pgx/v5`; embedded numbered migrations with a small runner. sqlc was dropped because it needs one generated package per engine |
 | JS runtime | Spike: `goja` vs QuickJS on `wazero`. Decision by benchmark (see [14](14-roadmap.md)) |
 | Git | git CLI (≥ 2.40) for clone/fetch/push/merge-tree/blame; `go-git` for in-process object reads where faster |
 | GitHub | `google/go-github`, `bradleyfalzon/ghinstallation` for App tokens |
@@ -100,7 +100,7 @@ kmdn/
 │  ├─ assets/                uploads, image processing
 │  ├─ audit/                 audit log
 │  ├─ jobs/                  DB-backed job queue
-│  ├─ store/                 sqlc queries, migrations (sqlite/, postgres/)
+│  ├─ store/                 connection, dialect rebinding, embedded migrations
 │  └─ config/  telemetry/  web/ (go:embed of web/dist)
 ├─ api/openapi.yaml
 ├─ web/                      TanStack Router SPA
@@ -117,7 +117,7 @@ kmdn/
 ## Build
 
 1. `pnpm -r build` → `packages/doc-engine/dist/engine.js` (IIFE bundle for the Go host, target ES2020, no DOM) and `web/dist`.
-2. `go generate ./...` → API server stubs, sqlc, embeds engine bundle and SPA.
+2. `go generate ./...` → API server stubs; `make web` copies the SPA and engine bundle for embedding.
 3. `go build -trimpath -ldflags "-s -w -X main.version=…" ./cmd/kmdn` with `CGO_ENABLED=0`.
 4. GoReleaser: linux/darwin × amd64/arm64 binaries, multi-arch Docker image (distroless-ish base + git).
 

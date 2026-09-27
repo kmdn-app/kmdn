@@ -15,6 +15,10 @@ linters:
         - fmt.Fprint
         - fmt.Fprintf
         - fmt.Fprintln
+        - (*database/sql.Rows).Close
+        - (*database/sql.Conn).Close
+        - (*database/sql.DB).Close
+        - (*github.com/kmdn-app/kmdn/internal/store.DB).Close
     revive:
       rules:
         - name: exported
