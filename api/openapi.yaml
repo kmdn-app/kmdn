@@ -1276,6 +1276,17 @@ paths:
                 required: [items]
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/PresenceUser" } }
+  /revisions/{revision}/sourcemap/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { $ref: "#/components/parameters/FilePath" }
+    get:
+      tags: [revisions]
+      operationId: getSourceMap
+      summary: The source map of a page's collaborative document (for source mode)
+      responses:
+        "200": { description: Source map (doc engine format), content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        "204": { description: The page has no document yet }
 components:
   parameters:
     RepoID:

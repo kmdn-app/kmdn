@@ -11,3 +11,4 @@ export { serialize, serializeBlock } from "./serialize";
 export { canonical, fnv1a64, nodeHash } from "./hash";
 export { CONTENT, applyDoc, readDoc, writeDoc } from "./ydoc";
 export { extractLinks, rewriteLinks, slugify, type Heading, type Link, type LinkKind } from "./links";
+export { SourceSync, textChange } from "./source-sync";

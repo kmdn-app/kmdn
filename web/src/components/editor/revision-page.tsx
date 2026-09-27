@@ -16,6 +16,7 @@ import { fileHref, type RepoView } from "@/lib/repos";
 import { revisionRawUrl, uploadAsset, useRevision, useRevisionContent, useRevisionEvents, type RevisionView } from "@/lib/revisions";
 import { cn } from "@/lib/utils";
 import { EditorToolbar, PageEditor, useRoomStatus, type ImageUploader } from "./page-editor";
+import { SourceEditor } from "./source-editor";
 
 /** Opens the page's room for as long as the view shows it. */
 function useRoom(revisionID: string | undefined, path: string) {
@@ -40,6 +41,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
   useRevisionEvents(repo, rev.data);
   const crumbs = path.split("/");
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [mode, setMode] = useEditorMode();
   const onEditor = useCallback((e: Editor | null) => setEditor(e), []);
   const provider = useRoom(rev.data?.id, path);
   const status = useRoomStatus(provider);
@@ -87,6 +89,7 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
             actions={
               <>
                 {rev.data && <PresenceStack repo={repo} rev={rev.data} path={path} />}
+                {status && !status.error && <ModeToggle mode={mode} onChange={setMode} />}
                 {rev.data && <RevisionPill rev={rev.data} />}
                 <SaveState status={status} />
                 <Button asChild size="sm" variant="outline">
@@ -97,17 +100,60 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
               </>
             }
           />
-          {status?.mode === "rw" && editor && (
+          {status?.mode === "rw" && editor && mode === "visual" && (
             <div className="flex shrink-0 overflow-x-auto border-b px-3 py-1">
               <EditorToolbar editor={editor} upload={upload} />
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-auto">
-            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} /> : <Loading />}
+            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} mode={mode} /> : <Loading />}
           </div>
         </>
       )}
     </AppShell>
+  );
+}
+
+type EditorMode = "visual" | "source";
+const MODE_KEY = "kmdn-editor-mode";
+
+/** Visual or source editing, remembered per browser. */
+function useEditorMode(): [EditorMode, (m: EditorMode) => void] {
+  const [mode, setMode] = useState<EditorMode>(() => {
+    try {
+      return localStorage.getItem(MODE_KEY) === "source" ? "source" : "visual";
+    } catch {
+      return "visual";
+    }
+  });
+  const set = (m: EditorMode) => {
+    setMode(m);
+    try {
+      localStorage.setItem(MODE_KEY, m);
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  return [mode, set];
+}
+
+function ModeToggle({ mode, onChange }: { mode: EditorMode; onChange: (m: EditorMode) => void }) {
+  const { t } = useTranslation();
+  return (
+    <div role="radiogroup" aria-label={t("editor.mode")} className="inline-flex shrink-0 gap-0.5 rounded-md bg-muted p-0.5 max-sm:hidden">
+      {(["visual", "source"] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          role="radio"
+          aria-checked={mode === m}
+          onClick={() => onChange(m)}
+          className={cn("h-6 rounded px-2 text-[12px] font-medium text-muted-foreground", mode === m && "bg-background text-foreground shadow-xs")}
+        >
+          {t(`editor.modes.${m}`)}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -128,6 +174,7 @@ function Body({
   provider,
   onEditor,
   upload,
+  mode,
 }: {
   repo: RepoView;
   rev: RevisionView;
@@ -135,6 +182,7 @@ function Body({
   provider: RoomProvider;
   onEditor: (e: Editor | null) => void;
   upload?: ImageUploader;
+  mode: EditorMode;
 }) {
   const { t } = useTranslation();
   const { data: me } = useMe();
@@ -167,7 +215,16 @@ function Body({
           <Loading />
         )
       ) : (
-        me && <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} />
+        me &&
+        (mode === "source" ? (
+          status?.synced ? (
+            <SourceEditor provider={provider} revisionID={rev.id} path={path} editable={status.mode === "rw"} />
+          ) : (
+            <Loading />
+          )
+        ) : (
+          <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} />
+        ))
       )}
     </>
   );

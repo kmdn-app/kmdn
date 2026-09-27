@@ -386,7 +386,12 @@
     "quote": "Quote",
     "codeBlock": "Code block",
     "rule": "Divider",
-    "image": "Image"
+    "image": "Image",
+    "mode": "Editing mode",
+    "modes": {
+      "visual": "Visual",
+      "source": "Markdown"
+    }
   },
   "revision": {
     "editsTo": "Edits to {{title}}",
