@@ -25,6 +25,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/jobs"
 	"github.com/kmdn-app/kmdn/internal/linking"
 	"github.com/kmdn-app/kmdn/internal/links"
+	"github.com/kmdn-app/kmdn/internal/llm"
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/notify"
 	"github.com/kmdn-app/kmdn/internal/publish"
@@ -64,6 +65,7 @@ type App struct {
 	Updates   *updates.Service
 	Notify    *notify.Service
 	Hooks     *hooks.Service
+	LLM       *llm.Service
 	Invites   *invites.Service
 }
 
@@ -151,6 +153,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 			return a.Collab.PutAnchor(ctx, repo, rev, c, p, threadID, pos)
 		},
 	}
+	a.LLM = &llm.Service{DB: db, Secrets: sec, Disabled: !cfg.Assistant.Enabled, Log: log}
+	a.LLM.Routes(r)
 	a.Notify = &notify.Service{DB: db, Jobs: a.Jobs, PublishUser: a.Realtime.PublishUser, BaseURL: a.Repos.BaseURL, Log: log,
 		Present: func(revID, userID string) bool {
 			for _, p := range a.Collab.Presence(revID) {
