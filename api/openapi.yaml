@@ -1146,6 +1146,52 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/assets:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+    get:
+      tags: [revisions]
+      operationId: listRevisionAssets
+      responses:
+        "200":
+          description: Images the revision adds
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RevisionAsset" } }
+    post:
+      tags: [revisions]
+      operationId: uploadRevisionAsset
+      summary: Upload an image next to a page
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, page]
+              properties:
+                file: { type: string, format: binary }
+                page: { type: string, description: The page the image is inserted into }
+      responses:
+        "201": { description: Uploaded, content: { application/json: { schema: { $ref: "#/components/schemas/UploadResult" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /revisions/{revision}/raw/{path}:
+    parameters:
+      - { $ref: "#/components/parameters/RevisionID" }
+      - { $ref: "#/components/parameters/FilePath" }
+    get:
+      tags: [revisions]
+      operationId: getRevisionRaw
+      summary: An image as the revision sees it (uploads, then the base)
+      responses:
+        "200": { description: Image bytes, content: { image/*: { schema: { type: string, format: binary } } } }
+        "404": { $ref: "#/components/responses/Problem" }
+        "415": { $ref: "#/components/responses/Problem" }
 components:
   parameters:
     RepoID:
@@ -1176,6 +1222,24 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    RevisionAsset:
+      type: object
+      required: [id, path, size, mime, sha256, created_at]
+      properties:
+        id: { type: string }
+        path: { type: string }
+        size: { type: integer }
+        mime: { type: string }
+        sha256: { type: string }
+        created_at: { type: string, format: date-time }
+    UploadResult:
+      allOf:
+        - $ref: "#/components/schemas/RevisionAsset"
+        - type: object
+          required: [markdown, src]
+          properties:
+            markdown: { type: string }
+            src: { type: string, description: Path relative to the page }
     Checkpoint:
       type: object
       required: [id, kind, created_at, file_count]

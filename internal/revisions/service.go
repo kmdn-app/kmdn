@@ -35,6 +35,10 @@ type Service struct {
 	DB    *store.DB
 	Repos *repos.Service
 	Log   *slog.Logger
+	// DataDir holds uploads (<data>/uploads/<sha[:2]>/<sha>).
+	DataDir string
+	// UploadMaxMB caps uploads; repo settings and .kmdn.yml can only lower it.
+	UploadMaxMB int
 
 	// Changed is called after a revision or its manifest changes (realtime
 	// fan-out and room mode switches hook in here). Optional.

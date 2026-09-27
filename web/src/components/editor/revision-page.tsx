@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, errorMessage, useMe } from "@/lib/api";
 import { RoomProvider } from "@/lib/realtime";
-import { fileHref, rawUrl, type RepoView } from "@/lib/repos";
-import { useRevision, useRevisionContent, useRevisionEvents, type RevisionView } from "@/lib/revisions";
+import { fileHref, type RepoView } from "@/lib/repos";
+import { revisionRawUrl, uploadAsset, useRevision, useRevisionContent, useRevisionEvents, type RevisionView } from "@/lib/revisions";
 import { cn } from "@/lib/utils";
-import { EditorToolbar, PageEditor, useRoomStatus } from "./page-editor";
+import { EditorToolbar, PageEditor, useRoomStatus, type ImageUploader } from "./page-editor";
 
 /** Opens the page's room for as long as the view shows it. */
 function useRoom(revisionID: string | undefined, path: string) {
@@ -41,6 +41,17 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
   const onEditor = useCallback((e: Editor | null) => setEditor(e), []);
   const provider = useRoom(rev.data?.id, path);
   const status = useRoomStatus(provider);
+  const revID = rev.data?.id;
+  const upload = useMemo(
+    () =>
+      revID
+        ? async (f: File) => {
+            const r = await uploadAsset(revID, path, f);
+            return { src: r.src, alt: r.markdown.slice(2, r.markdown.indexOf("]")) };
+          }
+        : undefined,
+    [revID, path],
+  );
 
   if (rev.error) {
     return (
@@ -85,11 +96,11 @@ export function RevisionPage({ repo, path, number }: { repo: RepoView; path: str
           />
           {status?.mode === "rw" && editor && (
             <div className="flex shrink-0 overflow-x-auto border-b px-3 py-1">
-              <EditorToolbar editor={editor} />
+              <EditorToolbar editor={editor} upload={upload} />
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-auto">
-            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} /> : <Loading />}
+            {rev.data && provider && status ? <Body repo={repo} rev={rev.data} path={path} provider={provider} onEditor={onEditor} upload={upload} /> : <Loading />}
           </div>
         </>
       )}
@@ -107,15 +118,29 @@ function Loading() {
   );
 }
 
-function Body({ repo, rev, path, provider, onEditor }: { repo: RepoView; rev: RevisionView; path: string; provider: RoomProvider; onEditor: (e: Editor | null) => void }) {
+function Body({
+  repo,
+  rev,
+  path,
+  provider,
+  onEditor,
+  upload,
+}: {
+  repo: RepoView;
+  rev: RevisionView;
+  path: string;
+  provider: RoomProvider;
+  onEditor: (e: Editor | null) => void;
+  upload?: ImageUploader;
+}) {
   const { t } = useTranslation();
   const { data: me } = useMe();
   const status = useRoomStatus(provider);
   const noDoc = status?.error?.code === "no_document";
   // Read-only callers get no room until someone edits: show the page as it is in the revision.
   const content = useRevisionContent(rev, path, noDoc || status?.error?.code === "not_found");
-  const resolveImage = useMemo(() => (src: string) => (/^[a-z]+:|^\/\//i.test(src) ? src : rawUrl(repo, resolveFrom(path, src))), [repo, path]);
-  const ctx = useMemo(() => ({ path, pageHref: (p: string) => fileHref(repo, p), imageSrc: (p: string) => rawUrl(repo, p) }), [repo, path]);
+  const resolveImage = useMemo(() => (src: string) => (/^[a-z]+:|^\/\//i.test(src) ? src : revisionRawUrl(rev.id, resolveFrom(path, src))), [rev.id, path]);
+  const ctx = useMemo(() => ({ path, pageHref: (p: string) => fileHref(repo, p), imageSrc: (p: string) => revisionRawUrl(rev.id, p) }), [repo, rev.id, path]);
 
   if (status?.error && !noDoc) {
     return (
@@ -139,7 +164,7 @@ function Body({ repo, rev, path, provider, onEditor }: { repo: RepoView; rev: Re
           <Loading />
         )
       ) : (
-        me && <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} onEditor={onEditor} />
+        me && <PageEditor provider={provider} user={{ id: me.id, name: me.name }} resolveImage={resolveImage} upload={upload} onEditor={onEditor} />
       )}
     </>
   );

@@ -1204,10 +1204,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/revisions/{revision}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        get: operations["listRevisionAssets"];
+        put?: never;
+        /** Upload an image next to a page */
+        post: operations["uploadRevisionAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/revisions/{revision}/raw/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        /** An image as the revision sees it (uploads, then the base) */
+        get: operations["getRevisionRaw"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RevisionAsset: {
+            id: string;
+            path: string;
+            size: number;
+            mime: string;
+            sha256: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        UploadResult: components["schemas"]["RevisionAsset"] & {
+            markdown: string;
+            /** @description Path relative to the page */
+            src: string;
+        };
         Checkpoint: {
             id: string;
             name?: string;
@@ -3722,6 +3776,89 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    listRevisionAssets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Images the revision adds */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RevisionAsset"][];
+                    };
+                };
+            };
+        };
+    };
+    uploadRevisionAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** @description The page the image is inserted into */
+                    page: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Uploaded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getRevisionRaw: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision: components["parameters"]["RevisionID"];
+                /** @description Repository-relative path; may contain slashes */
+                path: components["parameters"]["FilePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Image bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            404: components["responses"]["Problem"];
+            415: components["responses"]["Problem"];
         };
     };
 }

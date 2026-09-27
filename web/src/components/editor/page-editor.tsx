@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { EditorView } from "@tiptap/pm/view";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
@@ -11,6 +12,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  ImagePlus,
   Italic,
   Link2,
   List,
@@ -28,6 +30,7 @@ import { userColor } from "@/components/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { RoomProvider, RoomStatus } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { schemaExtensions } from "./schema";
 
 export type EditorUser = { id: string; name: string };
@@ -46,19 +49,30 @@ export function useRoomStatus(provider: RoomProvider | null): RoomStatus | null 
  * seeded here); editing is on only while the server says rw and the first
  * sync is done.
  */
+/** Uploads an image and returns the src to store in the page (relative path). */
+export type ImageUploader = (file: File) => Promise<{ src: string; alt: string }>;
+
+const IMAGE_TYPES = /^image\/(png|jpe?g|gif|webp|avif|svg\+xml)$/;
+
 export function PageEditor({
   provider,
   user,
   resolveImage,
+  upload,
   onEditor,
 }: {
   provider: RoomProvider;
   user: EditorUser;
   resolveImage: (src: string) => string;
+  upload?: ImageUploader;
   onEditor?: (e: Editor | null) => void;
 }) {
   const { t } = useTranslation();
   const status = useRoomStatus(provider);
+  const uploadRef = useRef(upload);
+  useEffect(() => {
+    uploadRef.current = upload;
+  }, [upload]);
   const extensions = useMemo(
     () => [
       ...schemaExtensions({ resolveImage }),
@@ -77,10 +91,41 @@ export function PageEditor({
       extensions,
       editable: false,
       immediatelyRender: true,
-      editorProps: { attributes: { class: "doc kmdn-editor", spellcheck: "true", "aria-label": t("editor.label") } },
+      editorProps: {
+        attributes: { class: "doc kmdn-editor", spellcheck: "true", "aria-label": t("editor.label") },
+        // Images pasted or dropped are uploaded into the revision, then inserted.
+        handlePaste: (view, e) => {
+          const files = [...(e.clipboardData?.files ?? [])].filter((f) => IMAGE_TYPES.test(f.type));
+          if (!files.length || !uploadRef.current || !view.editable) return false;
+          e.preventDefault();
+          void insertImages(view, view.state.selection.from, files);
+          return true;
+        },
+        handleDrop: (view, e, _slice, moved) => {
+          const files = [...(e.dataTransfer?.files ?? [])].filter((f) => IMAGE_TYPES.test(f.type));
+          if (moved || !files.length || !uploadRef.current || !view.editable) return false;
+          e.preventDefault();
+          const at = view.posAtCoords({ left: e.clientX, top: e.clientY })?.pos ?? view.state.selection.from;
+          void insertImages(view, at, files);
+          return true;
+        },
+      },
     },
     [extensions],
   );
+  // The paste/drop handlers are created once; they read the uploader through a ref.
+  async function insertImages(view: EditorView, at: number, files: File[]) {
+    for (const f of files) {
+      try {
+        const { src, alt } = await uploadRef.current!(f);
+        const node = view.state.schema.nodes.image!.create({ src, alt });
+        const pos = Math.min(at, view.state.doc.content.size);
+        view.dispatch(view.state.tr.insert(pos, node));
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t("errors.generic"));
+      }
+    }
+  }
   const editable = status?.mode === "rw" && status.synced;
   useEffect(() => {
     editor?.setEditable(editable);
@@ -117,7 +162,7 @@ function Btn({ label, active, disabled, onClick, children }: { label: string; ac
 }
 
 /** Formatting controls for the top bar. */
-export function EditorToolbar({ editor }: { editor: Editor | null }) {
+export function EditorToolbar({ editor, upload }: { editor: Editor | null; upload?: ImageUploader }) {
   const { t } = useTranslation();
   const s = useEditorState({
     editor,
@@ -152,6 +197,22 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
     if (href === null) return;
     if (href === "") run().unsetLink().run();
     else run().extendMarkRange("link").setLink({ href }).run();
+  };
+  const pickImage = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml";
+    input.onchange = async () => {
+      const f = input.files?.[0];
+      if (!f || !upload) return;
+      try {
+        const { src, alt } = await upload(f);
+        run().insertContent({ type: "image", attrs: { src, alt } }).run();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t("errors.generic"));
+      }
+    };
+    input.click();
   };
   const toggleTask = () => {
     const { $from } = editor.state.selection;
@@ -220,6 +281,11 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
       <Btn label={t("editor.rule")} disabled={off} onClick={() => run().setHorizontalRule().run()}>
         <Minus />
       </Btn>
+      {upload && (
+        <Btn label={t("editor.image")} disabled={off} onClick={pickImage}>
+          <ImagePlus />
+        </Btn>
+      )}
     </div>
   );
 }
