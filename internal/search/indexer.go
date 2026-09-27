@@ -39,9 +39,13 @@ func (ix *Indexer) Register() {
 		n, err := ix.Reindex(ctx, p.RepoID)
 		return map[string]int{"changed": n}, err
 	})
-	ix.Repos.OnHeadChanged = append(ix.Repos.OnHeadChanged, func(ctx context.Context, r repos.Repo, _, _ string) error {
+	enqueue := func(ctx context.Context, r repos.Repo) error {
 		_, err := ix.Jobs.Enqueue(ctx, ix.DB, JobIndex, map[string]string{"repo_id": r.ID}, jobs.EnqueueOptions{Key: r.ID})
 		return err
+	}
+	ix.Repos.OnScopeChanged = append(ix.Repos.OnScopeChanged, enqueue)
+	ix.Repos.OnHeadChanged = append(ix.Repos.OnHeadChanged, func(ctx context.Context, r repos.Repo, _, _ string) error {
+		return enqueue(ctx, r)
 	})
 }
 
