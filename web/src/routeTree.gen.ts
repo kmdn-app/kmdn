@@ -21,6 +21,8 @@ import { Route as AppSettingsProfileRouteImport } from './routes/_app/settings/p
 import { Route as AppOwnerRepoIndexRouteImport } from './routes/_app/$owner/$repo/index'
 import { Route as AppOwnerRepoSplatRouteImport } from './routes/_app/$owner/$repo/$'
 import { Route as AppOwnerRepoSettingsRouteImport } from './routes/_app/$owner/$repo/settings'
+import { Route as AppOwnerRepoRevisionsIndexRouteImport } from './routes/_app/$owner/$repo/revisions/index'
+import { Route as AppOwnerRepoRevisionsNumberRouteImport } from './routes/_app/$owner/$repo/revisions/$number'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -81,6 +83,18 @@ const AppOwnerRepoSettingsRoute = AppOwnerRepoSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppOwnerRepoRouteRoute,
 } as any)
+const AppOwnerRepoRevisionsIndexRoute =
+  AppOwnerRepoRevisionsIndexRouteImport.update({
+    id: '/revisions/',
+    path: '/revisions/',
+    getParentRoute: () => AppOwnerRepoRouteRoute,
+  } as any)
+const AppOwnerRepoRevisionsNumberRoute =
+  AppOwnerRepoRevisionsNumberRouteImport.update({
+    id: '/revisions/$number',
+    path: '/revisions/$number',
+    getParentRoute: () => AppOwnerRepoRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -94,6 +108,8 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
   '/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
   '/$owner/$repo/': typeof AppOwnerRepoIndexRoute
+  '/$owner/$repo/revisions/$number': typeof AppOwnerRepoRevisionsNumberRoute
+  '/$owner/$repo/revisions/': typeof AppOwnerRepoRevisionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
@@ -106,6 +122,8 @@ export interface FileRoutesByTo {
   '/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
   '/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
   '/$owner/$repo': typeof AppOwnerRepoIndexRoute
+  '/$owner/$repo/revisions/$number': typeof AppOwnerRepoRevisionsNumberRoute
+  '/$owner/$repo/revisions': typeof AppOwnerRepoRevisionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -121,6 +139,8 @@ export interface FileRoutesById {
   '/_app/$owner/$repo/$': typeof AppOwnerRepoSplatRoute
   '/_app/$owner/$repo/settings': typeof AppOwnerRepoSettingsRoute
   '/_app/$owner/$repo/': typeof AppOwnerRepoIndexRoute
+  '/_app/$owner/$repo/revisions/$number': typeof AppOwnerRepoRevisionsNumberRoute
+  '/_app/$owner/$repo/revisions/': typeof AppOwnerRepoRevisionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -136,6 +156,8 @@ export interface FileRouteTypes {
     | '/$owner/$repo/$'
     | '/$owner/$repo/settings'
     | '/$owner/$repo/'
+    | '/$owner/$repo/revisions/$number'
+    | '/$owner/$repo/revisions/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/setup'
@@ -148,6 +170,8 @@ export interface FileRouteTypes {
     | '/$owner/$repo/$'
     | '/$owner/$repo/settings'
     | '/$owner/$repo'
+    | '/$owner/$repo/revisions/$number'
+    | '/$owner/$repo/revisions'
   id:
     | '__root__'
     | '/_app'
@@ -162,6 +186,8 @@ export interface FileRouteTypes {
     | '/_app/$owner/$repo/$'
     | '/_app/$owner/$repo/settings'
     | '/_app/$owner/$repo/'
+    | '/_app/$owner/$repo/revisions/$number'
+    | '/_app/$owner/$repo/revisions/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -258,6 +284,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOwnerRepoSettingsRouteImport
       parentRoute: typeof AppOwnerRepoRouteRoute
     }
+    '/_app/$owner/$repo/revisions/': {
+      id: '/_app/$owner/$repo/revisions/'
+      path: '/revisions'
+      fullPath: '/$owner/$repo/revisions/'
+      preLoaderRoute: typeof AppOwnerRepoRevisionsIndexRouteImport
+      parentRoute: typeof AppOwnerRepoRouteRoute
+    }
+    '/_app/$owner/$repo/revisions/$number': {
+      id: '/_app/$owner/$repo/revisions/$number'
+      path: '/revisions/$number'
+      fullPath: '/$owner/$repo/revisions/$number'
+      preLoaderRoute: typeof AppOwnerRepoRevisionsNumberRouteImport
+      parentRoute: typeof AppOwnerRepoRouteRoute
+    }
   }
 }
 
@@ -265,12 +305,16 @@ interface AppOwnerRepoRouteRouteChildren {
   AppOwnerRepoSplatRoute: typeof AppOwnerRepoSplatRoute
   AppOwnerRepoSettingsRoute: typeof AppOwnerRepoSettingsRoute
   AppOwnerRepoIndexRoute: typeof AppOwnerRepoIndexRoute
+  AppOwnerRepoRevisionsNumberRoute: typeof AppOwnerRepoRevisionsNumberRoute
+  AppOwnerRepoRevisionsIndexRoute: typeof AppOwnerRepoRevisionsIndexRoute
 }
 
 const AppOwnerRepoRouteRouteChildren: AppOwnerRepoRouteRouteChildren = {
   AppOwnerRepoSplatRoute: AppOwnerRepoSplatRoute,
   AppOwnerRepoSettingsRoute: AppOwnerRepoSettingsRoute,
   AppOwnerRepoIndexRoute: AppOwnerRepoIndexRoute,
+  AppOwnerRepoRevisionsNumberRoute: AppOwnerRepoRevisionsNumberRoute,
+  AppOwnerRepoRevisionsIndexRoute: AppOwnerRepoRevisionsIndexRoute,
 }
 
 const AppOwnerRepoRouteRouteWithChildren =
