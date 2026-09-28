@@ -75,6 +75,9 @@ func Effective(ctx context.Context, q store.Querier, u users.User, repoID string
 	if err != nil || orgRole == "" {
 		return None, err
 	}
+	if status == orgs.Deleting {
+		return None, nil
+	}
 	// A suspended org is read-only: people can read and comment, nothing more.
 	if status == orgs.Suspended {
 		return Viewer, nil

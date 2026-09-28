@@ -253,6 +253,12 @@
     "admin": "Admin"
   },
   "profile": {
+    "delete": "Account",
+    "deleteDesc": "Erase your account and your personal data.",
+    "deleteTitle": "Delete your account",
+    "deleteHint": "Your sign-ins, memberships and preferences are erased. What you wrote stays, attributed to \u201cDeleted user\u201d; commits on the forge aren't touched. Organizations where you're the only member are deleted.",
+    "deleteAction": "Delete account",
+    "deleteConfirm": "Type your email address to confirm",
     "title": "Your account",
     "desc": "How you appear in kmdn and in published commits.",
     "name": "Name",
@@ -1207,6 +1213,14 @@
     "retried": "Queued again."
   },
   "orgs": {
+    "deleteTitle": "Delete this organization",
+    "deleteHint": "Everyone loses access at once. Its repositories stay on their forges; kmdn's revisions, threads and uploads are deleted for good after 30 days.",
+    "deleteAction": "Delete organization",
+    "deleteConfirm": "Type {{slug}} to confirm",
+    "deleted": "The organization was deleted.",
+    "restored": "The organization was restored.",
+    "restore": "Restore",
+    "purgeAfter": "Being deleted; purged after {{date}}",
     "notInPlan": "Not included in this organization's plan.",
     "createYours": "Create an organization",
     "upgrade": "Upgrade",

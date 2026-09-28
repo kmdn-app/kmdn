@@ -192,6 +192,9 @@ func (h *HTTP) SetSessionCookies(w http.ResponseWriter, token string, sess Sessi
 	http.SetCookie(w, &http.Cookie{Name: h.CookieName(CSRFCookie), Value: sess.CSRF, Path: "/", HttpOnly: false, Secure: h.Secure, SameSite: http.SameSiteLaxMode, MaxAge: maxAge})
 }
 
+// ClearCookies signs the browser out (the session itself is the caller's to end).
+func (h *HTTP) ClearCookies(w http.ResponseWriter) { h.clearCookies(w) }
+
 func (h *HTTP) clearCookies(w http.ResponseWriter) {
 	names := []string{SessionCookie, CSRFCookie}
 	if h.Secure {

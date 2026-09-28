@@ -7,6 +7,7 @@ import { KeyRound, Loader2, LogOut, Monitor, Moon, Sun } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { TopBar } from "@/components/shell/top-bar";
 import { Card, Panel, Row } from "@/components/settings-layout";
+import { DangerZone } from "@/components/danger-zone";
 import { Avatar } from "@/components/avatar";
 import { Time } from "@/components/time";
 import { ForgeIcon } from "@/components/shell/forge-icon";
@@ -53,6 +54,7 @@ function Profile() {
               <Appearance />
               <Notifications />
               <Sessions />
+              <DeleteAccount />
             </div>
           </div>
         </>
@@ -454,4 +456,31 @@ export function summarizeUA(ua: string): string {
   const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Browser";
   const os = /Mac OS X|Macintosh/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Linux/.test(ua) ? "Linux" : "";
   return os ? `${browser} on ${os}` : browser;
+}
+
+/** Erase the account (GDPR): what the person wrote stays as "Deleted user". */
+function DeleteAccount() {
+  const { t } = useTranslation();
+  const { data: me } = useMe();
+  const erase = useMutation({
+    mutationFn: (confirm: string) => unwrap(api.DELETE("/me", { body: { confirm } })),
+    onSuccess: () => {
+      window.location.assign("/signin");
+    },
+  });
+  if (!me) return null;
+  return (
+    <Panel title={t("profile.delete")} desc={t("profile.deleteDesc")}>
+      <DangerZone
+        title={t("profile.deleteTitle")}
+        desc={t("profile.deleteHint")}
+        action={t("profile.deleteAction")}
+        confirmLabel={t("profile.deleteConfirm")}
+        expected={me.email}
+        onConfirm={(c) => erase.mutate(c)}
+        pending={erase.isPending}
+        error={erase.error}
+      />
+    </Panel>
+  );
 }

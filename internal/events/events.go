@@ -12,6 +12,7 @@ import (
 const (
 	OrgCreated       = "org.created"
 	OrgStatusChanged = "org.status_changed"
+	OrgDeleted       = "org.deleted" // purged for good
 	MemberAdded      = "member.added"
 	MemberChanged    = "member.changed" // role or status
 	MemberRemoved    = "member.removed"

@@ -177,13 +177,27 @@ func TestEmbedding(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := app.DeleteOrg(ctx, acme.ID, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.RestoreOrg(ctx, acme.ID); err != nil {
+		t.Fatal(err)
+	}
+	_ = app.DeleteOrg(ctx, acme.ID, "test")
+	if err := app.PurgeOrg(ctx, acme.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.OrgByID(ctx, acme.ID); err == nil {
+		t.Fatal("purged org still there")
+	}
+
 	mu.Lock()
 	defer mu.Unlock()
 	count := map[string]int{}
 	for _, e := range seen {
 		count[e.Type]++
 	}
-	if count[kmdn.EventOrgCreated] != 2 || count[kmdn.EventMemberAdded] != 3 || count[kmdn.EventOrgStatusChanged] != 2 {
+	if count[kmdn.EventOrgCreated] != 2 || count[kmdn.EventMemberAdded] != 3 || count[kmdn.EventOrgStatusChanged] != 5 || count[kmdn.EventOrgDeleted] != 1 {
 		t.Fatalf("events: %v", count)
 	}
 }
