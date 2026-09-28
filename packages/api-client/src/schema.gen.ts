@@ -3798,6 +3798,8 @@ export interface components {
             settings: components["schemas"]["OrgSettings"];
             /** @description Fields managed by the deployment */
             locked: string[];
+            /** @description Where the org's plan, which locks those fields, can be changed (Policy.UpgradeURL) */
+            upgrade_url?: string;
         };
         OrgDomain: {
             domain: string;

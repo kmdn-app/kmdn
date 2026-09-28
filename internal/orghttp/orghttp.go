@@ -35,8 +35,10 @@ type Service struct {
 	OrgForges bool
 	// SignupURL is orgs.signup_url, for people without an org.
 	SignupURL string
-	Events    events.Sink
-	Log       *slog.Logger
+	// Policy gives the upgrade link for settings the plan locks.
+	Policy *policy.Policy
+	Events events.Sink
+	Log    *slog.Logger
 }
 
 // View is an org as the API returns it, with the caller's role.
@@ -331,7 +333,14 @@ func (s *Service) getSettings(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
-	api.JSON(w, http.StatusOK, map[string]any{"settings": st, "locked": locked})
+	out := map[string]any{"settings": st, "locked": locked}
+	// Locked by the org's plan: where to lift it.
+	if len(locked) > 0 && s.Policy != nil && s.Policy.UpgradeURL != nil {
+		if u := s.Policy.UpgradeURL(r.Context(), Current(r).ID); u != "" {
+			out["upgrade_url"] = u
+		}
+	}
+	api.JSON(w, http.StatusOK, out)
 }
 
 func (s *Service) updateSettings(w http.ResponseWriter, r *http.Request) {

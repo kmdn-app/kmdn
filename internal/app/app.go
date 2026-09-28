@@ -363,7 +363,7 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 	a.Server.Mount("/mcp", a.MCP.Handler(a.AuthH.TrustedProxies))
 	people := &admin.People{DB: db, Auth: a.Auth, Log: log}
 	people.Routes(r)
-	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, OrgForges: a.Policy.OrgForgesAllowed(), SignupURL: cfg.Orgs.SignupURL, Events: opts.Events, Log: log}
+	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, OrgForges: a.Policy.OrgForgesAllowed(), SignupURL: cfg.Orgs.SignupURL, Policy: a.Policy, Events: opts.Events, Log: log}
 
 	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL, Policy: a.Policy, Events: opts.Events}

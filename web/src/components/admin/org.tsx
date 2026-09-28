@@ -98,7 +98,23 @@ export function OrganizationPanel() {
         </div>
       </Card>
       <Card>
-        <Row title={t("orgs.assistant")} desc={assistantLocked ? t("orgs.managed") : t("orgs.assistantHint")}>
+        <Row
+          title={t("orgs.assistant")}
+          desc={
+            assistantLocked && settings.data?.upgrade_url && !settings.data.settings.assistant ? (
+              <>
+                {t("orgs.notInPlan")}{" "}
+                <a className="font-medium text-foreground underline underline-offset-2" href={settings.data.upgrade_url}>
+                  {t("orgs.upgrade")}
+                </a>
+              </>
+            ) : assistantLocked ? (
+              t("orgs.managed")
+            ) : (
+              t("orgs.assistantHint")
+            )
+          }
+        >
           <Switch
             aria-label={t("orgs.assistant")}
             checked={settings.data?.settings.assistant ?? true}

@@ -3970,6 +3970,7 @@ components:
       properties:
         settings: { $ref: "#/components/schemas/OrgSettings" }
         locked: { type: array, items: { type: string }, description: "Fields managed by the deployment" }
+        upgrade_url: { type: string, description: "Where the org's plan, which locks those fields, can be changed (Policy.UpgradeURL)" }
     OrgDomain:
       type: object
       required: [domain, org_id, created_at]

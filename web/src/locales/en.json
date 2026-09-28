@@ -1207,6 +1207,7 @@
     "retried": "Queued again."
   },
   "orgs": {
+    "notInPlan": "Not included in this organization's plan.",
     "createYours": "Create an organization",
     "upgrade": "Upgrade",
     "signInRequired": "Sign in again to open {{name}}",
