@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -214,6 +215,83 @@ func (k *App) OrgOwners(ctx context.Context, orgID string) ([]User, error) {
 		}
 	}
 	return out, nil
+}
+
+// OrgStats describes an org without reading its content (for a staff
+// console): people, pending invitations, repositories and how many of them
+// can't sync.
+type OrgStats struct {
+	Members        int `json:"members"`
+	Invitations    int `json:"invitations"`
+	Repos          int `json:"repos"`
+	UnhealthyRepos int `json:"unhealthy_repos"`
+}
+
+// OrgStats counts orgID's people and repositories.
+func (k *App) OrgStats(ctx context.Context, orgID string) (OrgStats, error) {
+	var st OrgStats
+	now := store.Millis(time.Now())
+	err := store.QueryRow(ctx, k.a.DB, `SELECT
+		(SELECT COUNT(*) FROM org_members WHERE org_id = ? AND status = 'active'),
+		(SELECT COUNT(*) FROM invites WHERE org_id = ? AND accepted_at IS NULL AND expires_at > ?),
+		(SELECT COUNT(*) FROM repos WHERE org_id = ?),
+		(SELECT COUNT(*) FROM repos WHERE org_id = ? AND health IN ('degraded', 'disconnected'))`,
+		orgID, orgID, now, orgID, orgID).Scan(&st.Members, &st.Invitations, &st.Repos, &st.UnhealthyRepos)
+	return st, err
+}
+
+// Orgs lists orgs whose slug or name contains query ("" for all), by name,
+// at most limit (0: all).
+func (k *App) Orgs(ctx context.Context, query string, limit int) ([]Org, error) {
+	all, err := orgs.List(ctx, k.a.DB)
+	if err != nil {
+		return nil, err
+	}
+	q := strings.ToLower(strings.TrimSpace(query))
+	var out []Org
+	for _, o := range all {
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+		if q == "" || strings.Contains(o.Slug, q) || strings.Contains(strings.ToLower(o.Name), q) {
+			out = append(out, o)
+		}
+	}
+	return out, nil
+}
+
+// OrgMembership is an org someone belongs to, and their role there.
+type OrgMembership struct {
+	Org  Org    `json:"org"`
+	Role string `json:"role"`
+}
+
+// OrgsOf lists the orgs u belongs to.
+func (k *App) OrgsOf(ctx context.Context, u User) ([]OrgMembership, error) {
+	list, err := orgs.ForUser(ctx, k.a.DB, u)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]OrgMembership, 0, len(list))
+	for _, o := range list {
+		role, err := orgs.MemberRole(ctx, k.a.DB, o.ID, u)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, OrgMembership{Org: o, Role: role})
+	}
+	return out, nil
+}
+
+// RevokeSessions signs userID out everywhere.
+func (k *App) RevokeSessions(ctx context.Context, userID string) error {
+	return k.a.Auth.RevokeUser(ctx, userID, "")
+}
+
+// Audit records action in orgID's audit log, as the system acting for the
+// program (data says who and why), so an org sees what was done to it.
+func (k *App) Audit(ctx context.Context, orgID, action string, data map[string]any) error {
+	return audit.Write(ctx, k.a.DB, audit.Entry{ActorType: audit.ActorSystem, OrgID: orgID, Action: action, TargetType: "org", TargetID: orgID, Data: data})
 }
 
 // ErrNotFound means what was looked up doesn't exist.

@@ -139,6 +139,18 @@ func TestEmbedding(t *testing.T) {
 	if role, err := app.OrgRole(ctx, acme.ID, alice); err != nil || role != kmdn.RoleOwner {
 		t.Fatalf("role: %q %v", role, err)
 	}
+	if st, err := app.OrgStats(ctx, acme.ID); err != nil || st.Members != 1 || st.Repos != 0 {
+		t.Fatalf("stats: %+v %v", st, err)
+	}
+	if list, err := app.Orgs(ctx, "acm", 10); err != nil || len(list) != 1 || list[0].Slug != "acme" {
+		t.Fatalf("orgs search: %v %v", list, err)
+	}
+	if ms, err := app.OrgsOf(ctx, alice); err != nil || len(ms) != 1 || ms[0].Role != kmdn.RoleOwner {
+		t.Fatalf("orgs of alice: %+v %v", ms, err)
+	}
+	if err := app.Audit(ctx, acme.ID, "staff.viewed", map[string]any{"staff": "ana"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := kmdn.ValidSlug("signup"); err == nil || kmdn.ValidSlug(kmdn.Slugify("Acme Corp")) != nil {
 		t.Fatalf("slugs: %v", err)
 	}
