@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/kmdn-app/kmdn/internal/app"
 	"github.com/kmdn-app/kmdn/internal/audit"
@@ -171,6 +172,17 @@ type App struct {
 // work (an org's requests, its jobs), like kmdn's own logs; New applies it
 // to the logger it's given.
 func LogHandler(h slog.Handler) slog.Handler { return telemetry.ContextHandler(h) }
+
+// RegisterMetrics adds an embedder's collectors to kmdn's /metrics. Label
+// them with bounded values only (never an org or user id).
+func RegisterMetrics(cs ...prometheus.Collector) error {
+	for _, c := range cs {
+		if err := telemetry.Registry.Register(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // New opens the database, applies migrations and builds kmdn.
 func New(ctx context.Context, cfg Config, log *slog.Logger, opts ...Option) (*App, error) {
