@@ -110,3 +110,44 @@ func TestBackupRestoreAndDoctor(t *testing.T) {
 		t.Fatalf("skip-db backup: %v", err)
 	}
 }
+
+// After the database is restored some other way (Postgres from its own
+// backups), resync-repos queues a sync of every repository, once each.
+func TestResyncRepos(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "kmdn.yaml")
+	var out bytes.Buffer
+	if err := run([]string{"init", "-config", cfgPath}, &out, &out); err != nil {
+		t.Fatal(err)
+	}
+	url := "sqlite://" + filepath.Join(dir, "kmdn.db")
+	t.Setenv("KMDN_DB_URL", url)
+	ctx := context.Background()
+	db, err := store.Open(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO forge_hosts (id, kind, display_name, created_at) VALUES ('fh_1', 'git', 'Git', 1)`,
+		`INSERT INTO repos (org_id, id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('org_default', 'repo_a', 'fh_1', 'northwind', 'a', 'a', 'main', 1)`,
+		`INSERT INTO repos (org_id, id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('org_default', 'repo_b', 'fh_1', 'northwind', 'b', 'b', 'main', 1)`,
+	} {
+		if _, err := store.Exec(ctx, db, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 2 {
+		out.Reset()
+		if err := run([]string{"admin", "resync-repos", "-config", cfgPath}, &out, &out); err != nil || !strings.Contains(out.String(), "Queued a sync of 2 repositories") {
+			t.Fatalf("resync: %v %s", err, out.String())
+		}
+	}
+	var n int
+	if err := store.QueryRow(ctx, db, `SELECT COUNT(*) FROM jobs WHERE kind = 'repo.sync' AND status = 'pending'`).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("queued syncs: %d %v", n, err)
+	}
+}

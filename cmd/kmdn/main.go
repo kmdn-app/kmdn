@@ -36,6 +36,9 @@ Usage:
   kmdn admin rotate-secret-key -new KEY
   kmdn admin rotate-org-key -org SLUG
                                      re-encrypt stored credentials with a new key
+  kmdn admin resync-repos            queue a sync of every repository, cloning
+                                     missing mirrors (after restoring the
+                                     database some other way)
   kmdn doctor  [-offline]            check git, the data dir, the database, the
                                      secret key, SMTP, forges and the AI provider
   kmdn backup  [-out FILE.tar.zst] [-skip-db] [-include-secrets]
@@ -111,8 +114,13 @@ func run(args []string, stdout, stderr io.Writer) error {
 				return err
 			}
 			return rotateOrgKey(*cfgPath, *slug, stdout)
+		case len(rest) > 0 && rest[0] == "resync-repos":
+			if err := fs.Parse(rest[1:]); err != nil {
+				return err
+			}
+			return resyncRepos(*cfgPath, stdout)
 		}
-		return errors.New("usage: kmdn admin rotate-secret-key -new <base64 32-byte key> | kmdn admin rotate-org-key -org <slug>")
+		return errors.New("usage: kmdn admin rotate-secret-key -new <base64 32-byte key> | kmdn admin rotate-org-key -org <slug> | kmdn admin resync-repos")
 	case "doctor":
 		offline := fs.Bool("offline", false, "skip network checks (SMTP, forges, AI provider)")
 		if err := fs.Parse(rest); err != nil {
@@ -324,6 +332,27 @@ func rotateSecretKey(cfgPath, newKey string, out io.Writer) error {
 }
 
 // rotateOrgKey gives one org a new key and re-wraps its secrets.
+// resyncRepos queues a sync of every repository (the running server picks
+// the jobs up).
+func resyncRepos(cfgPath string, out io.Writer) error {
+	cfg, err := config.Load(cfgPath, os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	db, err := store.Open(ctx, cfg.DB.URL)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	n, err := backup.ResyncRepos(ctx, db)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Queued a sync of %d repositories; missing mirrors are cloned again as they run.\n", n)
+	return nil
+}
+
 func rotateOrgKey(cfgPath, slug string, out io.Writer) error {
 	if slug == "" {
 		return errors.New("-org is required")
