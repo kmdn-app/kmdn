@@ -275,7 +275,10 @@ type Session struct {
 	ExpiresAt  time.Time `json:"expires_at"`
 	IP         string    `json:"ip"`
 	UserAgent  string    `json:"user_agent"`
-	Current    bool      `json:"current"`
+	// Method is how the session was signed in (magic_link, passkey,
+	// oauth_github, provider:<id>, …); "" for sessions from before.
+	Method  string `json:"method"`
+	Current bool   `json:"current"`
 }
 
 func (s *Service) ttl() time.Duration {
@@ -287,14 +290,19 @@ func (s *Service) ttl() time.Duration {
 
 // CreateSession starts a session and returns the raw cookie token.
 func (s *Service) CreateSession(ctx context.Context, q store.Querier, userID, ip, ua string) (token string, sess Session, err error) {
+	return s.CreateSessionBy(ctx, q, userID, ip, ua, "")
+}
+
+// CreateSessionBy creates a session signed in with method.
+func (s *Service) CreateSessionBy(ctx context.Context, q store.Querier, userID, ip, ua, method string) (token string, sess Session, err error) {
 	token = Token(32)
 	now := s.clock()
 	if len(ua) > 300 {
 		ua = ua[:300]
 	}
-	sess = Session{ID: Hash(token), UserID: userID, CSRF: Token(24), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(s.ttl()), IP: ip, UserAgent: ua}
-	_, err = store.Exec(ctx, q, `INSERT INTO sessions (id_hash, user_id, csrf_token, created_at, last_seen_at, expires_at, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		sess.ID, userID, sess.CSRF, store.Millis(now), store.Millis(now), store.Millis(sess.ExpiresAt), ip, ua)
+	sess = Session{ID: Hash(token), UserID: userID, CSRF: Token(24), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(s.ttl()), IP: ip, UserAgent: ua, Method: method}
+	_, err = store.Exec(ctx, q, `INSERT INTO sessions (id_hash, user_id, csrf_token, created_at, last_seen_at, expires_at, ip, user_agent, method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sess.ID, userID, sess.CSRF, store.Millis(now), store.Millis(now), store.Millis(sess.ExpiresAt), ip, ua, method)
 	return token, sess, err
 }
 
@@ -302,8 +310,8 @@ func (s *Service) CreateSession(ctx context.Context, q store.Querier, userID, ip
 func (s *Service) Lookup(ctx context.Context, token string) (Session, users.User, error) {
 	var sess Session
 	var created, seen, exp int64
-	err := store.QueryRow(ctx, s.DB, `SELECT id_hash, user_id, csrf_token, created_at, last_seen_at, expires_at, ip, user_agent FROM sessions WHERE id_hash = ?`, Hash(token)).
-		Scan(&sess.ID, &sess.UserID, &sess.CSRF, &created, &seen, &exp, &sess.IP, &sess.UserAgent)
+	err := store.QueryRow(ctx, s.DB, `SELECT id_hash, user_id, csrf_token, created_at, last_seen_at, expires_at, ip, user_agent, method FROM sessions WHERE id_hash = ?`, Hash(token)).
+		Scan(&sess.ID, &sess.UserID, &sess.CSRF, &created, &seen, &exp, &sess.IP, &sess.UserAgent, &sess.Method)
 	if err != nil {
 		return sess, users.User{}, store.NotFound(err)
 	}
@@ -344,7 +352,7 @@ func (s *Service) RevokeUser(ctx context.Context, userID, keep string) error {
 
 // Sessions lists a user's active sessions, newest first.
 func (s *Service) Sessions(ctx context.Context, userID, current string) ([]Session, error) {
-	rows, err := store.Query(ctx, s.DB, `SELECT id_hash, created_at, last_seen_at, expires_at, ip, user_agent FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY last_seen_at DESC`,
+	rows, err := store.Query(ctx, s.DB, `SELECT id_hash, created_at, last_seen_at, expires_at, ip, user_agent, method FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY last_seen_at DESC`,
 		userID, store.Millis(s.clock()))
 	if err != nil {
 		return nil, err
@@ -354,7 +362,7 @@ func (s *Service) Sessions(ctx context.Context, userID, current string) ([]Sessi
 	for rows.Next() {
 		var ss Session
 		var c, l, e int64
-		if err := rows.Scan(&ss.ID, &c, &l, &e, &ss.IP, &ss.UserAgent); err != nil {
+		if err := rows.Scan(&ss.ID, &c, &l, &e, &ss.IP, &ss.UserAgent, &ss.Method); err != nil {
 			return nil, err
 		}
 		ss.CreatedAt, ss.LastSeenAt, ss.ExpiresAt = store.FromMillis(c), store.FromMillis(l), store.FromMillis(e)
@@ -378,4 +386,37 @@ func (s *Service) audit(ctx context.Context, e audit.Entry) {
 	if err := audit.Write(ctx, s.DB, e); err != nil && s.Log != nil {
 		s.Log.Error("audit write failed", "action", e.Action, "error", err)
 	}
+}
+
+// SignInAllowed refuses a sign-in with method when u belongs to orgs and none
+// of them accepts it; the first org's reason is returned. Owners and instance
+// admins can always sign in (the break-glass path), and so can people in no
+// org. Orgs that refuse are enforced again whenever the session acts in them
+// (orgs.Role).
+func (s *Service) SignInAllowed(ctx context.Context, u users.User, method string) (*policy.SignInRequired, error) {
+	if s.Policy == nil || s.Policy.SignIn == nil || u.IsInstanceAdmin {
+		return nil, nil
+	}
+	list, err := orgs.ForUser(ctx, s.DB, u)
+	if err != nil {
+		return nil, err
+	}
+	var first *policy.SignInRequired
+	for _, o := range list {
+		role, err := orgs.MemberRole(ctx, s.DB, o.ID, u)
+		if err != nil {
+			return nil, err
+		}
+		if role == orgs.Owner {
+			return nil, nil
+		}
+		req := s.Policy.SignInFor(ctx, o.ID, method)
+		if req == nil {
+			return nil, nil
+		}
+		if first == nil {
+			first = req
+		}
+	}
+	return first, nil
 }

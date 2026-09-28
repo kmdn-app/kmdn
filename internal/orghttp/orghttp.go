@@ -18,6 +18,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/events"
 	"github.com/kmdn-app/kmdn/internal/orgs"
+	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
@@ -40,6 +41,17 @@ type Service struct {
 type View struct {
 	orgs.Org
 	Role string `json:"role"`
+	// SignIn is set when the session can't act in the org until the person
+	// signs in the way it asks.
+	SignIn *policy.SignInRequired `json:"sign_in,omitempty"`
+}
+
+func signInRequired(ctx context.Context, orgID string) *policy.SignInRequired {
+	var req *policy.SignInRequired
+	if errors.As(orgs.SignInBlocked(ctx, orgID), &req) {
+		return req
+	}
+	return nil
 }
 
 var (
@@ -102,6 +114,14 @@ func (s *Service) Resolve(next http.Handler) http.Handler {
 			return
 		}
 		if role == "" && !p.User.IsInstanceAdmin {
+			// A member whose session the org doesn't accept learns how to
+			// sign in; everyone else gets 404.
+			if req := signInRequired(r.Context(), o.ID); req != nil {
+				if member, _ := orgs.MemberRole(r.Context(), s.DB, o.ID, p.User); member != "" {
+					api.Error(w, r, req.Problem())
+					return
+				}
+			}
 			api.Error(w, r, api.ErrNotFound)
 			return
 		}
@@ -143,7 +163,18 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 			api.Error(w, r, err)
 			return
 		}
-		out = append(out, View{o, role})
+		v := View{Org: o, Role: role}
+		if role == "" && !p.User.IsInstanceAdmin {
+			if v.SignIn = signInRequired(r.Context(), o.ID); v.SignIn == nil {
+				out = append(out, v)
+				continue
+			}
+			if v.Role, err = orgs.MemberRole(r.Context(), s.DB, o.ID, p.User); err != nil {
+				api.Error(w, r, err)
+				return
+			}
+		}
+		out = append(out, v)
 	}
 	mode, err := orgs.Mode(r.Context(), s.DB)
 	if err != nil {
@@ -201,7 +232,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Events.Emit(ctx, events.Event{Type: events.OrgCreated, OrgID: o.ID, UserID: p.User.ID, Data: map[string]any{"slug": o.Slug}})
 	s.Events.Emit(ctx, events.Event{Type: events.MemberAdded, OrgID: o.ID, UserID: p.User.ID, Data: map[string]any{"role": orgs.Owner}})
-	api.JSON(w, http.StatusCreated, View{o, orgs.Owner})
+	api.JSON(w, http.StatusCreated, View{Org: o, Role: orgs.Owner})
 }
 
 // createFree creates an org with a slug made from its name, adding -2, -3…
@@ -241,7 +272,7 @@ func (s *Service) slugError(w http.ResponseWriter, r *http.Request, err error) b
 
 func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 	c, _ := orgs.FromContext(r.Context())
-	api.JSON(w, http.StatusOK, View{c.Org, c.Role})
+	api.JSON(w, http.StatusOK, View{Org: c.Org, Role: c.Role})
 }
 
 func (s *Service) update(w http.ResponseWriter, r *http.Request) {
@@ -286,7 +317,7 @@ func (s *Service) update(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
-	api.JSON(w, http.StatusOK, View{o, c.Role})
+	api.JSON(w, http.StatusOK, View{Org: o, Role: c.Role})
 }
 
 func (s *Service) getSettings(w http.ResponseWriter, r *http.Request) {

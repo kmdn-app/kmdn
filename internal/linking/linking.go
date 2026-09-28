@@ -290,7 +290,7 @@ func (s *Service) callback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.AuthH.SignIn(w, r, u, "oauth_"+h.Kind); err != nil {
-			fail(w, r, st, "session")
+			fail(w, r, st, auth.SignInErrorCode(err))
 			return
 		}
 		http.Redirect(w, r, safeRedirect(st.Redirect), http.StatusFound)

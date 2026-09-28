@@ -44,6 +44,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/outbound"
 	"github.com/kmdn-app/kmdn/internal/policy"
+	"github.com/kmdn-app/kmdn/internal/provision"
 	"github.com/kmdn-app/kmdn/internal/publish"
 	"github.com/kmdn-app/kmdn/internal/realtime"
 	"github.com/kmdn-app/kmdn/internal/repos"
@@ -99,6 +100,8 @@ type App struct {
 	Events events.Sink
 	// Content serves user bytes from server.content_base_url, when set.
 	Content *content.Origin
+	// Provision changes org membership from an outside source.
+	Provision *provision.Service
 
 	stopTracing func(context.Context) error
 	Invites     *invites.Service
@@ -121,6 +124,8 @@ type Options struct {
 	// kmdn's and recorded in MigrationsTable.
 	Migrations      fs.FS
 	MigrationsTable string
+	// Providers are extra ways to sign in (auth.Provider).
+	Providers []auth.Provider
 }
 
 // New opens the database, applies migrations and builds the services.
@@ -198,7 +203,14 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 
 	r := a.Server.API()
 	r.Use(a.AuthH.Middleware)
+	for _, p := range opts.Providers {
+		if err := a.AuthH.AddProvider(p); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
 	a.AuthH.Routes(r)
+	a.Provision = &provision.Service{DB: db, Policy: a.Policy, Events: opts.Events}
 	a.Setup.Routes(r)
 	(&admin.SMTP{DB: db, Mail: a.Mail, Secrets: sec, Log: log}).Routes(r)
 

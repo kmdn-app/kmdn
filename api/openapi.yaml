@@ -1464,6 +1464,49 @@ paths:
                 required: [items]
                 properties:
                   items: { type: array, items: { type: object, required: [id, kind, display_name], properties: { id: { type: string }, kind: { type: string }, display_name: { type: string } } } }
+  /auth/providers:
+    get:
+      tags: [auth]
+      operationId: listSignInProviders
+      security: []
+      responses:
+        "200":
+          description: Sign-in providers added by an embedding program and listed on the sign-in page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { type: object, required: [id, name, start_url], properties: { id: { type: string }, name: { type: string }, start_url: { type: string } } } }
+  /auth/providers/{id}/start:
+    get:
+      tags: [auth]
+      operationId: startSignInProvider
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: redirect, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Redirect to the identity provider }
+  /auth/providers/{id}/callback:
+    get:
+      tags: [auth]
+      operationId: signInProviderCallback
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "302": { description: Signed in (to the redirect) or back to the sign-in page with oauth_error }
+    post:
+      tags: [auth]
+      operationId: signInProviderCallbackPost
+      security: []
+      description: For identity providers that answer with a form POST (SAML).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "302": { description: Signed in (to the redirect) or back to the sign-in page with oauth_error }
   /auth/oauth/{host}/start:
     get:
       tags: [auth]
@@ -3901,6 +3944,14 @@ components:
           required: [role]
           properties:
             role: { type: string, enum: [member, admin, owner, ""], description: "Empty for an instance admin outside the org" }
+            sign_in:
+              type: object
+              description: Set when this session can't act in the org until the person signs in the way the org asks
+              required: [org_id, message]
+              properties:
+                org_id: { type: string }
+                message: { type: string }
+                url: { type: string, description: Starts a sign-in the org accepts }
     OrgInput:
       type: object
       required: [name]
@@ -4269,6 +4320,7 @@ components:
         expires_at: { type: string, format: date-time }
         ip: { type: string }
         user_agent: { type: string }
+        method: { type: string, description: "How the session was signed in (magic_link, passkey, oauth_github, provider:<id>, …); empty for older sessions" }
         current: { type: boolean }
     SetupStatus:
       type: object

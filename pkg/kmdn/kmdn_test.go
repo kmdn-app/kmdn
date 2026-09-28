@@ -11,6 +11,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"testing/fstest"
@@ -62,6 +63,7 @@ func TestEmbedding(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(map[string]string{"email": u.Email})
 			})
 		}),
+		kmdn.WithSignInProvider(sso{}),
 		kmdn.WithOrgRoutes(func(r chi.Router) {
 			r.Get("/billing", func(w http.ResponseWriter, r *http.Request) {
 				o, role, _ := kmdn.CurrentOrg(r)
@@ -131,6 +133,18 @@ func TestEmbedding(t *testing.T) {
 	if err := app.ResumeOrg(ctx, acme.ID); err != nil {
 		t.Fatal(err)
 	}
+	if res, err := http.Get(srv.URL + "/api/v1/auth/providers"); err != nil || res.StatusCode != 200 {
+		t.Fatalf("sign-in providers: %v", err)
+	} else {
+		b, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if !strings.Contains(string(b), `"id":"sso"`) {
+			t.Fatalf("sign-in providers: %s", b)
+		}
+	}
+	if _, err := app.Provisioner().Upsert(ctx, acme.ID, "scim", kmdn.ProvisionedMember{Email: "bob@acme.dev", Active: true}); err != nil {
+		t.Fatal(err)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -138,7 +152,19 @@ func TestEmbedding(t *testing.T) {
 	for _, e := range seen {
 		count[e.Type]++
 	}
-	if count[kmdn.EventOrgCreated] != 2 || count[kmdn.EventMemberAdded] != 2 || count[kmdn.EventOrgStatusChanged] != 2 {
+	if count[kmdn.EventOrgCreated] != 2 || count[kmdn.EventMemberAdded] != 3 || count[kmdn.EventOrgStatusChanged] != 2 {
 		t.Fatalf("events: %v", count)
 	}
+}
+
+// sso is a provider as an embedder writes one.
+type sso struct{}
+
+func (sso) Info() kmdn.ProviderInfo { return kmdn.ProviderInfo{ID: "sso", Name: "SSO", Listed: true} }
+func (sso) Start(w http.ResponseWriter, r *http.Request, state string) error {
+	http.Redirect(w, r, "https://idp.example.com/?state="+state, http.StatusFound)
+	return nil
+}
+func (sso) Callback(r *http.Request) (kmdn.Identity, string, error) {
+	return kmdn.Identity{Issuer: "https://idp.example.com", Subject: r.FormValue("sub")}, r.FormValue("state"), nil
 }
