@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Building2, Scale, Waypoints } from "lucide-react";
 import { Bell, Check, ChevronsUpDown, FilePen, Home, LayoutList, LogOut, Monitor, Moon, Plus, Search, Settings, Shield, Sun, UserRound } from "lucide-react";
@@ -30,7 +30,7 @@ import { usePresence, useRevisionFiles, useRevisions, useRevisionTree, type Revi
 import { cn } from "@/lib/utils";
 import { usePalette } from "./command-palette";
 import { ForgeIcon } from "./forge-icon";
-import { currentOrg, useAssistantStatus, useCurrentOrg, useOrgs } from "@/lib/orgs";
+import { currentOrg, orgsInfoQuery, useAssistantStatus, useCurrentOrg, useOrgs } from "@/lib/orgs";
 
 const itemCls =
   "flex h-[1.875rem] w-full items-center gap-2 rounded-[0.4375rem] px-2 text-left text-[0.8125rem] whitespace-nowrap text-sidebar-foreground hover:bg-sidebar-accent [&.active]:bg-sidebar-accent [&.active]:font-medium [&_svg]:size-4 [&_svg]:text-muted-foreground";
@@ -51,6 +51,7 @@ function RepoSwitcher({ repo }: { repo?: RepoView }) {
   const { t } = useTranslation();
   const { data: repos } = useRepos();
   const { data: orgs } = useOrgs();
+  const { data: orgsInfo } = useQuery(orgsInfoQuery);
   const org = useCurrentOrg();
   const { data: me } = useMe();
   const { data: setup } = useSetupStatus();
@@ -88,6 +89,15 @@ function RepoSwitcher({ repo }: { repo?: RepoView }) {
                 {o.slug === org?.slug && <Check className="ml-auto" />}
               </DropdownMenuItem>
             ))}
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {orgsInfo?.mode === "multi" && !orgsInfo.can_create && orgsInfo.signup_url && (
+          <>
+            <DropdownMenuItem onSelect={() => window.location.assign(orgsInfo.signup_url!)}>
+              <Plus />
+              {t("orgs.createYours")}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
         )}

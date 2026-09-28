@@ -83,6 +83,10 @@ type Limits struct {
 	Repos   int
 	// UploadMaxMB lowers the instance's upload size limit.
 	UploadMaxMB int
+	// RepoMB caps a repository's mirror on disk (what kmdn stores of it);
+	// RepoFiles caps the files in its content scope.
+	RepoMB    int
+	RepoFiles int
 }
 
 // ErrLimit is returned when an org is at one of its limits.
