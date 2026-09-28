@@ -101,7 +101,8 @@ export interface paths {
         get: operations["getMe"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Erase your account (GDPR); what you wrote stays as "Deleted user" */
+        delete: operations["eraseMe"];
         options?: never;
         head?: never;
         patch: operations["updateMe"];
@@ -316,7 +317,8 @@ export interface paths {
         get: operations["getOrg"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete the organization (owners); restorable for 30 days, then purged */
+        delete: operations["deleteOrg"];
         options?: never;
         head?: never;
         /** Rename the org (admins) or change its address (owners) */
@@ -540,6 +542,40 @@ export interface paths {
         get: operations["listAllOrgs"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/orgs/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Organizations being deleted, restorable until purge_after (instance admins) */
+        get: operations["listDeletedOrgs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/orgs/{org}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo an organization's deletion before it's purged (instance admins) */
+        post: operations["restoreOrg"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1020,7 +1056,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Erase an account (instance admins) */
+        delete: operations["eraseUser"];
         options?: never;
         head?: never;
         patch: operations["updateUser"];
@@ -4369,6 +4406,33 @@ export interface operations {
             401: components["responses"]["Problem"];
         };
     };
+    eraseMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Your email address */
+                    confirm: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Erased and signed out */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     updateMe: {
         parameters: {
             query?: never;
@@ -4796,6 +4860,43 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
+        };
+    };
+    deleteOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The organization's slug */
+                    confirm: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Deletion requested */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: boolean;
+                        /** Format: date-time */
+                        purge_after: string;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     updateOrg: {
@@ -5297,6 +5398,59 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    listDeletedOrgs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Orgs being deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            id: string;
+                            slug: string;
+                            name: string;
+                            /** Format: date-time */
+                            deleted_at: string;
+                            /** Format: date-time */
+                            purge_after: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    restoreOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     updateOrgStatus: {
@@ -6091,6 +6245,28 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    eraseUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Erased */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     updateUser: {

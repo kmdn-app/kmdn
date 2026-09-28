@@ -34,6 +34,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/hooks"
 	"github.com/kmdn-app/kmdn/internal/invites"
 	"github.com/kmdn-app/kmdn/internal/jobs"
+	"github.com/kmdn-app/kmdn/internal/lifecycle"
 	"github.com/kmdn-app/kmdn/internal/linking"
 	"github.com/kmdn-app/kmdn/internal/links"
 	"github.com/kmdn-app/kmdn/internal/llm"
@@ -102,6 +103,8 @@ type App struct {
 	Content *content.Origin
 	// Provision changes org membership from an outside source.
 	Provision *provision.Service
+	// Lifecycle deletes orgs and erases accounts.
+	Lifecycle *lifecycle.Service
 
 	stopTracing func(context.Context) error
 	Invites     *invites.Service
@@ -370,10 +373,12 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 
 	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL, Policy: a.Policy, Events: opts.Events}
+	a.Lifecycle = &lifecycle.Service{DB: db, Repos: a.Repos, Blobs: uploads, Secrets: sec, Events: opts.Events, Log: log}
+	a.Lifecycle.Routes(r, a.AuthH)
 	a.Invites.Routes(r)
 	link := &linking.Service{DB: db, Secrets: sec, AuthH: a.AuthH, BaseURL: a.Repos.BaseURL, HTTP: a.Repos.Adapters.HTTP, Adapters: a.Repos.Adapters}
 	link.Routes(r)
-	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes, a.Invites.OrgRoutes, a.MCP.OrgRoutes, a.LLM.OrgRoutes, a.Repos.OrgForgeRoutes, link.OrgRoutes, func(r chi.Router) {
+	a.Orgs.Routes(r, a.Lifecycle.OrgRoutes, a.Repos.OrgRoutes, people.OrgRoutes, a.Invites.OrgRoutes, a.MCP.OrgRoutes, a.LLM.OrgRoutes, a.Repos.OrgForgeRoutes, link.OrgRoutes, func(r chi.Router) {
 		if opts.OrgRoutes != nil {
 			opts.OrgRoutes(r)
 		}
@@ -425,6 +430,10 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 		a.stopTracing = shutdown
 	}
 
+	a.Jobs.Register(lifecycle.JobPurge, func(ctx context.Context, _ jobs.Job) (any, error) {
+		n, err := a.Lifecycle.PurgeDue(ctx)
+		return map[string]int{"purged": n}, err
+	})
 	a.Jobs.Register("auth.purge", func(ctx context.Context, _ jobs.Job) (any, error) {
 		if err := notify.Purge(ctx, a.DB); err != nil {
 			return nil, err
@@ -443,6 +452,7 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	go a.LLM.CheckEnv(ctx)
 	go a.periodic(ctx, time.Hour, "auth.purge")
+	go a.periodic(ctx, time.Hour, lifecycle.JobPurge)
 	go a.periodic(ctx, time.Hour, consistency.JobSchedule)
 	// Events recorded without a revision change (updates prepared, threads)
 	// still reach people within a minute.

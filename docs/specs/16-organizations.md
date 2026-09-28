@@ -155,6 +155,23 @@ http.ListenAndServe(addr, app.Handler())          // or app.Run(ctx)
 
 `pkg/kmdn/kmdn_test.go` is an embedding program that uses only this package (two orgs, its own routes, migrations, settings, limits, events, a sign-in provider and provisioning), so the surface can't break unnoticed. Sign-in providers, the sign-in policy and the provisioner are described in [Sign-in](#sign-in).
 
+## Lifecycle
+
+- **Deleting an org:**
+  - An owner deletes the org with `DELETE /orgs/{org}`, typing its slug to confirm. The org is unreachable at once: its routes answer 404, and so do ID-addressed resources (`access.Effective` treats a deleting org like no membership).
+  - For 30 days an instance admin can restore it (`GET /admin/orgs/deleted`, `POST /admin/orgs/{org}/restore`, or `App.RestoreOrg`).
+  - After that, the hourly `orgs.purge` job deletes it for good:
+    1. Its key and secrets go first (crypto-shredding: what they encrypted can't be read from any backup).
+    2. Then its rows in every tenant table and, through cascades, everything under its repos.
+    3. Then its mirrors and uploads.
+  - The default org can't be deleted in single mode.
+- **Erasing an account (GDPR):** `DELETE /me` (typing the email address) or `DELETE /admin/users/{id}` erases:
+  - sign-ins, passkeys, linked identities, memberships, grants, follows, reads, notifications and preferences;
+  - the name and email, replaced with "Deleted user" and an undeliverable address, so the address is free for a new account.
+
+  What the person wrote stays, attributed to "Deleted user", and forge history isn't touched. The account can't be erased while it's the only owner of an org that has other members. Orgs where it was the only member are deleted.
+- The export of an org's data is the next step.
+
 ## Isolation
 
 1. **Service layer**: every org-scoped query filters by the org from the context; every ID-addressed resource is checked against the caller's memberships where it's loaded.

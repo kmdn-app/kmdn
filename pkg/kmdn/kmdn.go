@@ -22,6 +22,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/events"
+	"github.com/kmdn-app/kmdn/internal/lifecycle"
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/policy"
@@ -84,6 +85,7 @@ var ErrLastOwner = provision.ErrLastOwner
 const (
 	EventOrgCreated       = events.OrgCreated
 	EventOrgStatusChanged = events.OrgStatusChanged
+	EventOrgDeleted       = events.OrgDeleted
 	EventMemberAdded      = events.MemberAdded
 	EventMemberChanged    = events.MemberChanged
 	EventMemberRemoved    = events.MemberRemoved
@@ -440,6 +442,32 @@ func (k *App) OrgByID(ctx context.Context, id string) (Org, error) {
 func (k *App) SuspendOrg(ctx context.Context, orgID, reason string) error {
 	return k.setStatus(ctx, orgID, orgs.Suspended, reason)
 }
+
+// DeleteOrg starts deleting an org: unreachable at once, restorable with
+// RestoreOrg until it's purged (30 days, hourly), or right away with PurgeOrg.
+func (k *App) DeleteOrg(ctx context.Context, orgID, why string) error {
+	return k.a.Lifecycle.RequestDeletion(ctx, orgID, audit.Entry{ActorType: audit.ActorSystem, Data: map[string]any{"why": why}})
+}
+
+// RestoreOrg undoes DeleteOrg before the purge.
+func (k *App) RestoreOrg(ctx context.Context, orgID string) error {
+	return k.a.Lifecycle.Restore(ctx, orgID, audit.Entry{ActorType: audit.ActorSystem})
+}
+
+// PurgeOrg deletes a deleted org for good now: rows, mirrors, uploads and
+// its key.
+func (k *App) PurgeOrg(ctx context.Context, orgID string) error {
+	return k.a.Lifecycle.Purge(ctx, orgID)
+}
+
+// EraseUser erases an account (GDPR); see DELETE /me. It fails with a
+// *SoleOwnerError while the person is the only owner of an org with others.
+func (k *App) EraseUser(ctx context.Context, userID, why string) error {
+	return k.a.Lifecycle.EraseUser(ctx, userID, audit.Entry{ActorType: audit.ActorSystem, Data: map[string]any{"why": why}})
+}
+
+// SoleOwnerError is EraseUser's refusal.
+type SoleOwnerError = lifecycle.SoleOwnerError
 
 // ResumeOrg lifts a suspension.
 func (k *App) ResumeOrg(ctx context.Context, orgID string) error {

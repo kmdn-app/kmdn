@@ -129,6 +129,24 @@ func ByExternal(ctx context.Context, q store.Querier, hostID, externalID string)
 	return r, store.NotFound(err)
 }
 
+// ListIn lists an org's repositories.
+func ListIn(ctx context.Context, q store.Querier, orgID string) ([]Repo, error) {
+	rows, err := store.Query(ctx, q, `SELECT `+repoCols+repoFrom+` WHERE r.org_id = ? ORDER BY r.display_name`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Repo{}
+	for rows.Next() {
+		r, err := scanRepo(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // List returns repos by id (all when ids is nil and all is true).
 func List(ctx context.Context, q store.Querier, ids []string, all bool) ([]Repo, error) {
 	query := `SELECT ` + repoCols + repoFrom

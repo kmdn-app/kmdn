@@ -110,6 +110,19 @@ paths:
       responses:
         "204": { description: Signed out }
   /me:
+    delete:
+      tags: [me]
+      operationId: eraseMe
+      summary: Erase your account (GDPR); what you wrote stays as "Deleted user"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [confirm], properties: { confirm: { type: string, description: "Your email address" } } }
+      responses:
+        "200": { description: Erased and signed out }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
     get:
       tags: [me]
       operationId: getMe
@@ -351,6 +364,22 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
   /orgs/{org}:
+    delete:
+      tags: [orgs]
+      operationId: deleteOrg
+      summary: Delete the organization (owners); restorable for 30 days, then purged
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [confirm], properties: { confirm: { type: string, description: "The organization's slug" } } }
+      responses:
+        "200": { description: Deletion requested, content: { application/json: { schema: { type: object, required: [ok, purge_after], properties: { ok: { type: boolean }, purge_after: { type: string, format: date-time } } } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
     get:
       tags: [orgs]
       operationId: getOrg
@@ -625,6 +654,32 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Org" } } } }
+  /admin/orgs/deleted:
+    get:
+      tags: [admin]
+      operationId: listDeletedOrgs
+      summary: Organizations being deleted, restorable until purge_after (instance admins)
+      responses:
+        "200":
+          description: Orgs being deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { type: object, required: [id, slug, name, deleted_at, purge_after], properties: { id: { type: string }, slug: { type: string }, name: { type: string }, deleted_at: { type: string, format: date-time }, purge_after: { type: string, format: date-time } } } }
+  /admin/orgs/{org}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreOrg
+      summary: Undo an organization's deletion before it's purged (instance admins)
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      responses:
+        "200": { description: Restored }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /admin/orgs/{org}:
     patch:
       tags: [admin]
@@ -1041,6 +1096,16 @@ paths:
             application/json:
               schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } } } }
   /admin/users/{id}:
+    delete:
+      tags: [admin]
+      operationId: eraseUser
+      summary: Erase an account (instance admins)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Erased }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
     patch:
       tags: [admin]
       operationId: updateUser

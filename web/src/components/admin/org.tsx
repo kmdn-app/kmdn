@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { CheckCircle2, Clock, Loader2, Plus, Trash2 } from "lucide-react";
 import type { components } from "@kmdn/api-client";
 import { Card, Panel, Row } from "@/components/settings-layout";
+import { DangerZone } from "@/components/danger-zone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,14 @@ export function OrganizationPanel() {
     mutationFn: () => unwrap(api.POST("/orgs/{org}/admin/domains", { params: { path: { org: currentOrg() } }, body: { domain } })),
     onSuccess: () => (setDomain(""), void qc.invalidateQueries({ queryKey: ["org-domains"] })),
     onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
+  const remove = useMutation({
+    mutationFn: (confirm: string) => unwrap(api.DELETE("/orgs/{org}", { params: { path: { org: currentOrg() } }, body: { confirm } })),
+    onSuccess: async () => {
+      toast.success(t("orgs.deleted"));
+      await qc.invalidateQueries({ queryKey: ["orgs"] });
+      await navigate({ to: "/" });
+    },
   });
   const removeDomain = useMutation({
     mutationFn: (d: string) => unwrap(api.DELETE("/orgs/{org}/admin/domains/{domain}", { params: { path: { org: currentOrg(), domain: d } } })),
@@ -182,6 +191,18 @@ export function OrganizationPanel() {
           </Button>
         </form>
       </Card>
+      {owner && (
+        <DangerZone
+          title={t("orgs.deleteTitle")}
+          desc={t("orgs.deleteHint")}
+          action={t("orgs.deleteAction")}
+          confirmLabel={t("orgs.deleteConfirm", { slug: org.slug })}
+          expected={org.slug}
+          onConfirm={(c) => remove.mutate(c)}
+          pending={remove.isPending}
+          error={remove.error}
+        />
+      )}
     </Panel>
   );
 }
@@ -195,6 +216,16 @@ export function OrgsPanel() {
   const [newName, setNewName] = useState("");
   const info = useQuery(orgsInfoQuery);
   const all = useQuery({ queryKey: ["admin-orgs"], queryFn: async () => (await unwrap(api.GET("/admin/orgs"))).items });
+  const deleted = useQuery({ queryKey: ["admin-orgs", "deleted"], queryFn: async () => (await unwrap(api.GET("/admin/orgs/deleted"))).items });
+  const restore = useMutation({
+    mutationFn: (slug: string) => unwrap(api.POST("/admin/orgs/{org}/restore", { params: { path: { org: slug } } })),
+    onSuccess: () => {
+      toast.success(t("orgs.restored"));
+      void qc.invalidateQueries({ queryKey: ["admin-orgs"] });
+      void qc.invalidateQueries({ queryKey: ["orgs"] });
+    },
+    onError: (e) => toast.error(errorMessage(e, t("errors.generic"))),
+  });
   const setStatus = useMutation({
     mutationFn: (o: Org) =>
       unwrap(api.PATCH("/admin/orgs/{org}", { params: { path: { org: o.slug } }, body: { status: o.status === "active" ? "suspended" : "active" } })),
@@ -248,6 +279,27 @@ export function OrgsPanel() {
           </tbody>
         </table>
       </div>
+      {(deleted.data?.length ?? 0) > 0 && (
+        <div className="overflow-x-auto rounded-xl border">
+          <table className="w-full text-[0.84375rem]">
+            <tbody>
+              {deleted.data!.map((o) => (
+                <tr key={o.id} className="border-b last:border-0">
+                  <td className="px-3 py-2.5">
+                    <div className="font-medium">{o.name}</div>
+                    <div className="text-xs text-muted-foreground">{t("orgs.purgeAfter", { date: new Date(o.purge_after).toLocaleDateString() })}</div>
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <Button variant="ghost" size="sm" disabled={restore.isPending} onClick={() => restore.mutate(o.slug)}>
+                      {t("orgs.restore")}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent>
           <DialogHeader>
