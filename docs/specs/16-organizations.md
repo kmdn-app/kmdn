@@ -113,7 +113,7 @@ Stored as `<org>/<sha[:2]>/<sha>` behind a blob store (`blobs.Store`: Put, Get, 
 
 ## AI
 
-`assistant_runs.org_id`; budgets are per user per day and **per org per month** (the former instance budget becomes the org budget; the instance keeps an optional global cap). An org setting (or the embedder) can turn every LLM feature off for an org. Provider and keys stay instance settings.
+`assistant_runs.org_id`; budgets are per user per day and **per org per month** (the former instance budget becomes the org budget; the instance keeps an optional global cap). Work nobody asked for right now (runs without a user: consistency checks, change summaries, embeddings) stops at 80% of the org's monthly budget, so the rest stays for people's own requests. `ai.usage` events carry the input, output and cache token split, for an embedder's cost tracking. An org setting (or the embedder) can turn every LLM feature off for an org. Provider and keys stay instance settings.
 
 ## Policy
 
