@@ -231,6 +231,38 @@ func (s *Service) SetGroupMembers(ctx context.Context, orgID, source, groupID st
 	})
 }
 
+// RenameGroup renames the org's group groupID.
+func (s *Service) RenameGroup(ctx context.Context, orgID, source, groupID, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New("provision: a group needs a name")
+	}
+	return s.DB.InTx(ctx, func(tx *store.Tx) error {
+		g, err := groups.Get(ctx, tx, groupID)
+		if err != nil || g.OrgID != orgID {
+			return store.ErrNotFound
+		}
+		if err := groups.Update(ctx, tx, groupID, name, g.Description); err != nil {
+			return err
+		}
+		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorSystem, OrgID: orgID, Action: "group.renamed", TargetType: "group", TargetID: groupID, Data: map[string]any{"via": source, "name": name}})
+	})
+}
+
+// DeleteGroup deletes the org's group groupID (and the roles it granted).
+func (s *Service) DeleteGroup(ctx context.Context, orgID, source, groupID string) error {
+	return s.DB.InTx(ctx, func(tx *store.Tx) error {
+		g, err := groups.Get(ctx, tx, groupID)
+		if err != nil || g.OrgID != orgID {
+			return store.ErrNotFound
+		}
+		if err := groups.Delete(ctx, tx, groupID); err != nil {
+			return err
+		}
+		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorSystem, OrgID: orgID, Action: "group.deleted", TargetType: "group", TargetID: groupID, Data: map[string]any{"via": source, "name": g.Name}})
+	})
+}
+
 func (s *Service) entry(orgID, source, action, userID string, data map[string]any) audit.Entry {
 	if data == nil {
 		data = map[string]any{}
