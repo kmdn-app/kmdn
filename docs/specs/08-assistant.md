@@ -27,7 +27,7 @@ When a Q&A turn asks for a change, the model calls the `propose_revision` tool i
 - Provider-agnostic loop in `internal/assistant`: messages → model → tool calls → results → … until the model ends the turn or limits hit.
 - Max 25 tool calls per run, max 10 minutes wall clock, configurable.
 - Streaming text and tool-call progress ("Reading docs/onboarding/it-setup.md…") are sent to the UI.
-- System prompt includes: product role, the repo's content root and conventions, style guide file if present, the user's role, the current revision manifest, the active file and selection (if any).
+- System prompt includes: product role, the repo's content root, its guidance (`AGENTS.md`, style guide, skill index: see [Repository guidance](#repository-guidance)), the user's role, the current revision manifest, the active file and selection (if any).
 - Prompt caching used where the provider supports it (Anthropic cache breakpoints on system prompt + repo context).
 
 ## Tools
@@ -44,6 +44,8 @@ Read tools (all contexts):
 | `find_related(path, heading?)` | Similar passages elsewhere in the repo (passage index), with similarity scores. Arrives with the passage index (#60) |
 | `read_comments(path?)` | Comment threads in the revision or discussions on a published doc |
 
+Only when the repository has skills: `load_skill(name, file?)` returns a skill's `SKILL.md` without its frontmatter and lists the other files in its folder; `file` reads one of those. Only listed files can be read, so a path can't leave the skill's folder.
+
 Q&A-only tool: `propose_revision(title, description, files[])`.
 
 Revision-context write tools (all produce suggestions attributed to the assistant on behalf of the requesting user):
@@ -59,6 +61,16 @@ Revision-context write tools (all produce suggestions attributed to the assistan
 In a revision thread the read tools see the revision: `read_file` returns the revision's version of its pages (pending suggestions excluded), `list_tree` includes its added, renamed and deleted pages, and `read_comments` lists its comment threads. Suggestion cards show "Assistant for <person>".
 
 The assistant never approves, publishes, resolves threads, or changes settings.
+
+### Repository guidance
+
+A repository tells agents how to work on it with the files coding agents already use. At the start of every run, in Q&A and revision threads alike, the assistant reads these from the published head. They're read wherever they are, not just in the content scope (`repos.ReadConfigFile`):
+
+- **`AGENTS.md`** at the repo root, then at the content root if that's a subfolder. Both go in, the content root's last, and the prompt says the later one takes precedence. Capped at 16,000 characters each.
+- **Style guide**: the first of `.kmdn/style.md`, `STYLE.md`, `<content root>/STYLE.md` (the same file the review summary checks against). Capped at 8,000 characters.
+- **Skills** in `.skills/` at the repo root and the content root, in the Agent Skills layout: `.skills/<name>/SKILL.md` with `name` and `description` in YAML frontmatter, plus any other files in the folder, or a flat `.skills/<name>.md`. A folder without `SKILL.md` and `.skills/README.md` aren't skills. On a name clash the content root's skill wins. Only the index (name and description, at most 50 skills, 300 characters per description) goes in the prompt. The model calls `load_skill` when a task matches (progressive disclosure keeps the prompt small).
+
+All of it goes in the cached system prompt block after kmdn's rules. The prompt says kmdn's rules win on a conflict: repository text can't make the assistant publish, approve, write outside suggestions or change settings. Guidance is cached in memory per repo and head SHA, so a sync that moves the head brings in the new files on the next run. A read error isn't cached, so the next run tries again. Without any of these files, the prompt and the tools are unchanged.
 
 ### Citations
 
