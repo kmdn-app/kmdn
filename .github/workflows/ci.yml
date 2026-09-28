@@ -137,3 +137,54 @@ jobs:
             e2e/playwright-report
             e2e/test-results
           retention-days: 7
+
+  rollback:
+    name: Rollback compatibility
+    # The base branch's build must run on the schema this change migrates to
+    # (expand, then contract: docs/specs/13-operations.md#upgrades).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: kmdn
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      KMDN_DB_URL: postgres://kmdn:kmdn@localhost:5432/rollback?sslmode=disable
+    steps:
+      - uses: actions/checkout@v5
+        with: { path: new }
+      - uses: actions/checkout@v5
+        with: { ref: "${{ github.event.pull_request.base.sha }}", path: old }
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: new/go.mod
+          cache-dependency-path: |
+            new/go.sum
+            old/go.sum
+      - uses: pnpm/action-setup@v4
+        with: { package_json_file: old/package.json }
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: old/pnpm-lock.yaml
+      - name: A database with this change's migrations
+        run: |
+          PGPASSWORD=kmdn psql -h localhost -U postgres -c "CREATE ROLE kmdn LOGIN PASSWORD 'kmdn'" -c "CREATE DATABASE rollback OWNER kmdn"
+          cd new && go run ./cmd/kmdn migrate up && go run ./cmd/kmdn migrate status | tail -3
+      - name: The base branch's build
+        working-directory: old
+        run: |
+          pnpm install --frozen-lockfile
+          make build
+          pnpm --filter @kmdn/e2e exec playwright install --with-deps chromium
+      - name: The base branch's end-to-end suite on the new schema
+        working-directory: old
+        run: pnpm --filter @kmdn/e2e e2e
+        env:
+          KMDN_E2E_DB_URL: ${{ env.KMDN_DB_URL }}
+
