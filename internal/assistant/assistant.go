@@ -54,6 +54,9 @@ type Service struct {
 	running map[string]bool // thread ids with a worker
 	queued  map[string]bool // thread ids posted to while their worker ran
 	wg      sync.WaitGroup
+
+	gmu    sync.Mutex
+	guides map[string]*guidance // repo id → guidance at its head
 }
 
 // Scope is the realtime scope of a thread's events.
@@ -192,8 +195,12 @@ func (s *Service) run(ctx context.Context, t Thread, msgs []Message, prompt Mess
 	defer cancel()
 
 	tools := append([]llm.Tool{}, readTools...)
-	e := env{s: s, repo: repo, caller: revisions.Caller{User: u, Role: role}}
-	system := s.system(repo, u, role, prompt.Context)
+	guide := s.guidance(ctx, repo)
+	if len(guide.skills) > 0 {
+		tools = append(tools, loadSkillTool)
+	}
+	e := env{s: s, repo: repo, guide: guide, caller: revisions.Caller{User: u, Role: role}}
+	system := s.system(repo, u, role, prompt.Context, guide)
 	if t.RevisionID == "" {
 		tools = append(tools, proposeTool)
 		system[len(system)-1].Text += qaNote + "\n"
@@ -370,9 +377,9 @@ func window(msgs []Message) []Message {
 	return msgs
 }
 
-// system is the system prompt: stable instructions and repo facts first
-// (cached), then this turn's context.
-func (s *Service) system(repo repos.Repo, u users.User, role access.Role, cx Context) []llm.System {
+// system is the system prompt: stable instructions, repo facts and the
+// repository's guidance first (cached), then this turn's context.
+func (s *Service) system(repo repos.Repo, u users.User, role access.Role, cx Context, g *guidance) []llm.System {
 	root := strings.Trim(repo.ContentRoot, "/")
 	if root == "" {
 		root = "the repository root"
@@ -386,6 +393,7 @@ How to answer:
 - When the pages don't say, say so plainly.
 - Be concise. Use markdown sparingly: short paragraphs and lists.
 - You never change published content yourself.`, repo.Slug, root)
+	stable += g.prompt()
 	return []llm.System{{Text: stable, Cache: true}, {Text: s.turn(u, role, cx)}}
 }
 

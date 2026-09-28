@@ -182,18 +182,13 @@ func (s *Service) diffText(ctx context.Context, rev revisions.Revision) (string,
 	return d, paths, nil
 }
 
-// styleGuide returns the repository's style guide (STYLE.md or .kmdn/style.md), if any.
+// styleGuide returns the repository's style guide, if any.
 func (s *Service) styleGuide(ctx context.Context, repo repos.Repo) string {
-	for _, p := range []string{".kmdn/style.md", "STYLE.md", strings.Trim(repo.ContentRoot, "/") + "/STYLE.md"} {
-		f, err := s.Repos.ReadConfigFile(ctx, repo, p)
-		if err == nil && len(f) > 0 {
-			if len(f) > 8000 {
-				f = f[:8000]
-			}
-			return string(f)
-		}
+	_, f := s.Repos.StyleGuide(ctx, repo)
+	if len(f) > 8000 {
+		f = f[:8000]
 	}
-	return ""
+	return string(f)
 }
 
 var reviewTool = llm.Tool{Name: "report_review", Description: "Report the review summary.", Schema: json.RawMessage(`{"type":"object","properties":{

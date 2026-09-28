@@ -111,6 +111,10 @@ func TestAssistantQA(t *testing.T) {
 	if !strings.Contains(second.System[1].Text, "reading docs/policy.md") || !second.System[0].Cache || !strings.Contains(second.System[0].Text, "[[path#heading-slug]]") {
 		t.Fatalf("system prompt: %+v", second.System)
 	}
+	// No AGENTS.md, style guide or skills: nothing added.
+	if strings.Contains(second.System[0].Text, "<instructions") || strings.Contains(second.System[0].Text, "skills") || hasTool(second, "load_skill") {
+		t.Fatalf("guidance without any: %+v", second.System[0])
+	}
 	var tools string
 	_ = store.QueryRow(ctx, a.DB, `SELECT tools FROM assistant_runs WHERE user_id = ? AND task = 'chat'`, sam.ID).Scan(&tools)
 	if tools != `["search"]` {
