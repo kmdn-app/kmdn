@@ -132,6 +132,23 @@ func WithMigrations(fsys fs.FS, table string) Option {
 	return func(o *app.Options) { o.Migrations, o.MigrationsTable = fsys, table }
 }
 
+// WithMailFilter sees every email the instance sends (sign-in links,
+// invitations, the program's own) before it goes: it can change it (a
+// footer, Mail.FromName) or refuse it; ErrMailSkip drops it quietly.
+func WithMailFilter(f func(ctx context.Context, m *Mail) error) Option {
+	return func(o *app.Options) { o.MailFilter = f }
+}
+
+// ErrMailSkip, from a mail filter, drops the message without an error.
+var ErrMailSkip = mail.ErrSkip
+
+// Mail kinds (Mail.Kind).
+const (
+	MailSignIn = mail.KindSignIn
+	MailInvite = mail.KindInvite
+	MailTest   = mail.KindTest
+)
+
 // WithSignInProvider adds a way to sign in (for example SAML for one org).
 func WithSignInProvider(p SignInProvider) Option {
 	return func(o *app.Options) { o.Providers = append(o.Providers, p) }

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	netmail "net/mail"
 	"sync"
 	"time"
 
@@ -27,7 +28,30 @@ type Message struct {
 	Subject string
 	Text    string
 	HTML    string
+	// Kind says what it is (KindSignIn, KindInvite, KindTest, or an
+	// embedder's own), and OrgID the org it's about, if any, so a Filter
+	// can tell messages apart.
+	Kind  string
+	OrgID string
+	// FromName is the sender's display name; the address is always the
+	// instance's own (smtp.from).
+	FromName string
 }
+
+// Message kinds.
+const (
+	KindSignIn = "sign_in"
+	KindInvite = "invite"
+	KindTest   = "test"
+)
+
+// ErrSkip, from a Filter, drops the message without an error (a
+// suppressed address, say: sign-in shouldn't reveal it).
+var ErrSkip = errors.New("mail: skipped")
+
+// Filter sees every message before it's sent: it can change it (a footer,
+// the display name) or refuse it (an error, or ErrSkip).
+type Filter func(ctx context.Context, m *Message) error
 
 // Sender delivers a message.
 type Sender interface {
@@ -56,6 +80,8 @@ type Service struct {
 	db      *store.DB
 	secrets *secrets.Store
 	log     *slog.Logger
+	// Filter, if set, runs before every Send (an embedder's).
+	Filter Filter
 }
 
 func NewService(cfg config.Config, db *store.DB, sec *secrets.Store, log *slog.Logger) *Service {
@@ -97,6 +123,16 @@ func (s *Service) Configured(ctx context.Context) bool {
 
 // Send delivers m with the current settings.
 func (s *Service) Send(ctx context.Context, m Message) error {
+	if s.Filter != nil {
+		err := s.Filter(ctx, &m)
+		if errors.Is(err, ErrSkip) {
+			s.log.Info("email skipped by the filter", "kind", m.Kind, "org", m.OrgID)
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
 	st, pw, err := s.Resolve(ctx)
 	if err != nil {
 		return err
@@ -107,11 +143,19 @@ func (s *Service) Send(ctx context.Context, m Message) error {
 // SendWith delivers m with explicit settings (used by "Send test email").
 func SendWith(ctx context.Context, st SMTPSettings, password string, m Message, log *slog.Logger) error {
 	if st.Host == "log" {
-		log.Info("email (smtp.host=log, not sent)", "to", m.To, "subject", m.Subject, "text", m.Text)
+		log.Info("email (smtp.host=log, not sent)", "to", m.To, "from_name", m.FromName, "subject", m.Subject, "text", m.Text)
 		return nil
 	}
 	msg := gomail.NewMsg()
-	if err := msg.From(st.From); err != nil {
+	if m.FromName != "" {
+		addr, err := netmail.ParseAddress(st.From)
+		if err != nil {
+			return fmt.Errorf("from address %q: %w", st.From, err)
+		}
+		if err := msg.FromFormat(m.FromName, addr.Address); err != nil {
+			return fmt.Errorf("from address %q: %w", st.From, err)
+		}
+	} else if err := msg.From(st.From); err != nil {
 		return fmt.Errorf("from address %q: %w", st.From, err)
 	}
 	if err := msg.To(m.To); err != nil {

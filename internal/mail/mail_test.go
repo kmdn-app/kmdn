@@ -45,3 +45,32 @@ func TestTemplatesEscape(t *testing.T) {
 		t.Fatal("inviter not escaped")
 	}
 }
+
+// A filter can change a message or drop it; sent messages carry its name.
+func TestFilter(t *testing.T) {
+	var buf bytes.Buffer
+	s := &Service{cfg: config.Config{SMTP: config.SMTP{Host: "log", From: "Docs <docs@example.com>"}}, log: slog.New(slog.NewTextHandler(&buf, nil))}
+	s.Filter = func(_ context.Context, m *Message) error {
+		if m.To == "bounced@example.com" {
+			return ErrSkip
+		}
+		if m.Kind == KindInvite && m.OrgID == "org_busy" {
+			return errors.New("too many invitations today")
+		}
+		m.FromName = "Acme via kmdn"
+		m.Text += "\nfooter"
+		return nil
+	}
+	if err := s.Send(context.Background(), Message{To: "bounced@example.com", Kind: KindSignIn}); err != nil || strings.Contains(buf.String(), "not sent") {
+		t.Fatalf("skip: %v %s", err, buf.String())
+	}
+	if err := s.Send(context.Background(), Message{To: "a@example.com", Kind: KindInvite, OrgID: "org_busy"}); err == nil {
+		t.Fatal("refused message sent")
+	}
+	if err := s.Send(context.Background(), Invite("Acme", "a@example.com", "Olga", "Acme", "https://x/invite/t", 7)); err != nil {
+		t.Fatal(err)
+	}
+	if out := buf.String(); !strings.Contains(out, `from_name="Acme via kmdn"`) || !strings.Contains(out, `footer`) {
+		t.Fatalf("filtered message: %s", out)
+	}
+}

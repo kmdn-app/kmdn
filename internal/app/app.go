@@ -126,6 +126,8 @@ type Options struct {
 	MigrationsTable string
 	// Providers are extra ways to sign in (auth.Provider).
 	Providers []auth.Provider
+	// MailFilter sees every email before it's sent (mail.Filter).
+	MailFilter mail.Filter
 }
 
 // New opens the database, applies migrations and builds the services.
@@ -195,6 +197,7 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 		return nil, err
 	}
 	a.Mail = mail.NewService(cfg, db, sec, log)
+	a.Mail.Filter = opts.MailFilter
 	a.Auth = &auth.Service{DB: db, Mail: a.Mail, BaseURL: cfg.Server.BaseURL, SessionTTL: cfg.Auth.SessionTTL, AutoJoinDomains: cfg.Auth.AutoJoinDomains, Policy: a.Policy, Events: opts.Events, Log: log}
 	a.AuthH = auth.NewHTTP(a.Auth, strings.HasPrefix(cfg.Server.BaseURL, "https://"), trusted)
 	a.AuthH.BaseURL = cfg.Server.BaseURL

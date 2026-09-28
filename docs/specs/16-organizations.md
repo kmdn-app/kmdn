@@ -147,6 +147,7 @@ app.SuspendOrg(ctx, org.ID, "Payment failed.")   // read-only, reason shown; Res
 app.SignIn(w, r, "alice@acme.dev")               // after the program verified the address itself
 s, ok := app.Authenticate(r)                     // on the program's own routes: the session, and its CSRF token for forms
 app.SendMail(ctx, kmdn.Mail{To: …, Subject: …, Text: …}) // through the instance's mail settings
+kmdn.WithMailFilter(func(ctx, m *kmdn.Mail) error {…})   // every email first: footer, FromName, suppression (ErrMailSkip), per-org rate limits (m.Kind, m.OrgID)
 kmdn.ValidSlug(slug); kmdn.Slugify(name)         // for a signup form
 app.Seats(ctx, org.ID); app.OrgSettings(ctx, org.ID); app.DB()
 http.ListenAndServe(addr, app.Handler())          // or app.Run(ctx)

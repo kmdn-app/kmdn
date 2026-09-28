@@ -21,7 +21,7 @@ func SignIn(instance, to, link, code string, minutes int) Message {
 <p style="margin:0 0 6px;color:#71717a;font-size:13px">Or enter this code on the sign-in page:</p>
 <p style="margin:0 0 20px;font:600 22px ui-monospace,monospace;letter-spacing:4px">%s</p>
 <p style="margin:0;color:#71717a;font-size:13px">If you didn't ask to sign in, you can ignore this email.</p>`, minutes, html.EscapeString(link), html.EscapeString(code))
-	return Message{To: to, Subject: "Sign in to " + instance, Text: text, HTML: htmlLayout("Sign in to "+instance, body)}
+	return Message{To: to, Subject: "Sign in to " + instance, Text: text, HTML: htmlLayout("Sign in to "+instance, body), Kind: KindSignIn}
 }
 
 // Invite is sent when someone is invited to the instance or a repo.
@@ -30,12 +30,12 @@ func Invite(instance, to, inviter, target, link string, days int) Message {
 	body := fmt.Sprintf(`<p style="margin:0 0 20px">%s invited you to <b>%s</b>.</p>
 <p style="margin:0 0 20px"><a href="%s" style="display:inline-block;background:#18181b;color:#fafafa;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:500">Accept invite</a></p>
 <p style="margin:0;color:#71717a;font-size:13px">The invite expires in %d days.</p>`, html.EscapeString(inviter), html.EscapeString(target), html.EscapeString(link), days)
-	return Message{To: to, Subject: inviter + " invited you to " + target, Text: text, HTML: htmlLayout("You're invited", body)}
+	return Message{To: to, Subject: inviter + " invited you to " + target, Text: text, HTML: htmlLayout("You're invited", body), Kind: KindInvite}
 }
 
 // Test is the "Send test email" message.
 func Test(instance, to string) Message {
-	return Message{To: to, Subject: instance + " test email",
+	return Message{Kind: KindTest, To: to, Subject: instance + " test email",
 		Text: "This is a test email from " + instance + ". Sign-in links and invites will be delivered the same way.\n",
 		HTML: htmlLayout("Email works", `<p style="margin:0">This is a test email from `+html.EscapeString(instance)+`. Sign-in links and invites will be delivered the same way.</p>`)}
 }
