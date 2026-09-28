@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/mail"
@@ -378,5 +379,35 @@ func TestSettingsUpgradeURL(t *testing.T) {
 	c.do("POST", "/orgs", map[string]any{"name": "Acme", "slug": "acme"})
 	if _, st := c.do("GET", "/orgs/acme/admin/settings", nil); st["upgrade_url"] != "/billing/acme" {
 		t.Fatalf("settings: %v", st)
+	}
+}
+
+// In multi mode, the instance's admins aren't reviewers of orgs they don't
+// belong to: not suggested (their name and address stay theirs), not
+// accepted, and asking for them says no more than for an unknown id.
+func TestReviewersStayInTheOrg(t *testing.T) {
+	a, root := newApp(t, multiOrgs)
+	ctx := context.Background()
+	alice, _ := users.Create(ctx, a.DB, "alice@acme.dev", "Alice", false)
+	op, _ := users.Create(ctx, a.DB, "op@kmdn.dev", "Operator", true)
+	signIn(t, a, root, alice)
+	root.do("POST", "/orgs", map[string]any{"name": "Acme", "slug": "acme"})
+	repoID, _ := connectLocalIn(t, a, root, "acme", map[string]string{"docs/index.md": "# Acme\n"})
+	sam, _ := users.Create(ctx, a.DB, "sam@acme.dev", "Sam", false)
+	if _, err := store.Exec(ctx, a.DB, `INSERT INTO org_members (org_id, user_id, role, status, joined_at) SELECT id, ?, 'member', 'active', 0 FROM orgs WHERE slug = 'acme'`, sam.ID); err != nil {
+		t.Fatal(err)
+	}
+	_ = access.Grant(ctx, a.DB, repoID, "user", sam.ID, access.Contributor)
+	samC := &tc{t: t, base: root.base, c: newClient()}
+	signIn(t, a, samC, sam)
+	_, rev := samC.do("POST", "/repos/"+repoID+"/revisions", map[string]any{"title": "Hi", "path": "docs/index.md"})
+	revID := rev["id"].(string)
+	_, sug := samC.do("GET", "/revisions/"+revID+"/reviewer-suggestions", nil)
+	if got := toJSON(sug); strings.Contains(got, op.ID) || strings.Contains(got, "op@kmdn.dev") || !strings.Contains(got, alice.ID) {
+		t.Fatalf("suggestions: %s", got)
+	}
+	code, body := samC.do("POST", "/revisions/"+revID+"/submit", map[string]any{"reviewers": []string{op.ID}})
+	if code != 422 || strings.Contains(toJSON(body), "Operator") {
+		t.Fatalf("the operator as reviewer: %d %v", code, body)
 	}
 }
