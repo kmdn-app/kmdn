@@ -18,6 +18,7 @@ kmdn doctor                        check git version, data dir perms, DB, SMTP, 
 kmdn admin create-invite --email   bootstrap/recovery when locked out
 kmdn admin rotate-secret-key
 kmdn admin rotate-org-key -org SLUG
+kmdn admin resync-repos            queue a sync of every repo (clones missing mirrors after a restore)
 kmdn backup  --out file.tar.zst    consistent backup (DB online backup + uploads + ydocs)
 kmdn restore --in file.tar.zst
 kmdn version

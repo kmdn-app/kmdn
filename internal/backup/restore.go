@@ -222,6 +222,13 @@ func prepareDatabase(ctx context.Context, dbURL string, manifest Manifest) (int,
 	if _, err := db.Migrate(ctx); err != nil {
 		return 0, fmt.Errorf("migrate the restored database: %w", err)
 	}
+	return ResyncRepos(ctx, db)
+}
+
+// ResyncRepos queues a sync of every repository, which clones missing
+// mirrors again: after a restore, the database knows repositories whose
+// mirrors aren't on this disk. It returns how many it queued.
+func ResyncRepos(ctx context.Context, db *store.DB) (int, error) {
 	list, err := repos.List(ctx, db, nil, true)
 	if err != nil {
 		return 0, err
