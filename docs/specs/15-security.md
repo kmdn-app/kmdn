@@ -56,7 +56,7 @@ A review of kmdn as built through M5 (issue #70). It lists what's worth protecti
 | T17 | Metrics disclosure (I) | `/metrics` can require a bearer token (`telemetry.metrics_token`); the example Caddyfile blocks it; it holds counts and ids, no content | `TestMetricsAndTraces` |
 | T18 | Malicious git content attacking the server (T) | git runs with `GIT_CONFIG_NOSYSTEM`, a null global config, no prompts; mirrors are bare (no hooks run on fetch); paths with tabs or newlines are refused when committing; restores refuse `..` paths | gitmirror and backup tests |
 | T19 | A member of one organization reads or changes another's data (I, T, E) | Org from the request context on every org-scoped query; ID-addressed resources checked against the caller's memberships where they're loaded, answering 404; per-org uniqueness (no cross-org upload dedupe); org keys for org secrets; Postgres row-level security as a second barrier ([16](16-organizations.md#isolation)) | Cross-org matrix over every API operation, WebSocket channel, MCP key and webhook |
-| T20 | Org admins abusing admin-configured URLs or git URLs when they aren't the operator (I) | Strict policy: git over `https`/`ssh` only, no local paths, `protocol.allow=never` otherwise; one egress dialer refusing non-public addresses for forges, AI, embeddings and webhooks ([16](16-organizations.md#policy)) | Policy tests (`file:///`, local paths, `ext::`, link-local) |
+| T20 | Org admins abusing admin-configured URLs or git URLs when they aren't the operator (I) | Strict policy: git over `https`/`ssh` only, no local paths, `protocol.allow=never` otherwise; one egress dialer refusing non-public addresses for forges, AI, embeddings and webhooks ([16](16-organizations.md#policy)). git itself connects through that dialer: an HTTP CONNECT proxy on loopback for https (no redirects), the kmdn binary as ssh's `ProxyCommand`, so DNS changes and redirects after the URL check don't reach private addresses. Clone URLs that org-added forges return are checked like typed ones and must be on the forge's host | Policy tests (`file:///`, local paths, `ext::`, link-local); `TestGitThroughTheProxy`; `TestOrgForgeCloneURL` |
 
 ## Findings of this review
 
@@ -69,6 +69,25 @@ A review of kmdn as built through M5 (issue #70). It lists what's worth protecti
 | Tests only used `file://` remotes, hiding forge-only behavior | Process | The e2e suite runs against a fake GitLab over HTTP with a token |
 
 No authorization gaps were found by the route matrix; the per-feature tests (revisions, reviews, assistant, consistency, MCP, admin) hold.
+
+## Multi-org review (2026-09)
+
+The cross-org threat model (T19, T20) was reviewed before kmdn hosted many organizations: every ID-addressed route, the realtime channels, MCP keys, export and import, row-level security, and outbound connections. Each finding below is fixed and has a regression test.
+
+| Finding | Severity | Fix |
+|---|---|---|
+| A private assistant thread only checked who owned it: after leaving the org, its owner could still read it and ask about the repository's current content | High | Reading a thread needs access to its repository; a run stops without it (`TestAssistantQA`) |
+| `kmdn org import` inserted archive rows as given, and org admins can edit their archive: a row could make them owner of another org or grant them another org's repositories | Medium (needs the operator to import it) | Rows may only refer to the imported org, the archive's accounts and hosts, and its own rows; credential references are dropped (`TestExportImportOrg`) |
+| git resolved names and followed redirects itself, after the URL check (DNS rebinding, redirects to private addresses, ssh port probing) | Medium | git connects through the egress guard (T20) |
+| Clone URLs returned by an org-added forge weren't checked | Medium | Checked, and on the forge's host (T20) |
+| Leaving an org kept the person's grants on its repositories and its groups, so old notifications still showed it | Low–Medium | Grants and group memberships go with the membership (`TestOrgInvitesAndKeys`) |
+| Agent keys of an org being deleted kept working through the grace period | Low–Medium | Refused at once |
+| Reviewer candidates included every instance admin, so every org saw the operator's admins' names and emails | Low | Only instance admins who belong to the org; outsiders answer as unknown (`TestReviewersStayInTheOrg`) |
+| The export took any string that looked like an account id for one (a group named after someone brought out their email) | Low | Only reference columns (`TestExportImportOrg`) |
+| Row-level security let a scoped session write shared rows (no org) | Low (second barrier) | Writes need the scope's org (migration 0031); the test fails for a tenant table without policies (`TestRowLevelSecurity`) |
+| The doctor fetched org-added forge URLs with a plain client | Low (operator-triggered) | Org hosts go through the org client |
+
+An external penetration test (tenant isolation, SSRF, authentication) is planned before multi-org instances open to the public.
 
 ## Residual risks and operator guidance
 

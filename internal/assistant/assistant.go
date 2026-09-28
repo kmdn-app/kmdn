@@ -164,7 +164,11 @@ func (s *Service) run(ctx context.Context, t Thread, msgs []Message, prompt Mess
 	if err != nil {
 		return
 	}
-	role, _ := access.Effective(ctx, s.DB, u, repo.ID)
+	role, err := access.Effective(ctx, s.DB, u, repo.ID)
+	if err != nil || role == access.None {
+		s.errorMessage(ctx, t, "", "You can't see this repository anymore.")
+		return
+	}
 	if err := s.LLM.CheckBudget(ctx, u.ID, repo.ID); err != nil {
 		var be *llm.ErrBudget
 		if errors.As(err, &be) {

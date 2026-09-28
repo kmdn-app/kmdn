@@ -56,8 +56,9 @@ Every config key can be set with an env var, e.g. KMDN_SERVER_BASE_URL.
 `
 
 func main() {
-	// git invokes the kmdn binary as GIT_ASKPASS to read mirror credentials.
-	if gitmirror.RunAskpass(os.Args[1:], os.Stdout) {
+	// git invokes the kmdn binary as GIT_ASKPASS to read mirror credentials,
+	// and as ssh's ProxyCommand under the strict policy.
+	if gitmirror.RunAskpass(os.Args[1:], os.Stdout) || gitmirror.RunDial(os.Args[1:], os.Stdin, os.Stdout) {
 		return
 	}
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {

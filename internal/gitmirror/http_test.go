@@ -2,6 +2,7 @@ package gitmirror
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/cgi"
 	"net/http/httptest"
@@ -10,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kmdn-app/kmdn/internal/outbound"
 )
 
 // TestMain lets git call this test binary as GIT_ASKPASS, like kmdn itself.
@@ -88,5 +91,43 @@ func TestPartialMirrorOverAuthenticatedHTTP(t *testing.T) {
 	}
 	if out, _ := exec.Command("git", "-C", bare, "rev-parse", "main").Output(); strings.TrimSpace(string(out)) != sha {
 		t.Fatalf("remote main is %s, want %s", out, sha)
+	}
+}
+
+// Under the strict policy git connects through kmdn's proxy (Git.Proxy):
+// its https remotes are reached only where the proxy's dialer allows, with
+// credentials still coming from askpass.
+func TestGitThroughTheProxy(t *testing.T) {
+	r := newRemote(t)
+	r.write("docs/a.md", "# A\n")
+	r.commit("one")
+	root := t.TempDir()
+	r.git("clone", "--quiet", "--bare", r.dir, filepath.Join(root, "r.git"))
+	gitBin, _ := exec.LookPath("git")
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if u, p, ok := req.BasicAuth(); !ok || u != "oauth2" || p != "s3cret" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="t"`)
+			http.Error(w, "no", http.StatusUnauthorized)
+			return
+		}
+		(&cgi.Handler{Path: gitBin, Args: []string{"http-backend"}, Env: []string{"GIT_PROJECT_ROOT=" + root, "GIT_HTTP_EXPORT_ALL=1", "REMOTE_USER=t"}}).ServeHTTP(w, req)
+	}))
+	defer srv.Close()
+	t.Setenv("GIT_SSL_NO_VERIFY", "1") // the test server's certificate
+	ctx := context.Background()
+	cred := &Credential{Username: "oauth2", Password: "s3cret"}
+	lsRemote := func(proxy string) error {
+		_, err := (&Git{Proxy: proxy}).run(ctx, "", cred, nil, "ls-remote", srv.URL+"/r.git")
+		return err
+	}
+	open, _ := outbound.StartProxy((&net.Dialer{}).DialContext)
+	defer func() { _ = open.Close() }()
+	if err := lsRemote(open.URL); err != nil {
+		t.Fatalf("through an open proxy: %v", err)
+	}
+	guarded, _ := outbound.StartProxy(outbound.Dialer(false).DialContext)
+	defer func() { _ = guarded.Close() }()
+	if err := lsRemote(guarded.URL); err == nil {
+		t.Fatal("reached a private address through the guarded proxy")
 	}
 }

@@ -163,6 +163,16 @@ func (s *Service) Connect(ctx context.Context, by auth.Principal, in ConnectInpu
 		fr.ExternalID = info.ExternalID
 	}
 	if info.CloneURL != "" && h.Kind != forge.KindGit {
+		// A host an org added answers with whatever clone URL it likes: it's
+		// checked like one typed in, and must be on the host itself.
+		if h.OrgID != "" {
+			if err := s.Policy.GitURL(ctx, info.CloneURL); err != nil {
+				return Repo{}, "", &ErrInvalid{"name", "The forge gave a clone URL kmdn won't use: " + err.Error()}
+			}
+			if !strings.EqualFold(hostOf(info.CloneURL), hostOf(h.BaseURL)) {
+				return Repo{}, "", &ErrInvalid{"name", "The forge gave a clone URL on another host (" + hostOf(info.CloneURL) + ")."}
+			}
+		}
 		fr.CloneURL = info.CloneURL
 	}
 	if info.Owner != "" {

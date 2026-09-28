@@ -16,6 +16,17 @@ var ErrPrivate = errors.New("the address is on a private network")
 // Client checks the resolved address at dial time, including after DNS changes.
 // Redirects and environment proxies cannot bypass that check.
 func Client(allowPrivate bool) *http.Client {
+	d := Dialer(allowPrivate)
+	return &http.Client{
+		Transport:     &http.Transport{DialContext: d.DialContext, TLSHandshakeTimeout: 10 * time.Second},
+		Timeout:       20 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}
+
+// Dialer connects only to public addresses unless allowPrivate: the check
+// runs on the address actually dialed, after resolution.
+func Dialer(allowPrivate bool) *net.Dialer {
 	d := &net.Dialer{Timeout: 10 * time.Second}
 	if !allowPrivate {
 		d.Control = func(_, address string, _ syscall.RawConn) error {
@@ -29,11 +40,7 @@ func Client(allowPrivate bool) *http.Client {
 			return nil
 		}
 	}
-	return &http.Client{
-		Transport:     &http.Transport{DialContext: d.DialContext, TLSHandshakeTimeout: 10 * time.Second},
-		Timeout:       20 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
+	return d
 }
 
 // Public reports whether an IP address (as text) is publicly routable.

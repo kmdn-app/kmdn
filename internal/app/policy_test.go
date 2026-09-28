@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strconv"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/repos"
+	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -135,5 +138,39 @@ func TestRepoCaps(t *testing.T) {
 	a.Policy.Limits = nil
 	if err := a.Repos.Sync(ctx, repoID); err != nil || health().Health != repos.HealthOK {
 		t.Fatalf("under the caps again: %v %s", err, health().Health)
+	}
+}
+
+// A forge an org added answers with the clone URL it likes: it's checked
+// like a typed one, and must be on the forge's own host.
+func TestOrgForgeCloneURL(t *testing.T) {
+	a, root := newApp(t, func(c *config.Config) {
+		multiOrgs(c)
+		c.Policy.Strict = true
+		c.Server.ContentBaseURL = "http://content.localhost"
+	})
+	ctx := context.Background()
+	alice, _ := users.Create(ctx, a.DB, "alice@acme.dev", "Alice", false)
+	signIn(t, a, root, alice)
+	_, org := root.do("POST", "/orgs", map[string]any{"name": "Acme", "slug": "acme"})
+	var clone string
+	gl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"id":7,"path":"docs","path_with_namespace":"acme/docs","default_branch":"main","visibility":"private","http_url_to_repo":"` + clone + `"}`))
+	}))
+	defer gl.Close()
+	a.Repos.Adapters.OrgHTTP = gl.Client() // the fake is local; the guard is tested elsewhere
+	if _, err := store.Exec(ctx, a.DB, `INSERT INTO forge_hosts (id, kind, base_url, api_url, display_name, org_id, created_at) VALUES ('fh_org', 'gitlab', ?, ?, 'GitLab', ?, 0)`, gl.URL, gl.URL+"/api/v4", org["id"]); err != nil {
+		t.Fatal(err)
+	}
+	for u, want := range map[string]string{
+		"https://gitlab.com/acme/docs.git":   "another host",
+		gl.URL + "/acme/docs.git":            "won't use",
+		"https://169.254.169.254/x/docs.git": "won't use",
+	} {
+		clone = u
+		code, b := root.do("POST", "/orgs/acme/repos", map[string]any{"forge_host_id": "fh_org", "owner": "acme", "name": "docs", "token": "glpat-x"})
+		if code != 422 || !strings.Contains(toJSON(b), want) {
+			t.Errorf("clone URL %s: %d %v", u, code, b)
+		}
 	}
 }

@@ -120,7 +120,7 @@ Stored as `<org>/<sha[:2]>/<sha>` behind a blob store (`blobs.Store`: Put, Get, 
 A `Policy` decides what orgs may do. The default is permissive (self-hosted admins are trusted, [15](15-security.md) T10); a strict policy is for instances whose org admins aren't the operator:
 
 - git URL schemes (strict: `https` and `ssh` only; `file://`, local paths and `ext::` refused; git runs with `protocol.allow=never` except for those);
-- outbound addresses for git, forge APIs, AI and embeddings base URLs, OTLP and webhooks (strict: public addresses only, through one dialer);
+- outbound addresses for git, forge APIs, AI and embeddings base URLs, OTLP and webhooks (strict: public addresses only, through one dialer; git connects through it too, by a loopback proxy for https and the kmdn binary as ssh's `ProxyCommand`, so embedders call `kmdn.RunGitHelper` first in `main`);
 - limits per org: members, repos, repository size on disk (`RepoMB`: a mirror over it is removed and the repo shows why) and files in scope (`RepoFiles`), upload size, AI on/off and budgets;
 - which console sections org admins can edit.
 
@@ -171,20 +171,21 @@ http.ListenAndServe(addr, app.Handler())          // or app.Run(ctx)
 
   What the person wrote stays, attributed to "Deleted user", and forge history isn't touched. The account can't be erased while it's the only owner of an org that has other members. Orgs where it was the only member are deleted.
 - **Export and import:**
-  - Admins download the org's archive from `GET /orgs/{org}/admin/export`, or with `kmdn org export -org SLUG -out FILE`. It's a `.tar.gz` holding a manifest, one NDJSON file per table (the org's rows, found through each table's parent chain), the accounts and forge hosts the rows mention, and the uploads.
+  - Admins download the org's archive from `GET /orgs/{org}/admin/export`, or with `kmdn org export -org SLUG -out FILE`. It's a `.tar.gz` holding a manifest, one NDJSON file per table (the org's rows, found through each table's parent chain), the accounts and forge hosts the rows mention (through reference columns only), and the uploads.
   - Credentials, sign-ins, keys and derived data (search, links, summaries, consistency findings) are left out.
   - `kmdn org import -in FILE [-slug S] [-into-default]` loads it into any kmdn at the same or a newer schema:
     - ids are kept;
     - accounts are matched by email and forge hosts by kind and URL, else created (hosts without credentials);
     - a copy into the instance it came from gets fresh ids throughout;
-    - values are converted between SQLite and Postgres.
+    - values are converted between SQLite and Postgres;
+    - an archive is a file its org's admins can edit, so nothing in it may reach outside it. Every `org_id` must be the imported org, and every account or forge host a row names must be one the archive lists. Any other id a row refers to must be a row from the same archive (the audit log excepted: it names what's gone). Credential references are dropped. Anything else refuses the whole import.
   - Repositories come back without credentials: reconnect them, and they sync.
 
 ## Isolation
 
 1. **Service layer**: every org-scoped query filters by the org from the context; every ID-addressed resource is checked against the caller's memberships where it's loaded.
 2. **Cross-org test matrix**: a fixture with two orgs calls every operation in `api/openapi.yaml` as members and admins of org A with org B's IDs and slugs and expects 404; it also covers WebSocket subscriptions, MCP keys, webhooks, search, the directory and mentions. Adding an operation without a cross-org case fails the test.
-3. **Row-level security** on Postgres (migration 0030): every tenant table has `org_id`. Tables under a repo, revision, thread, comment, hook, key, checkpoint, update or Yjs document take it from their parent through a trigger, so inserts don't name it. Each table has a policy, enforced for the owner too (`FORCE`): a session whose `app.org_id` is set reads and writes only that org's rows and shared rows with no org, while an empty setting sees everything. `store.WithOrg(ctx, org)` scopes a context; `/orgs/{org}/…` requests (after `Resolve`) and agent-key (MCP) calls are scoped, and jobs, webhooks, instance routes and ID-addressed routes are not (`access.Effective` guards those). The driver sets `app.org_id` on a connection only when a statement's scope differs from that connection's last one; a transaction keeps its scope, and one rolled back after changing it resets what the connection remembers. Superusers bypass RLS, so production connects as an ordinary role, and so do the Postgres tests (`storetest.Role`). `TestRowLevelSecurity` reads every policy table with raw SQL in one org's scope and finds none of the other org's rows. SQLite relies on 1 and 2.
+3. **Row-level security** on Postgres (migration 0030): every tenant table has `org_id`. Tables under a repo, revision, thread, comment, hook, key, checkpoint, update or Yjs document take it from their parent through a trigger, so inserts don't name it. Each table has a policy, enforced for the owner too (`FORCE`): a session whose `app.org_id` is set reads that org's rows and the shared rows with no org (the instance's forge hosts), and writes only that org's rows (0031), while an empty setting sees and writes everything. `store.WithOrg(ctx, org)` scopes a context; `/orgs/{org}/…` requests (after `Resolve`) and agent-key (MCP) calls are scoped, and jobs, webhooks, instance routes and ID-addressed routes are not (`access.Effective` guards those). The driver sets `app.org_id` on a connection only when a statement's scope differs from that connection's last one; a transaction keeps its scope, and one rolled back after changing it resets what the connection remembers. Superusers bypass RLS, so production connects as an ordinary role, and so do the Postgres tests (`storetest.Role`). `TestRowLevelSecurity` reads every policy table with raw SQL in one org's scope and finds none of the other org's rows, checks that shared rows can't be changed from a scope, and fails when a table with `org_id` has no policy. SQLite relies on 1 and 2.
 
 ## Out of scope in the core
 

@@ -24,6 +24,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/events"
+	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/groups"
 	"github.com/kmdn-app/kmdn/internal/lifecycle"
 	"github.com/kmdn-app/kmdn/internal/mail"
@@ -166,6 +167,18 @@ func WithSignInProvider(p SignInProvider) Option {
 // App is a running kmdn.
 type App struct {
 	a *app.App
+}
+
+// RunGitHelper handles the runs git makes of this program: kmdn gives git
+// the program's own path to read mirror credentials (GIT_ASKPASS) and, under
+// the strict policy, to connect to ssh remotes. Call it first in main, and
+// exit when it reports it ran:
+//
+//	if kmdn.RunGitHelper(os.Args[1:]) {
+//		return
+//	}
+func RunGitHelper(args []string) bool {
+	return gitmirror.RunAskpass(args, os.Stdout) || gitmirror.RunDial(args, os.Stdin, os.Stdout)
 }
 
 // LogHandler adds org_id to records logged with the context of org-scoped

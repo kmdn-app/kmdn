@@ -346,9 +346,19 @@ func SetMemberStatus(ctx context.Context, q store.Querier, orgID, userID, status
 	return one(store.Exec(ctx, q, `UPDATE org_members SET status = ? WHERE org_id = ? AND user_id = ?`, status, orgID, userID))
 }
 
-// RemoveMember deletes a membership.
+// RemoveMember deletes a membership, with the person's grants on the org's
+// repositories and their place in its groups: nothing of the org stays
+// reachable through them (old notifications, for one), and rejoining starts
+// from scratch.
 func RemoveMember(ctx context.Context, q store.Querier, orgID, userID string) error {
-	return one(store.Exec(ctx, q, `DELETE FROM org_members WHERE org_id = ? AND user_id = ?`, orgID, userID))
+	if err := one(store.Exec(ctx, q, `DELETE FROM org_members WHERE org_id = ? AND user_id = ?`, orgID, userID)); err != nil {
+		return err
+	}
+	if _, err := store.Exec(ctx, q, `DELETE FROM repo_members WHERE principal_type = 'user' AND principal_id = ? AND repo_id IN (SELECT id FROM repos WHERE org_id = ?)`, userID, orgID); err != nil {
+		return err
+	}
+	_, err := store.Exec(ctx, q, `DELETE FROM group_members WHERE user_id = ? AND group_id IN (SELECT id FROM groups WHERE org_id = ?)`, userID, orgID)
+	return err
 }
 
 // Members lists an org's membership rows, oldest first.

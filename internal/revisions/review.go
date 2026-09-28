@@ -12,6 +12,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/ids"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -139,8 +140,14 @@ type ReviewerCandidate struct {
 }
 
 // Maintainers are the users with at least the maintainer role on the repo
-// (directly or through groups), plus instance admins who are members.
+// (directly or through groups), plus instance admins who belong to its org
+// (in multi mode, the operator's admins aren't every org's reviewers, and
+// their names and addresses aren't every org's to see).
 func maintainers(ctx context.Context, q store.Querier, repoID string) ([]users.User, error) {
+	var orgID string
+	if err := store.QueryRow(ctx, q, `SELECT org_id FROM repos WHERE id = ?`, repoID).Scan(&orgID); err != nil {
+		return nil, err
+	}
 	rows, err := store.Query(ctx, q, `SELECT DISTINCT u.id FROM users u WHERE u.status = 'active' AND (
 		u.id IN (SELECT principal_id FROM repo_members WHERE repo_id = ? AND principal_type = 'user' AND role IN ('maintainer', 'admin'))
 		OR u.id IN (SELECT gm.user_id FROM group_members gm JOIN repo_members m ON m.principal_type = 'group' AND m.principal_id = gm.group_id
@@ -162,9 +169,13 @@ func maintainers(ctx context.Context, q store.Querier, repoID string) ([]users.U
 	out := make([]users.User, 0, len(idsList))
 	for _, id := range idsList {
 		u, err := users.ByID(ctx, q, id)
-		if err == nil {
-			out = append(out, u)
+		if err != nil {
+			continue
 		}
+		if in, err := orgs.Belongs(ctx, q, orgID, u); err != nil || !in {
+			continue
+		}
+		out = append(out, u)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
@@ -253,6 +264,10 @@ func (s *Service) editorSet(ctx context.Context, revID string) (map[string]bool,
 func (s *Service) checkReviewer(ctx context.Context, repo repos.Repo, rev Revision, userID string, editors map[string]bool) error {
 	u, err := users.ByID(ctx, s.DB, userID)
 	if err != nil {
+		return invalid("reviewers", "Unknown reviewer.")
+	}
+	// Outside the repository's org, nobody is anybody (not even a name).
+	if in, err := orgs.Belongs(ctx, s.DB, repo.OrgID, u); err != nil || !in {
 		return invalid("reviewers", "Unknown reviewer.")
 	}
 	role, err := access.Effective(ctx, s.DB, u, repo.ID)

@@ -128,7 +128,7 @@ func (s *Service) Import(ctx context.Context, r io.Reader, opt ImportOptions) (I
 	if a.manifest.SchemaVersion > schema {
 		return res, fmt.Errorf("the archive comes from a newer kmdn (schema %d, here %d): upgrade first", a.manifest.SchemaVersion, schema)
 	}
-	rm := &remapper{to: map[string]string{}}
+	rm := &remapper{to: map[string]string{}, users: map[string]bool{}, hosts: map[string]bool{}, seen: map[string]bool{}}
 	remap := rm.to
 	orgID, slug := a.manifest.Org.ID, a.manifest.Org.Slug
 	if opt.Slug != "" {
@@ -159,6 +159,7 @@ func (s *Service) Import(ctx context.Context, r io.Reader, opt ImportOptions) (I
 		}
 	}
 	res.OrgID, res.Slug = orgID, slug
+	rm.org = orgID
 	err = s.DB.InTx(ctx, func(tx *store.Tx) error {
 		// Accounts: matched by email, else created with their id.
 		if err := ndjson(a.files["users.ndjson"], func(u map[string]any) error {
@@ -168,6 +169,7 @@ func (s *Service) Import(ctx context.Context, r io.Reader, opt ImportOptions) (I
 			switch {
 			case err == nil:
 				remap[id] = have // itself too, so a copy doesn't renew it
+				rm.users[have] = true
 				return nil
 			case !errors.Is(store.NotFound(err), store.ErrNotFound):
 				return err
@@ -182,6 +184,7 @@ func (s *Service) Import(ctx context.Context, r io.Reader, opt ImportOptions) (I
 				remap[id] = id
 			}
 			id = remap[id]
+			rm.users[id] = true
 			status := str(u["status"])
 			if status == "" {
 				status = "active"
@@ -199,6 +202,7 @@ func (s *Service) Import(ctx context.Context, r io.Reader, opt ImportOptions) (I
 			err := store.QueryRow(ctx, tx, `SELECT id FROM forge_hosts WHERE kind = ? AND base_url = ? AND (org_id IS NULL OR org_id = ?) ORDER BY org_id NULLS FIRST LIMIT 1`, kind, base, orgID).Scan(&have)
 			if err == nil {
 				remap[id] = have
+				rm.hosts[have] = true
 				return nil
 			}
 			if !errors.Is(store.NotFound(err), store.ErrNotFound) {
@@ -206,6 +210,7 @@ func (s *Service) Import(ctx context.Context, r io.Reader, opt ImportOptions) (I
 			}
 			newID := ids.New("fh")
 			remap[id] = newID
+			rm.hosts[newID] = true
 			res.Hosts++
 			_, err = store.Exec(ctx, tx, `INSERT INTO forge_hosts (id, kind, base_url, api_url, display_name, org_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				newID, kind, base, str(h["api_url"]), str(h["display_name"]), orgID, store.Millis(time.Now()))
@@ -265,6 +270,46 @@ func (s *Service) Import(ctx context.Context, r io.Reader, opt ImportOptions) (I
 type remapper struct {
 	to    map[string]string
 	fresh bool
+	// What rows may refer to: the org being imported, the archive's own
+	// accounts and forge hosts, and the rows already inserted from it.
+	org   string
+	users map[string]bool
+	hosts map[string]bool
+	seen  map[string]bool
+}
+
+// check refuses a value that reaches outside the archive: an archive is a
+// file its org's admins can edit, so a row naming another org, an account
+// or host the archive doesn't list, or a row that isn't in it, would give
+// them a way into the rest of the instance.
+func (m *remapper) check(t, col string, v any) error {
+	s, ok := v.(string)
+	if !ok {
+		return nil
+	}
+	switch {
+	case col == "org_id" || (t == "orgs" && col == "id"):
+		if s != m.org {
+			return fmt.Errorf("%s.%s names another organization", t, col)
+		}
+	case col == "id" || t == "audit_log": // the audit log may name what's gone
+	case strings.HasSuffix(col, "_id") || strings.HasSuffix(col, "_by"):
+		p := idLike.FindStringSubmatch(s)
+		if p == nil {
+			return nil
+		}
+		switch {
+		case p[1] == ids.User && !m.users[s]:
+			return fmt.Errorf("%s.%s names an account the archive doesn't list", t, col)
+		case p[1] == "fh" && !m.hosts[s]:
+			return fmt.Errorf("%s.%s names a forge host the archive doesn't list", t, col)
+		case p[1] == ids.Org && s != m.org:
+			return fmt.Errorf("%s.%s names another organization", t, col)
+		case p[1] != ids.User && p[1] != "fh" && p[1] != ids.Org && !m.seen[s]:
+			return fmt.Errorf("%s.%s refers to %s, which isn't in the archive", t, col, s)
+		}
+	}
+	return nil
 }
 
 var idLike = regexp.MustCompile(`^([a-z]{2,5})_[0-9a-hjkmnp-tv-z]{26}$`)
@@ -332,29 +377,41 @@ func value(v any, typ string, remap *remapper) any {
 }
 
 func insert(ctx context.Context, q store.Querier, t string, cols []string, types map[string]string, row map[string]any, remap *remapper) error {
+	return insertRow(ctx, q, t, cols, types, row, remap, "")
+}
+
+func insertIgnore(ctx context.Context, q store.Querier, t string, cols []string, types map[string]string, row map[string]any, remap *remapper) error {
+	return insertRow(ctx, q, t, cols, types, row, remap, " ON CONFLICT DO NOTHING")
+}
+
+func insertRow(ctx context.Context, q store.Querier, t string, cols []string, types map[string]string, row map[string]any, remap *remapper, suffix string) error {
 	var names []string
 	var args []any
+	var id any
 	for _, c := range cols {
 		v, ok := row[c]
 		if !ok {
 			continue // a column this archive predates: its default
 		}
-		names = append(names, c)
-		args = append(args, value(v, types[c], remap))
-	}
-	_, err := store.Exec(ctx, q, `INSERT INTO `+t+` (`+strings.Join(names, ", ")+`) VALUES (`+strings.TrimSuffix(strings.Repeat("?, ", len(names)), ", ")+`)`, args...)
-	return err
-}
-
-func insertIgnore(ctx context.Context, q store.Querier, t string, cols []string, types map[string]string, row map[string]any, remap *remapper) error {
-	var names []string
-	var args []any
-	for _, c := range cols {
-		if v, ok := row[c]; ok {
-			names = append(names, c)
-			args = append(args, value(v, types[c], remap))
+		// Credentials don't travel: the org connects its forges again here.
+		if strings.HasSuffix(c, "_ref") || c == "install_id" {
+			continue
 		}
+		val := value(v, types[c], remap)
+		if err := remap.check(t, c, val); err != nil {
+			return err
+		}
+		if c == "id" {
+			id = val
+		}
+		names = append(names, c)
+		args = append(args, val)
 	}
-	_, err := store.Exec(ctx, q, `INSERT INTO `+t+` (`+strings.Join(names, ", ")+`) VALUES (`+strings.TrimSuffix(strings.Repeat("?, ", len(names)), ", ")+`) ON CONFLICT DO NOTHING`, args...)
-	return err
+	if _, err := store.Exec(ctx, q, `INSERT INTO `+t+` (`+strings.Join(names, ", ")+`) VALUES (`+strings.TrimSuffix(strings.Repeat("?, ", len(names)), ", ")+`)`+suffix, args...); err != nil {
+		return err
+	}
+	if s, ok := id.(string); ok {
+		remap.seen[s] = true
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -87,9 +88,41 @@ func TestRowLevelSecurity(t *testing.T) {
 	} else if n, _ := res.RowsAffected(); n != 0 {
 		t.Fatalf("updated %d of globex's repos", n)
 	}
-	if _, err := store.Exec(scoped, a.DB, `INSERT INTO repo_members (repo_id, principal_type, principal_id, role, added_at) VALUES (?, 'user', 'usr_x', 'admin', 0)`, globexRepo); err == nil || !strings.Contains(err.Error(), "org_id") {
+	if _, err := store.Exec(scoped, a.DB, `INSERT INTO repo_members (repo_id, principal_type, principal_id, role, added_at) VALUES (?, 'user', 'usr_x', 'admin', 0)`, globexRepo); err == nil || (!strings.Contains(err.Error(), "org_id") && !strings.Contains(err.Error(), "row-level security")) {
 		t.Fatalf("inserted a member into globex's repo: %v", err)
 	}
+	// Shared rows (no org: the instance's forge hosts) are read, not written.
+	if _, err := store.Exec(ctx, a.DB, `INSERT INTO forge_hosts (id, kind, base_url, api_url, display_name, created_at) VALUES ('fh_shared', 'gitlab', 'https://gitlab.example.com', '', 'Shared', 0)`); err != nil {
+		t.Fatal(err)
+	}
+	var shared int
+	_ = store.QueryRow(scoped, a.DB, `SELECT COUNT(*) FROM forge_hosts WHERE id = 'fh_shared'`).Scan(&shared)
+	if shared != 1 {
+		t.Fatal("acme's scope doesn't see the shared host")
+	}
+	for _, q := range []string{`UPDATE forge_hosts SET display_name = 'Mine' WHERE id = 'fh_shared'`, `DELETE FROM forge_hosts WHERE id = 'fh_shared'`} {
+		if res, err := store.Exec(scoped, a.DB, q); err != nil {
+			t.Fatal(err)
+		} else if n, _ := res.RowsAffected(); n != 0 {
+			t.Fatalf("%s: %d rows", q, n)
+		}
+	}
+	if _, err := store.Exec(scoped, a.DB, `INSERT INTO forge_hosts (id, kind, base_url, api_url, display_name, created_at) VALUES ('fh_x', 'gitlab', 'https://x.example', '', 'X', 0)`); err == nil {
+		t.Fatal("acme's scope added a shared host")
+	}
+	// Every table with an org has its policies (a new one without fails here).
+	cols, err := store.Query(ctx, a.DB, `SELECT table_name FROM information_schema.columns WHERE column_name = 'org_id' AND table_schema = current_schema() ORDER BY 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for cols.Next() {
+		var tbl string
+		_ = cols.Scan(&tbl)
+		if !slices.Contains(tables, tbl) {
+			t.Errorf("%s has org_id but no row-level security policy", tbl)
+		}
+	}
+	cols.Close()
 	// A transaction keeps its scope, and a rolled-back one doesn't leak it.
 	_ = a.DB.InTx(scoped, func(tx *store.Tx) error {
 		var n int

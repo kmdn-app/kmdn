@@ -107,6 +107,7 @@ type App struct {
 	Lifecycle *lifecycle.Service
 
 	stopTracing func(context.Context) error
+	gitProxy    *outbound.Proxy // git's connections under the strict policy
 	Invites     *invites.Service
 }
 
@@ -228,8 +229,15 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 		Content:  a.Content,
 	}
 	if a.Policy.Strict {
-		// Hosts an org added only reach public addresses.
+		// Hosts an org added only reach public addresses, and so does git,
+		// whatever its DNS says later or its remotes redirect to.
 		a.Repos.Adapters.OrgHTTP = outbound.Client(false)
+		p, err := outbound.StartProxy(outbound.Dialer(false).DialContext)
+		if err != nil {
+			return nil, fmt.Errorf("git proxy: %w", err)
+		}
+		a.gitProxy = p
+		a.Repos.Git.Proxy = p.URL
 	}
 	a.Repos.Register()
 	idx := &search.Indexer{Index: search.Index{DB: db}, Repos: a.Repos, Jobs: a.Jobs}
@@ -371,7 +379,7 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 	people.Routes(r)
 	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, OrgForges: a.Policy.OrgForgesAllowed(), SignupURL: cfg.Orgs.SignupURL, Policy: a.Policy, Events: opts.Events, Log: log}
 
-	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
+	(&admin.System{DB: db, Config: cfg, Started: time.Now(), OrgHTTP: a.Repos.Adapters.OrgHTTP}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL, Policy: a.Policy, Events: opts.Events}
 	a.Lifecycle = &lifecycle.Service{DB: db, Repos: a.Repos, Blobs: uploads, Secrets: sec, Events: opts.Events, Log: log}
 	a.Lifecycle.Routes(r, a.AuthH)
@@ -567,6 +575,9 @@ func (a *App) periodic(ctx context.Context, every time.Duration, kind string) {
 
 // Close releases resources (and flushes traces).
 func (a *App) Close() error {
+	if a.gitProxy != nil {
+		_ = a.gitProxy.Close()
+	}
 	if a.stopTracing != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = a.stopTracing(ctx)
