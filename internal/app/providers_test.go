@@ -74,7 +74,7 @@ func newAppWith(t *testing.T, mutate func(*config.Config), opts Options) (*App, 
 func TestSignInProviderAndPolicy(t *testing.T) {
 	idp := &fakeIdP{}
 	var acmeID string
-	pol := &policy.Policy{SignIn: func(_ context.Context, orgID, method string) *policy.SignInRequired {
+	pol := &policy.Policy{SignIn: func(_ context.Context, orgID string, _ policy.Subject, method string) *policy.SignInRequired {
 		if orgID != acmeID || method == auth.ProviderMethod("acme-sso") {
 			return nil
 		}

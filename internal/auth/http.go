@@ -15,6 +15,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/orgs"
+	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/telemetry"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -129,7 +130,7 @@ func (h *HTTP) Middleware(next http.Handler) http.Handler {
 		if pol := h.Svc.Policy; pol != nil && pol.SignIn != nil && !u.IsInstanceAdmin {
 			method := sess.Method
 			ctx = orgs.WithSignInGate(ctx, func(ctx context.Context, orgID string) error {
-				if req := pol.SignInFor(ctx, orgID, method); req != nil {
+				if req := pol.SignInFor(ctx, orgID, policy.Subject{UserID: u.ID, Email: u.Email}, method); req != nil {
 					return req
 				}
 				return nil
