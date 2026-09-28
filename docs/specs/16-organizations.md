@@ -120,7 +120,7 @@ Stored as `<org>/<sha[:2]>/<sha>` behind a blob store (`blobs.Store`: Put, Get, 
 A `Policy` decides what orgs may do. The default is permissive (self-hosted admins are trusted, [15](15-security.md) T10); a strict policy is for instances whose org admins aren't the operator:
 
 - git URL schemes (strict: `https` and `ssh` only; `file://`, local paths and `ext::` refused; git runs with `protocol.allow=never` except for those);
-- outbound addresses for git, forge APIs, AI and embeddings base URLs, OTLP and webhooks (strict: public addresses only, through one dialer);
+- outbound addresses for git, forge APIs, AI and embeddings base URLs, OTLP and webhooks (strict: public addresses only, through one dialer; git connects through it too, by a loopback proxy for https and the kmdn binary as ssh's `ProxyCommand`, so embedders call `kmdn.RunGitHelper` first in `main`);
 - limits per org: members, repos, repository size on disk (`RepoMB`: a mirror over it is removed and the repo shows why) and files in scope (`RepoFiles`), upload size, AI on/off and budgets;
 - which console sections org admins can edit.
 
