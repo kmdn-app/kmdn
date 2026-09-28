@@ -125,7 +125,10 @@ func (s *Service) Resolve(next http.Handler) http.Handler {
 			api.Error(w, r, api.ErrNotFound)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(orgs.WithCurrent(r.Context(), orgs.Current{Org: o, Role: role})))
+		// On Postgres, row-level security keeps this request's statements to
+		// the org's rows.
+		ctx := store.WithOrg(orgs.WithCurrent(r.Context(), orgs.Current{Org: o, Role: role}), o.ID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

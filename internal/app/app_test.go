@@ -16,6 +16,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/config"
+	"github.com/kmdn-app/kmdn/internal/storetest"
 )
 
 type tc struct {
@@ -62,6 +63,9 @@ func newApp(t *testing.T, mutate func(*config.Config)) (*App, *tc) {
 	cfg := config.Defaults()
 	cfg.DataDir = dir
 	cfg.DB.URL = "sqlite://" + filepath.Join(dir, "kmdn.db")
+	if storetest.PostgresEnabled() {
+		cfg.DB.URL = storetest.PostgresURL(t)
+	}
 	cfg.SecretKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
 	if mutate != nil {
 		mutate(&cfg)
@@ -74,6 +78,15 @@ func newApp(t *testing.T, mutate func(*config.Config)) (*App, *tc) {
 	srv := httptest.NewServer(a.Server.Handler())
 	t.Cleanup(srv.Close)
 	return a, &tc{t: t, base: srv.URL, c: newClient()}
+}
+
+// sqliteOnly skips tests that simulate failures with SQLite triggers or back
+// up the SQLite file.
+func sqliteOnly(t *testing.T) {
+	t.Helper()
+	if storetest.PostgresEnabled() {
+		t.Skip("SQLite only")
+	}
 }
 
 func newClient() *http.Client {

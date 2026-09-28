@@ -157,7 +157,7 @@ func TestAdminSystem(t *testing.T) {
 	runJobs(t, a)
 	_, sys := admin.do("GET", "/admin/system", nil)
 	failed := sys["failed_jobs"].([]any)
-	if sys["db"] != "sqlite" || len(failed) != 1 || failed[0].(map[string]any)["last_error"] != "the forge said no" {
+	if sys["db"] != a.DB.Dialect.String() || len(failed) != 1 || failed[0].(map[string]any)["last_error"] != "the forge said no" {
 		t.Fatalf("system: %v", sys)
 	}
 	id := failed[0].(map[string]any)["id"].(string)

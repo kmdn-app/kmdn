@@ -9,6 +9,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -108,7 +109,7 @@ func TestOrgMembers(t *testing.T) {
 	if code, _ := root.do("PATCH", "/orgs/acme/members/"+carl.ID, map[string]any{"role": "admin"}); code != 404 {
 		t.Fatalf("changing a non-member: %d", code)
 	}
-	if _, err := a.DB.ExecContext(ctx, `INSERT INTO org_members (org_id, user_id, role, status, joined_at) SELECT id, ?, 'member', 'active', 0 FROM orgs WHERE slug = 'acme'`, carl.ID); err != nil {
+	if _, err := store.Exec(ctx, a.DB, `INSERT INTO org_members (org_id, user_id, role, status, joined_at) SELECT id, ?, 'member', 'active', 0 FROM orgs WHERE slug = 'acme'`, carl.ID); err != nil {
 		t.Fatal(err)
 	}
 	if code, o := carlC.do("GET", "/orgs/acme", nil); code != 200 || o["role"] != "member" {

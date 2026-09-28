@@ -115,6 +115,7 @@ func TestPublishClaimRejectsLateMutationsBeforeChangingDocuments(t *testing.T) {
 }
 
 func TestPublishClaimRecoversExactPushedMergeAfterRestart(t *testing.T) {
+	sqliteOnly(t)
 	a, client, repo, rev, u, remote := approvedClaimFixture(t)
 	ctx := context.Background()
 	if _, err := store.Exec(ctx, a.DB, `CREATE TRIGGER fail_publish BEFORE UPDATE OF state ON revisions WHEN NEW.state = 'published' BEGIN SELECT RAISE(FAIL, 'crash after push'); END`); err != nil {
@@ -171,6 +172,7 @@ func TestPublishClaimRecoversExactPushedMergeAfterRestart(t *testing.T) {
 }
 
 func TestPublishClaimSurvivesBackupBeforePush(t *testing.T) {
+	sqliteOnly(t)
 	a, client, _, rev, _, remote := approvedClaimFixture(t)
 	ctx := context.Background()
 	initial := gitIn(t, remote, "rev-parse", "main")
