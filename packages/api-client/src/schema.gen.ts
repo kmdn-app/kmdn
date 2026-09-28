@@ -3798,6 +3798,8 @@ export interface components {
             settings: components["schemas"]["OrgSettings"];
             /** @description Fields managed by the deployment */
             locked: string[];
+            /** @description Where the org's plan, which locks those fields, can be changed (Policy.UpgradeURL) */
+            upgrade_url?: string;
         };
         OrgDomain: {
             domain: string;
@@ -4155,6 +4157,8 @@ export interface components {
             smtp_configured: boolean;
             smtp_from_config: boolean;
             instance_name: string;
+            /** @description Where new people create an account and an org (orgs.signup_url), if the instance offers signup */
+            signup_url?: string;
         };
         SMTPSettings: {
             host: string;
@@ -4734,6 +4738,8 @@ export interface operations {
                         mode: "single" | "multi";
                         /** @description The caller may create an organization */
                         can_create: boolean;
+                        /** @description Where people create an org through the instance's signup (orgs.signup_url); empty when none */
+                        signup_url?: string;
                         /** @description Org admins can add their own forges (policy) */
                         org_forges: boolean;
                     };

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { ProblemMessage } from "@/components/problem-message";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -354,7 +355,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
               </Select>
             </div>
           </div>
-          {invite.error && <p className="text-[0.8125rem] text-destructive">{errorMessage(invite.error, t("errors.generic"))}</p>}
+          {invite.error && <ProblemMessage error={invite.error} />}
         </div>
         <DialogFooter>
           <Button onClick={() => invite.mutate()} disabled={!email || invite.isPending}>
@@ -817,11 +818,7 @@ function ConnectDialog({ host, onClose }: { host: ForgeHost; onClose: () => void
               <Input id="cr-branch" className="font-mono" placeholder={t("admin.defaultBranch")} value={form.target_branch} onChange={(e) => setForm({ ...form, target_branch: e.target.value })} />
             </div>
           </div>
-          {connect.error && (
-            <p role="alert" className="text-[0.8125rem] text-destructive">
-              {errorMessage(connect.error, t("errors.generic"))}
-            </p>
-          )}
+          {connect.error && <ProblemMessage error={connect.error} />}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               {t("settings.cancel")}

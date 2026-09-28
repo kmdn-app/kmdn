@@ -36,6 +36,9 @@ type Policy struct {
 	// and instance admins are never blocked, so an org can't lock itself
 	// out.
 	SignIn func(ctx context.Context, orgID, method string) *SignInRequired
+	// UpgradeURL is where an org's admins lift its limits (a billing
+	// page); limit errors carry it. nil or "" for none.
+	UpgradeURL func(ctx context.Context, orgID string) string
 }
 
 // SignInRequired is why a session may not act in an org, and where to sign
@@ -84,8 +87,19 @@ type Limits struct {
 
 // ErrLimit is returned when an org is at one of its limits.
 type ErrLimit struct {
-	What  string // members | repos
+	What  string // members | repositories
 	Limit int
+	// UpgradeURL lifts the limit (Policy.UpgradeURL), if any.
+	UpgradeURL string
+}
+
+// Limit is the error for orgID being at its limit of what.
+func (p *Policy) Limit(ctx context.Context, orgID, what string, limit int) *ErrLimit {
+	e := &ErrLimit{What: what, Limit: limit}
+	if p != nil && p.UpgradeURL != nil {
+		e.UpgradeURL = p.UpgradeURL(ctx, orgID)
+	}
+	return e
 }
 
 func (e *ErrLimit) Error() string {
@@ -189,8 +203,12 @@ func (p *Policy) AllowPrivateOutbound(configured bool) bool {
 // Problem is the API error for an org at a limit (409 limit_reached, with
 // the limit and what it caps as params).
 func Problem(l *ErrLimit) *api.Problem {
-	return api.Err(http.StatusConflict, "limit_reached", "This organization has reached its limit of "+strconv.Itoa(l.Limit)+" "+l.What+".").
+	p := api.Err(http.StatusConflict, "limit_reached", "This organization has reached its limit of "+strconv.Itoa(l.Limit)+" "+l.What+".").
 		WithParam("what", l.What).WithParam("limit", l.Limit)
+	if l.UpgradeURL != "" {
+		p = p.WithParam("upgrade_url", l.UpgradeURL)
+	}
+	return p
 }
 
 // IsLimit reports whether err is an ErrLimit.

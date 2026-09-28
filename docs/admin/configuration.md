@@ -108,6 +108,14 @@ SMTP can also be set in the admin console. Values from the file or the environme
 
 Budgets and consistency scan settings live in the admin console. See [Assistant and consistency](assistant.md).
 
+### Organizations
+
+| Key | Default | Description |
+|---|---|---|
+| `orgs.mode` | `single` | `single`: one organization that every account belongs to. `multi`: any number, and accounts belong to the ones they join. |
+| `orgs.allow_create` | `admins` | Who can create organizations in `multi` mode: `admins` (instance admins) or `anyone` signed in. |
+| `orgs.signup_url` | none | Where new people create an account and an organization, when a program embedding kmdn offers signup (a path like `/signup`, or a URL). The sign-in page and people without an organization link to it. |
+
 ### Limits
 
 | Key | Default | Description |

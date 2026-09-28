@@ -34,7 +34,9 @@ type Service struct {
 	Mail    *mail.Service
 	Auth    *auth.HTTP
 	BaseURL string
-	Log     *slog.Logger
+	// SignupURL is orgs.signup_url.
+	SignupURL string
+	Log       *slog.Logger
 }
 
 // Prepare issues a fresh setup token when no admin exists and logs the URL.
@@ -61,6 +63,9 @@ type Status struct {
 	SMTPConfigured bool   `json:"smtp_configured"`
 	SMTPFromConfig bool   `json:"smtp_from_config"`
 	InstanceName   string `json:"instance_name"`
+	// SignupURL is where new people create an account and an org, if the
+	// instance offers signup (orgs.signup_url).
+	SignupURL string `json:"signup_url,omitempty"`
 }
 
 func (s *Service) status(ctx context.Context) (Status, error) {
@@ -79,6 +84,7 @@ func (s *Service) status(ctx context.Context) (Status, error) {
 		SMTPConfigured: s.Mail.Configured(ctx),
 		SMTPFromConfig: s.Mail.FromConfig(),
 		InstanceName:   auth.InstanceName(ctx, s.DB),
+		SignupURL:      s.SignupURL,
 	}, nil
 }
 

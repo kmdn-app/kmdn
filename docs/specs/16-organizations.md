@@ -133,7 +133,7 @@ A limit reached is an explicit answer (409 `limit_reached`, with what and how ma
 ```go
 cfg, _ := kmdn.LoadConfig("")               // or kmdn.DefaultConfig()
 app, err := kmdn.New(ctx, cfg, logger,
-    kmdn.WithPolicy(&kmdn.Policy{Strict: true, Limits: planLimits}), // URL/egress rules, members, repos, upload size
+    kmdn.WithPolicy(&kmdn.Policy{Strict: true, Limits: planLimits, UpgradeURL: billingPage}), // URL/egress rules, members, repos, upload size; limit errors link to UpgradeURL
     kmdn.WithManagedSettings(planSettings),    // e.g. {"assistant": false, "monthly_tokens": 100000}, read-only in the console
     kmdn.WithEvents(onEvent),                  // org created/status, member added/changed/removed, repo connected/removed, AI usage
     kmdn.WithRoutes(func(r chi.Router) {…}),   // root: sign-up pages, billing webhooks
@@ -145,6 +145,9 @@ app, err := kmdn.New(ctx, cfg, logger,
 org, _ := app.CreateOrg(ctx, kmdn.NewOrg{Name: "Acme", OwnerEmail: "alice@acme.dev"})
 app.SuspendOrg(ctx, org.ID, "Payment failed.")   // read-only, reason shown; ResumeOrg lifts it
 app.SignIn(w, r, "alice@acme.dev")               // after the program verified the address itself
+s, ok := app.Authenticate(r)                     // on the program's own routes: the session, and its CSRF token for forms
+app.SendMail(ctx, kmdn.Mail{To: …, Subject: …, Text: …}) // through the instance's mail settings
+kmdn.ValidSlug(slug); kmdn.Slugify(name)         // for a signup form
 app.Seats(ctx, org.ID); app.OrgSettings(ctx, org.ID); app.DB()
 http.ListenAndServe(addr, app.Handler())          // or app.Run(ctx)
 ```

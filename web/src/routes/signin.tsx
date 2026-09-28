@@ -32,7 +32,17 @@ function SignIn() {
       {sentTo ? (
         <CheckEmail email={sentTo.email} minutes={sentTo.minutes} onBack={() => setSentTo(null)} />
       ) : (
-        <RequestForm instance={instance} email={email} setEmail={setEmail} onSent={setSentTo} t={t} />
+        <>
+          <RequestForm instance={instance} email={email} setEmail={setEmail} onSent={setSentTo} t={t} />
+          {setup?.signup_url && (
+            <p className="mt-6 text-center text-[0.8125rem] text-muted-foreground">
+              {t("signin.new")}{" "}
+              <a className="font-medium text-foreground underline underline-offset-2" href={setup.signup_url}>
+                {t("signin.signup")}
+              </a>
+            </p>
+          )}
+        </>
       )}
     </AuthLayout>
   );

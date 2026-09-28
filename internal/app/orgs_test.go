@@ -9,6 +9,8 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/orgs"
+	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
@@ -325,5 +327,31 @@ func TestOrgUploadsAreSeparate(t *testing.T) {
 	})
 	if len(paths) != 2 {
 		t.Fatalf("files on disk: %v", paths)
+	}
+}
+
+// With orgs.signup_url, the sign-in page and people without an org learn
+// where to create one.
+func TestSignupURL(t *testing.T) {
+	a, c := newApp(t, func(cfg *config.Config) { multiOrgs(cfg); cfg.Orgs.SignupURL = "/signup" })
+	if _, st := c.do("GET", "/setup/status", nil); st["signup_url"] != "/signup" {
+		t.Fatalf("status: %v", st)
+	}
+	u, _ := users.Create(context.Background(), a.DB, "new@example.com", "New", false)
+	signIn(t, a, c, u)
+	if _, list := c.do("GET", "/orgs", nil); list["signup_url"] != "/signup" || len(list["items"].([]any)) != 0 {
+		t.Fatalf("orgs: %v", list)
+	}
+}
+
+// Settings a plan locks come with the link to change the plan.
+func TestSettingsUpgradeURL(t *testing.T) {
+	pol := &policy.Policy{UpgradeURL: func(context.Context, string) string { return "/billing/acme" }}
+	a, c := newAppWith(t, multiOrgs, Options{Policy: pol, Managed: func(context.Context, orgs.Org) map[string]any { return map[string]any{"assistant": false} }})
+	u, _ := users.Create(context.Background(), a.DB, "olga@acme.dev", "Olga", false)
+	signIn(t, a, c, u)
+	c.do("POST", "/orgs", map[string]any{"name": "Acme", "slug": "acme"})
+	if _, st := c.do("GET", "/orgs/acme/admin/settings", nil); st["upgrade_url"] != "/billing/acme" {
+		t.Fatalf("settings: %v", st)
 	}
 }
