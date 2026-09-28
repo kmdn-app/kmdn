@@ -239,7 +239,7 @@ func (s *Service) WriteReview(ctx context.Context, revID, by string) error {
 		system = append(system, llm.System{Text: "The repository's style guide:\n" + style})
 	}
 	res, err := s.LLM.Complete(ctx, llm.TaskReviewSummary, llm.Run{UserID: by, RepoID: repo.ID, RevisionID: rev.ID}, llm.ChatRequest{
-		System: system, Messages: []llm.Message{llm.Text(llm.RoleUser, prompt.String())}, Tools: []llm.Tool{reviewTool}, ToolChoice: reviewTool.Name, MaxTokens: 2000,
+		System: system, Messages: []llm.Message{llm.Text(llm.RoleUser, prompt.String())}, Tools: []llm.Tool{reviewTool}, ToolChoice: reviewTool.Name, MaxTokens: 8000,
 	})
 	var out struct {
 		Summary     string `json:"summary"`

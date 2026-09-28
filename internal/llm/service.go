@@ -337,7 +337,7 @@ func (s *Service) RunCheck(ctx context.Context, st Settings, key string) Check {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	res, err := Collect(ctx, p, ChatRequest{Model: model, MaxTokens: 200, Tools: []Tool{checkTool}, ToolChoice: checkTool.Name,
+	res, err := Collect(ctx, p, ChatRequest{Model: model, MaxTokens: 2000, Tools: []Tool{checkTool}, ToolChoice: checkTool.Name,
 		Messages: []Message{Text(RoleUser, "Call the report_status tool with ok set to true.")}}, nil)
 	id, _ := s.StartRun(context.WithoutCancel(ctx), Run{Task: "capability_check", Provider: p.Name(), Model: model})
 	_ = s.FinishRun(context.WithoutCancel(ctx), id, res.Usage, nil, map[bool]string{true: "error", false: "done"}[err != nil], errString(err))

@@ -10,7 +10,9 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -78,7 +80,8 @@ type ChatRequest struct {
 	Messages  []Message
 	Tools     []Tool
 	MaxTokens int
-	// ToolChoice forces a tool ("" lets the model choose).
+	// ToolChoice forces a tool ("" lets the model choose). Models that
+	// reject forcing get the tool asked for in the prompt (collect).
 	ToolChoice string
 }
 
@@ -173,7 +176,52 @@ func Collect(ctx context.Context, p Provider, req ChatRequest, onText func(strin
 	return collect(ctx, p, req, onText)
 }
 
+// unforced remembers the models that reject a forced tool choice (Claude
+// Opus 5.5, Fable 5.1…), by provider and model: their calls ask for the tool
+// in the prompt instead.
+var unforced sync.Map
+
 func collect(ctx context.Context, p Provider, req ChatRequest, onText func(string)) (Result, error) {
+	if req.ToolChoice == "" {
+		return stream(ctx, p, req, onText)
+	}
+	key := p.Name() + "\x00" + req.Model
+	if _, ok := unforced.Load(key); ok {
+		return steer(ctx, p, req, onText)
+	}
+	res, err := stream(ctx, p, req, onText)
+	if !rejectsToolChoice(err) {
+		return res, err
+	}
+	unforced.Store(key, true)
+	return steer(ctx, p, req, onText)
+}
+
+// rejectsToolChoice: the provider refused the request for its tool_choice,
+// before any output (Anthropic's message, relayed as is by proxies).
+func rejectsToolChoice(err error) bool {
+	var ae *APIError
+	return errors.As(err, &ae) && ae.Status >= 400 && ae.Status < 500 && strings.Contains(ae.Message, "tool_choice")
+}
+
+// steer lets the model choose, asks for the tool in the system prompt and
+// retries once when the model answers without calling it.
+func steer(ctx context.Context, p Provider, req ChatRequest, onText func(string)) (Result, error) {
+	name := req.ToolChoice
+	req.ToolChoice = ""
+	req.System = append(slices.Clip(req.System), System{Text: "Answer by calling the " + name + " tool."})
+	var used Usage
+	for attempt := 0; ; attempt++ {
+		res, err := stream(ctx, p, req, onText)
+		used.Add(res.Usage)
+		res.Usage = used
+		if err != nil || attempt > 0 || slices.ContainsFunc(res.Content, func(b Block) bool { return b.Type == BlockToolUse && b.Name == name }) {
+			return res, err
+		}
+	}
+}
+
+func stream(ctx context.Context, p Provider, req ChatRequest, onText func(string)) (Result, error) {
 	ch, err := p.Stream(ctx, req)
 	if err != nil {
 		return Result{}, err
