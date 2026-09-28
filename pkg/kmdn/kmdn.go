@@ -161,6 +161,19 @@ func New(ctx context.Context, cfg Config, log *slog.Logger, opts ...Option) (*Ap
 // Provisioner changes org membership from an outside source.
 func (k *App) Provisioner() *Provisioner { return k.a.Provision }
 
+// UserByEmail finds an account by email address (ErrNotFound when there is
+// none).
+func (k *App) UserByEmail(ctx context.Context, email string) (User, error) {
+	u, err := users.ByEmail(ctx, k.a.DB, users.NormalizeEmail(email))
+	if errors.Is(err, store.ErrNotFound) {
+		return u, ErrNotFound
+	}
+	return u, err
+}
+
+// ErrNotFound means what was looked up doesn't exist.
+var ErrNotFound = store.ErrNotFound
+
 // Mail is an email: plain text, and optionally HTML.
 type Mail = mail.Message
 

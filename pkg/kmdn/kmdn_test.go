@@ -126,6 +126,12 @@ func TestEmbedding(t *testing.T) {
 	if code, who := get("/whoami"); code != 200 || who["email"] != "alice@acme.dev" || who["csrf"] == "" || who["method"] != "embedded" {
 		t.Fatalf("authenticate on a program route: %d %v", code, who)
 	}
+	if u, err := app.UserByEmail(ctx, "Alice@acme.dev"); err != nil || u.Email != "alice@acme.dev" {
+		t.Fatalf("user by email: %v %+v", err, u)
+	}
+	if _, err := app.UserByEmail(ctx, "nobody@acme.dev"); !errors.Is(err, kmdn.ErrNotFound) {
+		t.Fatalf("missing user: %v", err)
+	}
 	if err := kmdn.ValidSlug("signup"); err == nil || kmdn.ValidSlug(kmdn.Slugify("Acme Corp")) != nil {
 		t.Fatalf("slugs: %v", err)
 	}
