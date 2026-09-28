@@ -65,6 +65,8 @@ type (
 	// SignInRequired is what Policy.SignIn returns to refuse a session in
 	// an org.
 	SignInRequired = policy.SignInRequired
+	// SignInSubject is who Policy.SignIn is asked about.
+	SignInSubject = policy.Subject
 	// Provisioner changes org membership and groups from an outside
 	// source (directory sync) without invitations; ProvisionedMember is
 	// one person as that source sees them.

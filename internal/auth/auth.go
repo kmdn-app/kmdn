@@ -410,7 +410,7 @@ func (s *Service) SignInAllowed(ctx context.Context, u users.User, method string
 		if role == orgs.Owner {
 			return nil, nil
 		}
-		req := s.Policy.SignInFor(ctx, o.ID, method)
+		req := s.Policy.SignInFor(ctx, o.ID, policy.Subject{UserID: u.ID, Email: u.Email}, method)
 		if req == nil {
 			return nil, nil
 		}

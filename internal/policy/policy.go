@@ -35,7 +35,7 @@ type Policy struct {
 	// methods were recorded) may act in an org. nil allows it. Org owners
 	// and instance admins are never blocked, so an org can't lock itself
 	// out.
-	SignIn func(ctx context.Context, orgID, method string) *SignInRequired
+	SignIn func(ctx context.Context, orgID string, who Subject, method string) *SignInRequired
 	// UpgradeURL is where an org's admins lift its limits (a billing
 	// page); limit errors carry it. nil or "" for none.
 	UpgradeURL func(ctx context.Context, orgID string) string
@@ -65,12 +65,18 @@ func (e *SignInRequired) Problem() *api.Problem {
 	return p
 }
 
+// Subject is who a sign-in policy is asked about.
+type Subject struct {
+	UserID string
+	Email  string
+}
+
 // SignInFor applies the SignIn hook.
-func (p *Policy) SignInFor(ctx context.Context, orgID, method string) *SignInRequired {
+func (p *Policy) SignInFor(ctx context.Context, orgID string, who Subject, method string) *SignInRequired {
 	if p == nil || p.SignIn == nil {
 		return nil
 	}
-	r := p.SignIn(ctx, orgID, method)
+	r := p.SignIn(ctx, orgID, who, method)
 	if r != nil && r.OrgID == "" {
 		r.OrgID = orgID
 	}
