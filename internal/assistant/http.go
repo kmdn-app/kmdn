@@ -33,10 +33,11 @@ func (s *Service) Routes(r chi.Router) {
 }
 
 // CanRead reports whether u may see a thread: its owner for Q&A, anyone
-// who can see the repository for a revision's thread.
+// who can see the repository for a revision's thread; either way only while
+// they can still see the repository (not after leaving its org).
 func (s *Service) CanRead(ctx context.Context, u users.User, t Thread) bool {
-	if t.OwnerID != "" {
-		return t.OwnerID == u.ID
+	if t.OwnerID != "" && t.OwnerID != u.ID {
+		return false
 	}
 	role, err := access.Effective(ctx, s.DB, u, t.RepoID)
 	return err == nil && role != access.None

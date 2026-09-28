@@ -123,6 +123,19 @@ func TestAssistantQA(t *testing.T) {
 	if _, list := samC.do("GET", "/repos/"+repoID+"/assistant/threads", nil); len(list["items"].([]any)) != 1 {
 		t.Fatalf("list: %v", list)
 	}
+	// Losing the repository (leaving its org, a revoked grant) loses its
+	// threads too: no reading them, no asking the assistant about it.
+	_ = access.Revoke(ctx, a.DB, repoID, "user", sam.ID)
+	if role, _ := access.Effective(ctx, a.DB, sam, repoID); role != access.None {
+		t.Fatalf("sam still has %s", role)
+	}
+	if code, _ := samC.do("GET", "/assistant/threads/"+threadID, nil); code != 404 {
+		t.Fatalf("own thread without access: %d", code)
+	}
+	if code, _ := samC.do("POST", "/assistant/threads/"+threadID+"/messages", map[string]any{"text": "read docs/policy.md"}); code != 404 {
+		t.Fatalf("asking without access: %d", code)
+	}
+	_ = access.Grant(ctx, a.DB, repoID, "user", sam.ID, access.Contributor)
 
 	// Asking for a change proposes a revision; accepting starts it and moves the conversation.
 	model.push(func(llm.ChatRequest) []llm.ChatEvent {
