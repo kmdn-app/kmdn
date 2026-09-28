@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 )
 
 // Row-level security on Postgres (docs/specs/16-organizations.md#isolation):
@@ -19,9 +21,10 @@ import (
 
 type scopeKey struct{}
 
-// WithOrg scopes the Postgres statements run with ctx to orgID.
+// WithOrg scopes the Postgres statements run with ctx to orgID. Logs and
+// traces from ctx carry the org too (telemetry.WithOrg).
 func WithOrg(ctx context.Context, orgID string) context.Context {
-	return context.WithValue(ctx, scopeKey{}, orgID)
+	return context.WithValue(telemetry.WithOrg(ctx, orgID), scopeKey{}, orgID)
 }
 
 // OrgScope returns the org ctx is scoped to ("" when unscoped).

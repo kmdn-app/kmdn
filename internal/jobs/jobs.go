@@ -316,6 +316,7 @@ func (q *Queue) RunOnce(ctx context.Context) (bool, error) {
 	start := q.now()
 	telemetry.JobDelay.WithLabelValues(j.Kind).Observe(max(0, start.Sub(j.RunAt).Seconds()))
 	jctx, span := telemetry.Tracer().Start(ctx, "job "+j.Kind, trace.WithAttributes(attribute.String("kmdn.job.id", j.ID), attribute.String("kmdn.job.kind", j.Kind), attribute.Int("kmdn.job.attempt", j.Attempts)))
+	jctx = telemetry.WithOrg(jctx, j.OrgID)
 	jctx, cancel := context.WithTimeout(jctx, q.opts.LockFor)
 	result, herr := safeRun(jctx, h, j)
 	cancel()
@@ -323,7 +324,7 @@ func (q *Queue) RunOnce(ctx context.Context) (bool, error) {
 	telemetry.JobDuration.WithLabelValues(j.Kind).Observe(q.now().Sub(start).Seconds())
 	outcome := "done"
 	if herr != nil {
-		q.opts.Logger.Warn("job failed", "job_id", j.ID, "kind", j.Kind, "attempt", j.Attempts, "error", herr)
+		q.opts.Logger.WarnContext(jctx, "job failed", "job_id", j.ID, "kind", j.Kind, "attempt", j.Attempts, "error", herr)
 		outcome = "retry"
 		var p permanent
 		if errors.As(herr, &p) || j.Attempts >= j.MaxAttempts {

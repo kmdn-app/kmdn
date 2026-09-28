@@ -30,6 +30,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/provision"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/telemetry"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -166,6 +167,11 @@ type App struct {
 	a *app.App
 }
 
+// LogHandler adds org_id to records logged with the context of org-scoped
+// work (an org's requests, its jobs), like kmdn's own logs; New applies it
+// to the logger it's given.
+func LogHandler(h slog.Handler) slog.Handler { return telemetry.ContextHandler(h) }
+
 // New opens the database, applies migrations and builds kmdn.
 func New(ctx context.Context, cfg Config, log *slog.Logger, opts ...Option) (*App, error) {
 	var o app.Options
@@ -175,6 +181,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger, opts ...Option) (*Ap
 	if log == nil {
 		log = slog.Default()
 	}
+	log = slog.New(LogHandler(log.Handler()))
 	a, err := app.NewWith(ctx, cfg, log, o)
 	if err != nil {
 		return nil, err
