@@ -121,22 +121,24 @@ A limit reached is an explicit answer (409 `limit_reached`, with what and how ma
 `pkg/kmdn` is the public surface for building kmdn into another Go program (the only way, since `internal/` can't be imported):
 
 ```go
-app, err := kmdn.New(ctx, cfg,
-    kmdn.WithPolicy(p),                 // limits, URL and egress rules, console sections
-    kmdn.WithEvents(sink),              // member added/removed/role changed, usage, org lifecycle
-    kmdn.WithRoutes(func(r chi.Router){…}), kmdn.WithAPIRoutes(…),
-    kmdn.WithMigrations(fs, "schema"),  // extra migrations in their own schema
-    kmdn.WithManagedSettings(m),
-    kmdn.WithSignInProvider(sp),        // e.g. SAML; returns a verified identity
-    kmdn.WithSignInPolicy(sip),         // per-org allowed sign-in methods
-    kmdn.WithProvisioning(),            // create/deactivate memberships from an external source
-    kmdn.WithBlobStore(bs), kmdn.WithMailer(m), kmdn.WithLogger(l), kmdn.WithMetrics(reg),
+cfg, _ := kmdn.LoadConfig("")               // or kmdn.DefaultConfig()
+app, err := kmdn.New(ctx, cfg, logger,
+    kmdn.WithPolicy(&kmdn.Policy{Strict: true, Limits: planLimits}), // URL/egress rules, members, repos, upload size
+    kmdn.WithManagedSettings(planSettings),    // e.g. {"assistant": false, "monthly_tokens": 100000}, read-only in the console
+    kmdn.WithEvents(onEvent),                  // org created/status, member added/changed/removed, repo connected/removed, AI usage
+    kmdn.WithRoutes(func(r chi.Router) {…}),   // root: sign-up pages, billing webhooks
+    kmdn.WithAPIRoutes(func(r chi.Router) {…}),// /api/v1, kmdn.CurrentUser(r)
+    kmdn.WithOrgRoutes(func(r chi.Router) {…}),// /api/v1/orgs/{org}, kmdn.CurrentOrg(r); outsiders get 404
+    kmdn.WithMigrations(migrationsFS, "saas_migrations"),
 )
-app.Orgs.Create(ctx, kmdn.NewOrg{Slug, Name, Owner})   // and Suspend, Resume, Export, Delete
-http.ListenAndServe(addr, app.Handler())
+org, _ := app.CreateOrg(ctx, kmdn.NewOrg{Name: "Acme", OwnerEmail: "alice@acme.dev"})
+app.SuspendOrg(ctx, org.ID, "Payment failed.")   // read-only, reason shown; ResumeOrg lifts it
+app.SignIn(w, r, "alice@acme.dev")               // after the program verified the address itself
+app.Seats(ctx, org.ID); app.OrgSettings(ctx, org.ID); app.DB()
+http.ListenAndServe(addr, app.Handler())          // or app.Run(ctx)
 ```
 
-An example embedder test in the core runs two orgs behind these options, so the surface can't break unnoticed.
+`pkg/kmdn/kmdn_test.go` is an embedding program that uses only this package (two orgs, its own routes, migrations, settings, limits and events), so the surface can't break unnoticed. Sign-in providers and provisioning come next ([extension points](#sign-in-and-joining)).
 
 ## Isolation
 

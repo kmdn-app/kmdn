@@ -16,6 +16,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/events"
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -31,6 +32,7 @@ type Service struct {
 	AllowCreate string
 	// OrgForges says whether org admins can add their own forges.
 	OrgForges bool
+	Events    events.Sink
 	Log       *slog.Logger
 }
 
@@ -197,6 +199,8 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	if !s.slugError(w, r, err) {
 		return
 	}
+	s.Events.Emit(ctx, events.Event{Type: events.OrgCreated, OrgID: o.ID, UserID: p.User.ID, Data: map[string]any{"slug": o.Slug}})
+	s.Events.Emit(ctx, events.Event{Type: events.MemberAdded, OrgID: o.ID, UserID: p.User.ID, Data: map[string]any{"role": orgs.Owner}})
 	api.JSON(w, http.StatusCreated, View{o, orgs.Owner})
 }
 
@@ -437,6 +441,7 @@ func (s *Service) instanceUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o, _ = orgs.ByID(ctx, s.DB, o.ID)
+	s.Events.Emit(ctx, events.Event{Type: events.OrgStatusChanged, OrgID: o.ID, UserID: p.User.ID, Data: map[string]any{"status": o.Status, "reason": o.StatusReason}})
 	api.JSON(w, http.StatusOK, o)
 }
 
@@ -584,6 +589,7 @@ func (s *Service) updateMember(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
+	s.Events.Emit(ctx, events.Event{Type: events.MemberChanged, OrgID: c.Org.ID, UserID: target.ID, Data: map[string]any{"role": in.Role, "status": in.Status}})
 	api.JSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -630,6 +636,7 @@ func (s *Service) removeMember(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
+	s.Events.Emit(ctx, events.Event{Type: events.MemberRemoved, OrgID: c.Org.ID, UserID: target.ID})
 	api.JSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log/slog"
 
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/admin"
@@ -24,6 +27,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/consistency"
 	"github.com/kmdn-app/kmdn/internal/docengine"
+	"github.com/kmdn-app/kmdn/internal/events"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/hooks"
 	"github.com/kmdn-app/kmdn/internal/invites"
@@ -87,13 +91,41 @@ type App struct {
 	Orgs        *orghttp.Service
 	// Policy is what orgs may do; set from the config.
 	Policy *policy.Policy
+	// OrgSettings reads org settings through the managed overlay.
+	OrgSettings *orgs.SettingsStore
+	// Events receives what happens in orgs (Options.Events).
+	Events events.Sink
 
 	stopTracing func(context.Context) error
 	Invites     *invites.Service
 }
 
+// Options are what an embedding program adds (pkg/kmdn,
+// docs/specs/16-organizations.md#embedding). The zero value is kmdn alone.
+type Options struct {
+	// Policy replaces the one built from the config's policy section.
+	Policy *policy.Policy
+	// Managed fixes org settings per org (read-only in the console).
+	Managed orgs.Managed
+	// Events receives what happens in orgs.
+	Events events.Sink
+	// Routes adds routes to the root router; APIRoutes to /api/v1, after the
+	// session middleware (auth.FromContext works there); OrgRoutes to
+	// /api/v1/orgs/{org}, where the org is resolved (orgs.FromContext).
+	Routes, APIRoutes, OrgRoutes func(chi.Router)
+	// Migrations are the program's own NNNN_name.sql files, run after
+	// kmdn's and recorded in MigrationsTable.
+	Migrations      fs.FS
+	MigrationsTable string
+}
+
 // New opens the database, applies migrations and builds the services.
 func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error) {
+	return NewWith(ctx, cfg, log, Options{})
+}
+
+// NewWith is New with an embedding program's options.
+func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Options) (*App, error) {
 	db, err := store.Open(ctx, cfg.DB.URL)
 	if err != nil {
 		return nil, fmt.Errorf("database: %w", err)
@@ -109,6 +141,12 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	if err := orgs.SetMode(ctx, db, cfg.Orgs.Mode); err != nil {
 		db.Close()
 		return nil, err
+	}
+	if opts.Migrations != nil {
+		if _, err := db.MigrateFS(ctx, opts.Migrations, opts.MigrationsTable); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("embedded migrations: %w", err)
+		}
 	}
 	kek, err := cfg.SecretKeyBytes()
 	if err != nil {
@@ -136,8 +174,11 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		return nil, err
 	}
 	a.Policy = &policy.Policy{Strict: cfg.Policy.Strict, NoOrgForges: cfg.Policy.NoOrgForges}
+	if opts.Policy != nil {
+		a.Policy = opts.Policy
+	}
 	a.Mail = mail.NewService(cfg, db, sec, log)
-	a.Auth = &auth.Service{DB: db, Mail: a.Mail, BaseURL: cfg.Server.BaseURL, SessionTTL: cfg.Auth.SessionTTL, AutoJoinDomains: cfg.Auth.AutoJoinDomains, Policy: a.Policy, Log: log}
+	a.Auth = &auth.Service{DB: db, Mail: a.Mail, BaseURL: cfg.Server.BaseURL, SessionTTL: cfg.Auth.SessionTTL, AutoJoinDomains: cfg.Auth.AutoJoinDomains, Policy: a.Policy, Events: opts.Events, Log: log}
 	a.AuthH = auth.NewHTTP(a.Auth, strings.HasPrefix(cfg.Server.BaseURL, "https://"), trusted)
 	a.AuthH.BaseURL = cfg.Server.BaseURL
 	a.Setup = &setup.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: cfg.Server.BaseURL, Log: log}
@@ -152,8 +193,9 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		DB: db, Secrets: sec, Jobs: a.Jobs, Git: &gitmirror.Git{AllowProtocols: a.Policy.GitProtocols()}, DataDir: cfg.DataDir, BaseURL: strings.TrimRight(cfg.Server.BaseURL, "/"), Log: log,
 		Adapters: &repos.Adapters{DB: db, Secrets: sec, HTTP: &http.Client{Timeout: 30 * time.Second, Transport: telemetry.Transport(nil)}},
 		Policy:   a.Policy,
+		Events:   opts.Events,
 	}
-	if cfg.Policy.Strict {
+	if a.Policy.Strict {
 		// Hosts an org added only reach public addresses.
 		a.Repos.Adapters.OrgHTTP = outbound.Client(false)
 	}
@@ -190,7 +232,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 			return a.Collab.PutAnchor(ctx, repo, rev, c, p, threadID, pos)
 		},
 	}
-	orgSettings := &orgs.SettingsStore{DB: db}
+	orgSettings := &orgs.SettingsStore{DB: db, Managed: opts.Managed}
 	a.LLM = &llm.Service{DB: db, Secrets: sec, Disabled: !cfg.Assistant.Enabled, Env: llm.EnvFrom(cfg.Assistant), Log: log,
 		OrgAllows: func(ctx context.Context, orgID string) bool {
 			st, _, err := orgSettings.Get(ctx, orgID)
@@ -199,7 +241,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		OrgBudget: func(ctx context.Context, orgID string) int {
 			st, _, _ := orgSettings.Get(ctx, orgID)
 			return st.MonthlyTokens
-		}}
+		},
+		Events: opts.Events}
 	a.LLM.Routes(r)
 	a.Notify = &notify.Service{DB: db, Jobs: a.Jobs, PublishUser: a.Realtime.PublishUser, BaseURL: a.Repos.BaseURL, Log: log,
 		Present: func(revID, userID string) bool {
@@ -289,14 +332,25 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	a.Server.Mount("/mcp", a.MCP.Handler(a.AuthH.TrustedProxies))
 	people := &admin.People{DB: db, Auth: a.Auth, Log: log}
 	people.Routes(r)
-	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, OrgForges: a.Policy.OrgForgesAllowed(), Log: log}
+	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, OrgForges: a.Policy.OrgForgesAllowed(), Events: opts.Events, Log: log}
 
 	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
-	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL, Policy: a.Policy}
+	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL, Policy: a.Policy, Events: opts.Events}
 	a.Invites.Routes(r)
 	link := &linking.Service{DB: db, Secrets: sec, AuthH: a.AuthH, BaseURL: a.Repos.BaseURL, HTTP: a.Repos.Adapters.HTTP, Adapters: a.Repos.Adapters}
 	link.Routes(r)
-	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes, a.Invites.OrgRoutes, a.MCP.OrgRoutes, a.LLM.OrgRoutes, a.Repos.OrgForgeRoutes, link.OrgRoutes)
+	a.Orgs.Routes(r, a.Repos.OrgRoutes, people.OrgRoutes, a.Invites.OrgRoutes, a.MCP.OrgRoutes, a.LLM.OrgRoutes, a.Repos.OrgForgeRoutes, link.OrgRoutes, func(r chi.Router) {
+		if opts.OrgRoutes != nil {
+			opts.OrgRoutes(r)
+		}
+	})
+	if opts.APIRoutes != nil {
+		opts.APIRoutes(r)
+	}
+	if opts.Routes != nil {
+		opts.Routes(a.Server.Router())
+	}
+	a.OrgSettings, a.Events = orgSettings, opts.Events
 	if _, err := repos.EnsureGitHost(ctx, db); err != nil {
 		db.Close()
 		return nil, err

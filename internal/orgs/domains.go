@@ -121,8 +121,13 @@ func AutoJoinOrg(ctx context.Context, q store.Querier, email string) (string, er
 
 // Join adds u to the org as a member unless they already have a membership
 // row (active or deactivated: an org that deactivated someone keeps them out).
-func Join(ctx context.Context, q store.Querier, orgID, userID string) error {
-	_, err := store.Exec(ctx, q, `INSERT INTO org_members (org_id, user_id, role, status, joined_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (org_id, user_id) DO NOTHING`,
+// It reports whether it added one.
+func Join(ctx context.Context, q store.Querier, orgID, userID string) (bool, error) {
+	res, err := store.Exec(ctx, q, `INSERT INTO org_members (org_id, user_id, role, status, joined_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (org_id, user_id) DO NOTHING`,
 		orgID, userID, Member, Active, store.Millis(time.Now()))
-	return err
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }

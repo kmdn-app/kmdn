@@ -56,6 +56,9 @@ func New(o Options) *Server {
 // API returns the router mounted at /api/v1 so packages can register handlers.
 func (s *Server) API() chi.Router { return s.api }
 
+// Router is the root router, for an embedding program's own routes.
+func (s *Server) Router() chi.Router { return s.router }
+
 // Mount attaches a handler under a path prefix (e.g. /ws, /hooks, /mcp).
 func (s *Server) Mount(pattern string, h http.Handler) { s.router.Mount(pattern, h) }
 

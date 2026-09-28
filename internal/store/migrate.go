@@ -26,7 +26,16 @@ var migName = regexp.MustCompile(`^(\d{4})_([a-z0-9_]+)\.sql$`)
 
 // Migrations lists the embedded migrations in order.
 func Migrations() ([]Migration, error) {
-	entries, err := fs.ReadDir(migrationFS, "migrations")
+	sub, err := fs.Sub(migrationFS, "migrations")
+	if err != nil {
+		return nil, err
+	}
+	return migrationsIn(sub)
+}
+
+// migrationsIn reads NNNN_name.sql files from the root of fsys, in order.
+func migrationsIn(fsys fs.FS) ([]Migration, error) {
+	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +46,7 @@ func Migrations() ([]Migration, error) {
 			return nil, fmt.Errorf("store: bad migration file name %q", e.Name())
 		}
 		v, _ := strconv.Atoi(m[1])
-		b, err := migrationFS.ReadFile("migrations/" + e.Name())
+		b, err := fs.ReadFile(fsys, e.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -90,8 +99,8 @@ type MigrationStatus struct {
 	AppliedAt *time.Time
 }
 
-func (db *DB) ensureMigrationsTable(ctx context.Context) error {
-	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+func (db *DB) ensureMigrationsTable(ctx context.Context, table string) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS `+table+` (
 		version INTEGER PRIMARY KEY,
 		name TEXT NOT NULL,
 		applied_at BIGINT NOT NULL
@@ -101,15 +110,19 @@ func (db *DB) ensureMigrationsTable(ctx context.Context) error {
 
 // Status reports every migration and whether it has been applied.
 func (db *DB) Status(ctx context.Context) ([]MigrationStatus, error) {
-	if err := db.ensureMigrationsTable(ctx); err != nil {
-		return nil, err
-	}
 	all, err := Migrations()
 	if err != nil {
 		return nil, err
 	}
+	return db.status(ctx, all, "schema_migrations")
+}
+
+func (db *DB) status(ctx context.Context, all []Migration, table string) ([]MigrationStatus, error) {
+	if err := db.ensureMigrationsTable(ctx, table); err != nil {
+		return nil, err
+	}
 	applied := map[int]time.Time{}
-	rows, err := db.QueryContext(ctx, `SELECT version, applied_at FROM schema_migrations`)
+	rows, err := db.QueryContext(ctx, `SELECT version, applied_at FROM `+table)
 	if err != nil {
 		return nil, err
 	}
@@ -136,10 +149,34 @@ func (db *DB) Status(ctx context.Context) ([]MigrationStatus, error) {
 	return out, nil
 }
 
-// Migrate applies pending migrations. On Postgres an advisory lock keeps
-// concurrent starts from racing; SQLite's immediate transactions serialize.
+// Migrate applies kmdn's pending migrations. On Postgres an advisory lock
+// keeps concurrent starts from racing; SQLite's immediate transactions serialize.
 func (db *DB) Migrate(ctx context.Context) (applied int, err error) {
-	if err := db.ensureMigrationsTable(ctx); err != nil {
+	all, err := Migrations()
+	if err != nil {
+		return 0, err
+	}
+	return db.migrate(ctx, all, "schema_migrations")
+}
+
+// MigrateFS applies an embedding program's own NNNN_name.sql migrations
+// from the root of fsys, recorded in their own table (so their numbers
+// don't collide with kmdn's).
+func (db *DB) MigrateFS(ctx context.Context, fsys fs.FS, table string) (int, error) {
+	if !tableName.MatchString(table) || table == "schema_migrations" {
+		return 0, fmt.Errorf("store: bad migrations table %q", table)
+	}
+	all, err := migrationsIn(fsys)
+	if err != nil {
+		return 0, err
+	}
+	return db.migrate(ctx, all, table)
+}
+
+var tableName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+
+func (db *DB) migrate(ctx context.Context, all []Migration, table string) (applied int, err error) {
+	if err := db.ensureMigrationsTable(ctx, table); err != nil {
 		return 0, err
 	}
 	if db.Dialect == Postgres {
@@ -153,7 +190,7 @@ func (db *DB) Migrate(ctx context.Context) (applied int, err error) {
 		}
 		defer conn.ExecContext(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(7331001)`) //nolint:errcheck
 	}
-	status, err := db.Status(ctx)
+	status, err := db.status(ctx, all, table)
 	if err != nil {
 		return 0, err
 	}
@@ -164,7 +201,7 @@ func (db *DB) Migrate(ctx context.Context) (applied int, err error) {
 		m := st.Migration
 		err := db.InTx(ctx, func(tx *Tx) error {
 			var exists int
-			if err := QueryRow(ctx, tx, `SELECT COUNT(*) FROM schema_migrations WHERE version = ?`, m.Version).Scan(&exists); err != nil {
+			if err := QueryRow(ctx, tx, `SELECT COUNT(*) FROM `+table+` WHERE version = ?`, m.Version).Scan(&exists); err != nil {
 				return err
 			}
 			if exists > 0 {
@@ -175,7 +212,7 @@ func (db *DB) Migrate(ctx context.Context) (applied int, err error) {
 					return fmt.Errorf("migration %04d_%s: %w\n%s", m.Version, m.Name, err, stmt)
 				}
 			}
-			_, err := Exec(ctx, tx, `INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)`, m.Version, m.Name, Millis(time.Now()))
+			_, err := Exec(ctx, tx, `INSERT INTO `+table+` (version, name, applied_at) VALUES (?, ?, ?)`, m.Version, m.Name, Millis(time.Now()))
 			return err
 		})
 		if err != nil {
