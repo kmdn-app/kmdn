@@ -3715,6 +3715,8 @@ export interface components {
             name: string;
             /** @enum {string} */
             status: "active" | "suspended" | "deleting";
+            /** @description Why a suspended org is read-only */
+            status_reason?: string;
             /** Format: date-time */
             created_at: string;
         };
@@ -4674,6 +4676,8 @@ export interface operations {
                         mode: "single" | "multi";
                         /** @description The caller may create an organization */
                         can_create: boolean;
+                        /** @description Org admins can add their own forges (policy) */
+                        org_forges: boolean;
                     };
                 };
             };
@@ -5246,6 +5250,8 @@ export interface operations {
                 "application/json": {
                     /** @enum {string} */
                     status: "active" | "suspended";
+                    /** @description Shown to members while suspended */
+                    reason?: string;
                 };
             };
         };

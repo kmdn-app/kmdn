@@ -464,7 +464,7 @@ func (s *Service) upload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	limit := maxAssetBytes(repo, s.UploadMaxMB)
+	limit := maxAssetBytes(repo, s.uploadMaxMB(r.Context(), repo))
 	r.Body = http.MaxBytesReader(w, r.Body, limit+1<<20)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		api.Error(w, r, api.Invalid("file", "Send the image as multipart form data (up to the size limit)."))

@@ -161,6 +161,15 @@ func assetTarget(repo repos.Repo, page, name, ext string) string {
 	return strings.TrimPrefix(path.Clean("/"+p), "/")
 }
 
+// uploadMaxMB is the instance's upload limit, lowered by the org's.
+func (s *Service) uploadMaxMB(ctx context.Context, repo repos.Repo) int {
+	mb := s.UploadMaxMB
+	if o := s.Policy.For(ctx, repo.OrgID).UploadMaxMB; o > 0 && (mb <= 0 || o < mb) {
+		mb = o
+	}
+	return mb
+}
+
 func maxAssetBytes(repo repos.Repo, configMB int) int64 {
 	mb := configMB
 	for _, a := range []*repos.AssetsConfig{repo.Settings.Assets, repo.KmdnYML.Assets} {
@@ -211,7 +220,7 @@ func (s *Service) Upload(ctx context.Context, repo repos.Repo, rev Revision, c C
 	if !repos.IsMarkdown(page) || !repo.Scope().Contains(page) {
 		return UploadResult{}, invalid("page", "Upload images from a page in the repository's content.")
 	}
-	limit := maxAssetBytes(repo, s.UploadMaxMB)
+	limit := maxAssetBytes(repo, s.uploadMaxMB(ctx, repo))
 	b, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
 		return UploadResult{}, err

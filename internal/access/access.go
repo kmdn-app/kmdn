@@ -65,8 +65,8 @@ func Effective(ctx context.Context, q store.Querier, u users.User, repoID string
 	if u.Status != users.Active {
 		return None, nil
 	}
-	var orgID string
-	if err := store.QueryRow(ctx, q, `SELECT org_id FROM repos WHERE id = ?`, repoID).Scan(&orgID); errors.Is(err, sql.ErrNoRows) {
+	var orgID, status string
+	if err := store.QueryRow(ctx, q, `SELECT r.org_id, o.status FROM repos r JOIN orgs o ON o.id = r.org_id WHERE r.id = ?`, repoID).Scan(&orgID, &status); errors.Is(err, sql.ErrNoRows) {
 		return None, nil
 	} else if err != nil {
 		return None, err
@@ -74,6 +74,10 @@ func Effective(ctx context.Context, q store.Querier, u users.User, repoID string
 	orgRole, err := orgs.Role(ctx, q, orgID, u)
 	if err != nil || orgRole == "" {
 		return None, err
+	}
+	// A suspended org is read-only: people can read and comment, nothing more.
+	if status == orgs.Suspended {
+		return Viewer, nil
 	}
 	if orgs.AtLeast(orgRole, orgs.Admin) {
 		return Admin, nil

@@ -329,11 +329,12 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, mode, can_create]
+                required: [items, mode, can_create, org_forges]
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/OrgView" } }
                   mode: { type: string, enum: [single, multi] }
                   can_create: { type: boolean, description: "The caller may create an organization" }
+                  org_forges: { type: boolean, description: "Org admins can add their own forges (policy)" }
     post:
       tags: [orgs]
       operationId: createOrg
@@ -634,7 +635,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, required: [status], properties: { status: { type: string, enum: [active, suspended] } } }
+            schema: { type: object, required: [status], properties: { status: { type: string, enum: [active, suspended] }, reason: { type: string, description: "Shown to members while suspended" } } }
       responses:
         "200": { description: Organization, content: { application/json: { schema: { $ref: "#/components/schemas/Org" } } } }
         "404": { $ref: "#/components/responses/Problem" }
@@ -3891,6 +3892,7 @@ components:
         slug: { type: string }
         name: { type: string }
         status: { type: string, enum: [active, suspended, deleting] }
+        status_reason: { type: string, description: "Why a suspended org is read-only" }
         created_at: { type: string, format: date-time }
     OrgView:
       allOf:

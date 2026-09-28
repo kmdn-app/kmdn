@@ -149,7 +149,7 @@ func TestSingleMode(t *testing.T) {
 	if r, _ := Role(ctx, db, DefaultID, carol); r != "" {
 		t.Errorf("carol in multi mode without a row = %q", r)
 	}
-	if err := SetStatus(ctx, db, other.ID, Deleting); err != nil {
+	if err := SetStatus(ctx, db, other.ID, Deleting, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := SetMode(ctx, db, Single); err != nil {
@@ -192,7 +192,7 @@ func TestSlugAndStatus(t *testing.T) {
 	if err := Rename(ctx, db, a.ID, " Alpha Two "); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetStatus(ctx, db, a.ID, Deleting); err != nil {
+	if err := SetStatus(ctx, db, a.ID, Deleting, ""); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := BySlug(ctx, db, "alpha-2")

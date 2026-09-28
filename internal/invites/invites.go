@@ -21,6 +21,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/orghttp"
 	"github.com/kmdn-app/kmdn/internal/orgs"
+	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -35,6 +36,28 @@ type Service struct {
 	Mail    mail.Sender
 	Auth    *auth.HTTP
 	BaseURL string
+	// Policy caps an org's members (pending invitations count).
+	Policy *policy.Policy
+}
+
+// seatFree fails with a policy.ErrLimit when the org is at its member limit.
+func (s *Service) seatFree(ctx context.Context, q store.Querier, orgID string, invitee bool) error {
+	max := s.Policy.For(ctx, orgID).Members
+	if max <= 0 {
+		return nil
+	}
+	n, err := orgs.Seats(ctx, q, orgID)
+	if err != nil {
+		return err
+	}
+	// Accepting an invitation turns its pending seat into a member.
+	if invitee {
+		n--
+	}
+	if n >= max {
+		return &policy.ErrLimit{What: "members", Limit: max}
+	}
+	return nil
 }
 
 // Invite is a pending or accepted invitation.
@@ -81,6 +104,9 @@ func (s *Service) Create(ctx context.Context, by auth.Principal, org orgs.Org, e
 			return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorUser, ActorID: by.User.ID, Action: "member.role_changed", TargetType: "user", TargetID: u.ID, RepoID: repo.ID, Data: map[string]any{"role": role}})
 		}
 		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
+		if err := s.seatFree(ctx, tx, org.ID, false); err != nil {
 			return err
 		}
 		token := auth.Token(24)
@@ -216,6 +242,9 @@ func (s *Service) accept(w http.ResponseWriter, r *http.Request) {
 		if role, err := orgs.Role(ctx, tx, inv.orgID, u); err != nil {
 			return err
 		} else if role == "" {
+			if err := s.seatFree(ctx, tx, inv.orgID, true); err != nil {
+				return err
+			}
 			if err := orgs.AddMember(ctx, tx, inv.orgID, u.ID, orgs.Member, inv.inviter); err != nil {
 				return err
 			}
@@ -236,6 +265,10 @@ func (s *Service) accept(w http.ResponseWriter, r *http.Request) {
 		}
 		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorUser, ActorID: u.ID, OrgID: inv.orgID, Action: "invite.accepted", TargetType: "invite", TargetID: inv.id, RepoID: inv.repoID})
 	})
+	if l, ok := policy.IsLimit(err); ok {
+		api.Error(w, r, policy.Problem(l))
+		return
+	}
 	if err != nil {
 		api.Error(w, r, err)
 		return
@@ -314,6 +347,10 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request, org orgs.Org, b
 	}
 	p, _ := auth.FromContext(r.Context())
 	res, err := s.Create(r.Context(), p, org, email, repo, role)
+	if l, ok := policy.IsLimit(err); ok {
+		api.Error(w, r, policy.Problem(l))
+		return
+	}
 	if err != nil {
 		api.Error(w, r, err)
 		return

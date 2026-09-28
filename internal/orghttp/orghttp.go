@@ -29,7 +29,9 @@ type Service struct {
 	Settings *orgs.SettingsStore
 	// AllowCreate is config orgs.allow_create: "admins" or "anyone".
 	AllowCreate string
-	Log         *slog.Logger
+	// OrgForges says whether org admins can add their own forges.
+	OrgForges bool
+	Log       *slog.Logger
 }
 
 // View is an org as the API returns it, with the caller's role.
@@ -147,7 +149,7 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	canCreate := mode == orgs.Multi && (s.AllowCreate == "anyone" || p.User.IsInstanceAdmin)
-	api.JSON(w, http.StatusOK, map[string]any{"items": out, "mode": mode, "can_create": canCreate})
+	api.JSON(w, http.StatusOK, map[string]any{"items": out, "mode": mode, "can_create": canCreate, "org_forges": s.OrgForges})
 }
 
 func (s *Service) create(w http.ResponseWriter, r *http.Request) {
@@ -414,6 +416,7 @@ func (s *Service) instanceUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		Status string `json:"status"`
+		Reason string `json:"reason"`
 	}
 	if err := api.Decode(r, &in); err != nil {
 		api.Error(w, r, err)
@@ -424,7 +427,7 @@ func (s *Service) instanceUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = s.DB.InTx(ctx, func(tx *store.Tx) error {
-		if err := orgs.SetStatus(ctx, tx, o.ID, in.Status); err != nil {
+		if err := orgs.SetStatus(ctx, tx, o.ID, in.Status, strings.TrimSpace(in.Reason)); err != nil {
 			return err
 		}
 		return audit.Write(ctx, tx, audit.Entry{ActorType: audit.ActorUser, ActorID: p.User.ID, OrgID: o.ID, Action: "org.status_changed", TargetType: "org", TargetID: o.ID, Data: map[string]any{"status": in.Status}})
@@ -433,7 +436,7 @@ func (s *Service) instanceUpdate(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, err)
 		return
 	}
-	o.Status = in.Status
+	o, _ = orgs.ByID(ctx, s.DB, o.ID)
 	api.JSON(w, http.StatusOK, o)
 }
 

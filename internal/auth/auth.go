@@ -20,6 +20,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/orgs"
+	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/settings"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -45,6 +46,8 @@ type Service struct {
 	Mail       mail.Sender
 	BaseURL    string
 	SessionTTL time.Duration
+	// Policy caps an org's members: auto-join stops at the limit.
+	Policy *policy.Policy
 	// AutoJoinDomains lets people with these email domains create an account
 	// by signing in. Off (empty) by default.
 	AutoJoinDomains []string
@@ -107,6 +110,20 @@ func (s *Service) autoJoinOrg(ctx context.Context, q store.Querier, email string
 		}
 	}
 	return orgs.AutoJoinOrg(ctx, q, email)
+}
+
+// seatFree reports whether u can join the org without going over its
+// member limit (someone already in it always can).
+func (s *Service) seatFree(ctx context.Context, q store.Querier, orgID string, u users.User) bool {
+	max := s.Policy.For(ctx, orgID).Members
+	if max <= 0 {
+		return true
+	}
+	if in, err := orgs.Belongs(ctx, q, orgID, u); err == nil && in {
+		return true
+	}
+	n, err := orgs.Seats(ctx, q, orgID)
+	return err == nil && n < max
 }
 
 // RequestLink emails a sign-in link and code if email belongs to an active
@@ -234,7 +251,7 @@ func (s *Service) userForSignIn(ctx context.Context, q store.Querier, email stri
 	}
 	// People on an org's domain join it when they sign in (not when the org
 	// already has them, deactivated or not).
-	if org != "" {
+	if org != "" && s.seatFree(ctx, q, org, u) {
 		if err := orgs.Join(ctx, q, org, u.ID); err != nil {
 			return u, err
 		}

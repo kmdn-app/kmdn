@@ -147,9 +147,20 @@ type Adapters struct {
 	DB      *store.DB
 	Secrets *secrets.Store
 	HTTP    *http.Client
+	// OrgHTTP, when set, is used for hosts an org added (their URLs come
+	// from org admins): in strict mode it only reaches public addresses.
+	OrgHTTP *http.Client
 
 	mu   sync.Mutex
 	apps map[string]*forge.GitHubApp
+}
+
+// For is the HTTP client for requests to a host.
+func (a *Adapters) For(h HostRecord) *http.Client {
+	if h.OrgID != "" && a.OrgHTTP != nil {
+		return a.OrgHTTP
+	}
+	return a.HTTP
 }
 
 func (a *Adapters) secret(ctx context.Context, ref string) (string, error) {
@@ -174,7 +185,7 @@ func (a *Adapters) ForRepo(ctx context.Context, r Repo) (forge.Adapter, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &forge.GitLab{BaseURL: h.BaseURL, Token: tok, HTTP: a.HTTP}, nil
+		return &forge.GitLab{BaseURL: h.BaseURL, Token: tok, HTTP: a.For(h)}, nil
 	case forge.KindGit:
 		tok, err := a.secret(ctx, r.TokenRef)
 		if err != nil {
@@ -200,7 +211,7 @@ func (a *Adapters) GitHubApp(ctx context.Context, h HostRecord) (*forge.GitHubAp
 	if err != nil {
 		return nil, err
 	}
-	app := &forge.GitHubApp{APIURL: h.APIURL, AppID: h.AppID, PrivateKey: key, HTTP: a.HTTP}
+	app := &forge.GitHubApp{APIURL: h.APIURL, AppID: h.AppID, PrivateKey: key, HTTP: a.For(h)}
 	if a.apps == nil {
 		a.apps = map[string]*forge.GitHubApp{}
 	}

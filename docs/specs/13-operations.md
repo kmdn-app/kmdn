@@ -49,6 +49,9 @@ auth:
 orgs:
   mode: single                       # or multi (see 16-organizations.md)
   allow_create: admins               # multi mode: admins | anyone
+policy:                              # 16-organizations.md#policy
+  strict: false                      # org admins aren't the operator: git over https/ssh to public hosts, org forges and webhooks to public addresses
+  no_org_forges: false               # orgs only use the instance's shared forges
 assistant:
   enabled: true
   # Optional: fix the provider here instead of the admin console (then shown locked).

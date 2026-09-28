@@ -29,6 +29,7 @@ type Config struct {
 	SMTP      SMTP      `yaml:"smtp"`
 	Auth      Auth      `yaml:"auth"`
 	Orgs      Orgs      `yaml:"orgs"`
+	Policy    Policy    `yaml:"policy"`
 	Assistant Assistant `yaml:"assistant"`
 	Limits    Limits    `yaml:"limits"`
 	Telemetry Telemetry `yaml:"telemetry"`
@@ -75,6 +76,15 @@ type Orgs struct {
 	// AllowCreate says who can create orgs in multi mode: "admins"
 	// (instance admins) or "anyone" signed in.
 	AllowCreate string `yaml:"allow_create"`
+}
+
+// Policy is what orgs may do (docs/specs/16-organizations.md#policy).
+type Policy struct {
+	// Strict: org admins aren't the operator. Git only over https/ssh to
+	// public hosts, org forges and webhooks only to public addresses.
+	Strict bool `yaml:"strict"`
+	// NoOrgForges: orgs use the instance's shared forges only.
+	NoOrgForges bool `yaml:"no_org_forges"`
 }
 
 type Assistant struct {

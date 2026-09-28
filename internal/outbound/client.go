@@ -36,6 +36,9 @@ func Client(allowPrivate bool) *http.Client {
 	}
 }
 
+// Public reports whether an IP address (as text) is publicly routable.
+func Public(host string) bool { return publicAddress(host) }
+
 func publicAddress(host string) bool {
 	ip, err := netip.ParseAddr(host)
 	if err != nil {
