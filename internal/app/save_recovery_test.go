@@ -20,6 +20,7 @@ import (
 )
 
 func TestSaveRecoversPushedCommitAfterRestart(t *testing.T) {
+	sqliteOnly(t)
 	a, admin := newApp(t, nil)
 	ctx := context.Background()
 	maya, _ := users.Create(ctx, a.DB, "maya@example.org", "Maya", true)
@@ -133,6 +134,7 @@ func assertSaveJournalCounts(t *testing.T, db *store.DB, revID string, intents, 
 }
 
 func TestSaveRecoversBeforePushAndAtomicFinalization(t *testing.T) {
+	sqliteOnly(t)
 	for _, failure := range []string{"before_push", "checkpoint_insert", "intent_delete", "before_intent"} {
 		t.Run(failure, func(t *testing.T) {
 			a, admin := newApp(t, nil)
@@ -272,6 +274,7 @@ func TestSaveRecoveryRejectsExternalTipAndMissingPreparedCommit(t *testing.T) {
 }
 
 func TestSaveRecoveryPreservesSnapshotAfterLiveDocumentDeletion(t *testing.T) {
+	sqliteOnly(t)
 	a, admin := newApp(t, nil)
 	ctx := context.Background()
 	maya, _ := users.Create(ctx, a.DB, "maya@example.org", "Maya", true)
@@ -324,6 +327,7 @@ func TestSaveRecoveryPreservesSnapshotAfterLiveDocumentDeletion(t *testing.T) {
 }
 
 func TestSaveRejectsFailedMaterialization(t *testing.T) {
+	sqliteOnly(t)
 	a, admin := newApp(t, nil)
 	ctx := context.Background()
 	maya, _ := users.Create(ctx, a.DB, "maya@example.org", "Maya", true)

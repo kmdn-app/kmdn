@@ -7,6 +7,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"os"
@@ -15,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib" // postgres driver
-	_ "modernc.org/sqlite"             // sqlite driver
+	"github.com/jackc/pgx/v5/stdlib" // postgres driver
+	_ "modernc.org/sqlite"           // sqlite driver
 )
 
 // Dialect identifies the SQL engine.
@@ -63,10 +64,11 @@ func Open(ctx context.Context, url string) (*DB, error) {
 		db := &DB{DB: sdb, Dialect: SQLite}
 		return db, db.PingContext(ctx)
 	case strings.HasPrefix(url, "postgres://"), strings.HasPrefix(url, "postgresql://"):
-		sdb, err := sql.Open("pgx", url)
+		dc, err := stdlib.GetDefaultDriver().(driver.DriverContext).OpenConnector(url)
 		if err != nil {
 			return nil, err
 		}
+		sdb := sql.OpenDB(scopedConnector{dc})
 		sdb.SetMaxOpenConns(20)
 		sdb.SetConnMaxIdleTime(5 * time.Minute)
 		db := &DB{DB: sdb, Dialect: Postgres}

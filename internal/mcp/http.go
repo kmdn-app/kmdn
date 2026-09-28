@@ -86,7 +86,9 @@ func (s *Service) Handler(trusted []*net.IPNet) http.Handler {
 				s.Log.Error("touch agent key", "err", err)
 			}
 		}
-		protected.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), callKey{}, call{key: k, ip: ip})))
+		// A key belongs to one org: on Postgres its statements see only that org's rows.
+		ctx := store.WithOrg(context.WithValue(r.Context(), callKey{}, call{key: k, ip: ip}), k.OrgID)
+		protected.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

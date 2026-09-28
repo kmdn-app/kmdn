@@ -36,7 +36,7 @@ server:
 data_dir: /data
 secret_key: ${KMDN_SECRET_KEY}
 db:
-  url: sqlite:///data/kmdn.db        # or postgres://…
+  url: sqlite:///data/kmdn.db        # or postgres://… as an ordinary role (not a superuser, which skips row-level security)
 smtp:
   host: smtp.postmarkapp.com
   port: 587

@@ -15,6 +15,7 @@ import (
 )
 
 func TestSaveRecoveryAfterBackupBeforePush(t *testing.T) {
+	sqliteOnly(t)
 	a, admin := newApp(t, nil)
 	ctx := context.Background()
 	maya, _ := users.Create(ctx, a.DB, "maya@example.org", "Maya", true)

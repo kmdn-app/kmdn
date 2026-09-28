@@ -21,6 +21,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/provision"
 	"github.com/kmdn-app/kmdn/internal/store"
+	"github.com/kmdn-app/kmdn/internal/storetest"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
@@ -50,6 +51,9 @@ func newAppWith(t *testing.T, mutate func(*config.Config), opts Options) (*App, 
 	cfg := config.Defaults()
 	cfg.DataDir = dir
 	cfg.DB.URL = "sqlite://" + filepath.Join(dir, "kmdn.db")
+	if storetest.PostgresEnabled() {
+		cfg.DB.URL = storetest.PostgresURL(t)
+	}
 	cfg.SecretKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
 	if mutate != nil {
 		mutate(&cfg)

@@ -70,7 +70,7 @@ hooks:
 | `server.trusted_proxies` | none | Proxies whose `X-Forwarded-For` header kmdn trusts for client IPs, as CIDR ranges. |
 | `data_dir` | `./data` | Git mirrors, uploads, the SQLite database and local backups. |
 | `secret_key` | none, required | 32 random bytes, base64. Encrypts stored credentials. `kmdn init` generates one. |
-| `db.url` | `sqlite://<data_dir>/kmdn.db` | `sqlite://path` or `postgres://…`. |
+| `db.url` | `sqlite://<data_dir>/kmdn.db` | `sqlite://path` or `postgres://…`. On Postgres, connect as an ordinary role that owns the schema, not a superuser: superusers skip the row-level security that keeps each organization's rows apart. |
 
 ### Email
 
