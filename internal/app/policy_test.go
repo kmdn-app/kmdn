@@ -45,6 +45,7 @@ func TestOrgLimits(t *testing.T) {
 	ctx := context.Background()
 	a.Invites.Mail = &mail.Capture{}
 	a.Policy.Limits = func(context.Context, string) policy.Limits { return policy.Limits{Members: 2, Repos: 1} }
+	a.Policy.UpgradeURL = func(_ context.Context, orgID string) string { return "/billing/" + orgID }
 	alice, _ := users.Create(ctx, a.DB, "alice@acme.dev", "Alice", false)
 	signIn(t, a, root, alice)
 	root.do("POST", "/orgs", map[string]any{"name": "Acme", "slug": "acme"})
@@ -52,7 +53,7 @@ func TestOrgLimits(t *testing.T) {
 		t.Fatalf("second seat: %d %v", code, b)
 	}
 	code, b := root.do("POST", "/orgs/acme/admin/invites", map[string]any{"email": "carl@acme.dev"})
-	if code != 409 || b["code"] != "limit_reached" {
+	if code != 409 || b["code"] != "limit_reached" || !strings.HasPrefix(b["params"].(map[string]any)["upgrade_url"].(string), "/billing/org_") {
 		t.Fatalf("third seat: %d %v", code, b)
 	}
 	connectLocalIn(t, a, root, "acme", map[string]string{"docs/index.md": "# One\n"})

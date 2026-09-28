@@ -21,6 +21,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/events"
+	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/provision"
@@ -160,6 +161,47 @@ func New(ctx context.Context, cfg Config, log *slog.Logger, opts ...Option) (*Ap
 // Provisioner changes org membership from an outside source.
 func (k *App) Provisioner() *Provisioner { return k.a.Provision }
 
+// Mail is an email: plain text, and optionally HTML.
+type Mail = mail.Message
+
+// SendMail sends m through the instance's mail settings (as sign-in links
+// and invitations are).
+func (k *App) SendMail(ctx context.Context, m Mail) error { return k.a.Mail.Send(ctx, m) }
+
+// Session is who a request is signed in as.
+type Session struct {
+	User User
+	// CSRF is the session's token: a form on the program's own routes
+	// carries it and compares it with this before changing anything.
+	CSRF string
+	// Method is how the session signed in (magic_link, provider:<id>, …).
+	Method string
+}
+
+// Authenticate reads the session of a request to the program's own routes
+// (WithRoutes), where the core's session middleware doesn't run. It checks
+// the session like /api/v1 does but not CSRF, whatever the method: compare
+// Session.CSRF with the form's token for unsafe requests.
+func (k *App) Authenticate(r *http.Request) (Session, bool) {
+	var s Session
+	var ok bool
+	probe := r.Clone(r.Context())
+	probe.Method = http.MethodGet
+	k.a.AuthH.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		if p, found := auth.FromContext(r.Context()); found {
+			s, ok = Session{User: p.User, CSRF: p.Session.CSRF, Method: p.Session.Method}, true
+		}
+	})).ServeHTTP(discard{}, probe)
+	return s, ok
+}
+
+// discard is a ResponseWriter that keeps nothing.
+type discard struct{}
+
+func (discard) Header() http.Header         { return http.Header{} }
+func (discard) Write(b []byte) (int, error) { return len(b), nil }
+func (discard) WriteHeader(int)             {}
+
 // Handler serves kmdn (the app, the API, WebSockets, MCP, webhooks).
 func (k *App) Handler() http.Handler { return k.a.Server.Handler() }
 
@@ -198,6 +240,13 @@ type NewOrg struct {
 	OwnerEmail string
 	OwnerName  string
 }
+
+// ValidSlug says why slug can't name an org (nil if it can): length,
+// characters, or a word the app's URLs use.
+func ValidSlug(slug string) error { return orgs.ValidSlug(slug) }
+
+// Slugify makes a slug candidate from an org name.
+func Slugify(name string) string { return orgs.Slugify(name) }
 
 // ErrSlugTaken means another org has the slug.
 var ErrSlugTaken = orgs.ErrSlugTaken

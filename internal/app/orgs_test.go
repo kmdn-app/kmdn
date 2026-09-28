@@ -327,3 +327,17 @@ func TestOrgUploadsAreSeparate(t *testing.T) {
 		t.Fatalf("files on disk: %v", paths)
 	}
 }
+
+// With orgs.signup_url, the sign-in page and people without an org learn
+// where to create one.
+func TestSignupURL(t *testing.T) {
+	a, c := newApp(t, func(cfg *config.Config) { multiOrgs(cfg); cfg.Orgs.SignupURL = "/signup" })
+	if _, st := c.do("GET", "/setup/status", nil); st["signup_url"] != "/signup" {
+		t.Fatalf("status: %v", st)
+	}
+	u, _ := users.Create(context.Background(), a.DB, "new@example.com", "New", false)
+	signIn(t, a, c, u)
+	if _, list := c.do("GET", "/orgs", nil); list["signup_url"] != "/signup" || len(list["items"].([]any)) != 0 {
+		t.Fatalf("orgs: %v", list)
+	}
+}

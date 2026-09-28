@@ -334,6 +334,7 @@ paths:
                   items: { type: array, items: { $ref: "#/components/schemas/OrgView" } }
                   mode: { type: string, enum: [single, multi] }
                   can_create: { type: boolean, description: "The caller may create an organization" }
+                  signup_url: { type: string, description: "Where people create an org through the instance's signup (orgs.signup_url); empty when none" }
                   org_forges: { type: boolean, description: "Org admins can add their own forges (policy)" }
     post:
       tags: [orgs]
@@ -4332,6 +4333,7 @@ components:
         smtp_configured: { type: boolean }
         smtp_from_config: { type: boolean }
         instance_name: { type: string }
+        signup_url: { type: string, description: "Where new people create an account and an org (orgs.signup_url), if the instance offers signup" }
     SMTPSettings:
       type: object
       required: [host, port, security, username, from, has_password, from_config, configured]

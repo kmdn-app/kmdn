@@ -31,6 +31,7 @@ func TestEmbedding(t *testing.T) {
 	cfg.DataDir, cfg.DB.URL = dir, "sqlite://"+filepath.Join(dir, "kmdn.db")
 	cfg.SecretKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
 	cfg.Orgs.Mode = "multi"
+	cfg.SMTP.Host, cfg.SMTP.From = "log", "kmdn@acme.test" // mail goes to the log
 	cfg.Server.ContentBaseURL = "http://content.localhost"
 
 	var mu sync.Mutex
@@ -47,6 +48,14 @@ func TestEmbedding(t *testing.T) {
 		kmdn.WithEvents(func(_ context.Context, e kmdn.Event) { mu.Lock(); seen = append(seen, e); mu.Unlock() }),
 		kmdn.WithMigrations(fstest.MapFS{"0001_plans.sql": {Data: []byte("CREATE TABLE saas_plans (org_id TEXT PRIMARY KEY, plan TEXT NOT NULL);")}}, "saas_migrations"),
 		kmdn.WithRoutes(func(r chi.Router) {
+			r.Get("/whoami", func(w http.ResponseWriter, r *http.Request) {
+				s, ok := app.Authenticate(r)
+				if !ok {
+					http.Error(w, "", http.StatusUnauthorized)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]string{"email": s.User.Email, "csrf": s.CSRF, "method": s.Method})
+			})
 			r.Get("/signup/finish", func(w http.ResponseWriter, r *http.Request) {
 				if err := app.SignIn(w, r, r.URL.Query().Get("email")); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
@@ -113,6 +122,15 @@ func TestEmbedding(t *testing.T) {
 	}
 	if code, _ := get("/signup/finish?email=alice@acme.dev"); code != 200 {
 		t.Fatalf("sign in: %d", code)
+	}
+	if code, who := get("/whoami"); code != 200 || who["email"] != "alice@acme.dev" || who["csrf"] == "" || who["method"] != "embedded" {
+		t.Fatalf("authenticate on a program route: %d %v", code, who)
+	}
+	if err := kmdn.ValidSlug("signup"); err == nil || kmdn.ValidSlug(kmdn.Slugify("Acme Corp")) != nil {
+		t.Fatalf("slugs: %v", err)
+	}
+	if err := app.SendMail(ctx, kmdn.Mail{To: "alice@acme.dev", Subject: "Hi", Text: "Hello"}); err != nil {
+		t.Fatalf("send mail: %v", err)
 	}
 	if code, me := get("/api/v1/saas/me"); code != 200 || me["email"] != "alice@acme.dev" {
 		t.Fatalf("api route: %d %v", code, me)

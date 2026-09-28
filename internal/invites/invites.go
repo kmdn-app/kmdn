@@ -57,7 +57,7 @@ func (s *Service) seatFree(ctx context.Context, q store.Querier, orgID string, i
 		n--
 	}
 	if n >= max {
-		return &policy.ErrLimit{What: "members", Limit: max}
+		return s.Policy.Limit(ctx, orgID, "members", max)
 	}
 	return nil
 }

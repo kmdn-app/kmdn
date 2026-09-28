@@ -116,7 +116,7 @@ func (s *Service) Connect(ctx context.Context, by auth.Principal, in ConnectInpu
 			return Repo{}, "", err
 		}
 		if n >= max {
-			return Repo{}, "", &policy.ErrLimit{What: "repositories", Limit: max}
+			return Repo{}, "", s.Policy.Limit(ctx, in.OrgID, "repositories", max)
 		}
 	}
 	fr := forge.Repo{Owner: in.Owner, Name: in.Name, CloneURL: in.CloneURL}

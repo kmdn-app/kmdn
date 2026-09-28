@@ -4,6 +4,8 @@
     "tagline": "Collaborative markdown editing with a git backend."
   },
   "signin": {
+    "new": "New here?",
+    "signup": "Create an account",
     "title": "Sign in to {{instance}}",
     "subtitle": "Use your work email. There are no passwords to remember.",
     "email": "Work email",
@@ -1205,6 +1207,8 @@
     "retried": "Queued again."
   },
   "orgs": {
+    "createYours": "Create an organization",
+    "upgrade": "Upgrade",
     "signInRequired": "Sign in again to open {{name}}",
     "signInRequiredAction": "Continue to sign in",
     "none": "You're not in an organization yet",

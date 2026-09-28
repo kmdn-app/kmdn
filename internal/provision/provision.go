@@ -84,7 +84,7 @@ func (s *Service) Upsert(ctx context.Context, orgID, source string, m Member) (u
 					return err
 				}
 				if n >= max {
-					return &policy.ErrLimit{What: "members", Limit: max}
+					return s.Policy.Limit(ctx, orgID, "members", max)
 				}
 			}
 			role := m.Role

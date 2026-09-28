@@ -33,6 +33,8 @@ type Service struct {
 	AllowCreate string
 	// OrgForges says whether org admins can add their own forges.
 	OrgForges bool
+	// SignupURL is orgs.signup_url, for people without an org.
+	SignupURL string
 	Events    events.Sink
 	Log       *slog.Logger
 }
@@ -185,7 +187,7 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	canCreate := mode == orgs.Multi && (s.AllowCreate == "anyone" || p.User.IsInstanceAdmin)
-	api.JSON(w, http.StatusOK, map[string]any{"items": out, "mode": mode, "can_create": canCreate, "org_forges": s.OrgForges})
+	api.JSON(w, http.StatusOK, map[string]any{"items": out, "mode": mode, "can_create": canCreate, "org_forges": s.OrgForges, "signup_url": s.SignupURL})
 }
 
 func (s *Service) create(w http.ResponseWriter, r *http.Request) {

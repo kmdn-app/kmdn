@@ -199,7 +199,7 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 	a.AuthH = auth.NewHTTP(a.Auth, strings.HasPrefix(cfg.Server.BaseURL, "https://"), trusted)
 	a.AuthH.BaseURL = cfg.Server.BaseURL
 	a.AuthH.LegacyCookies = !a.Content.Enabled()
-	a.Setup = &setup.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: cfg.Server.BaseURL, Log: log}
+	a.Setup = &setup.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: cfg.Server.BaseURL, SignupURL: cfg.Orgs.SignupURL, Log: log}
 
 	r := a.Server.API()
 	r.Use(a.AuthH.Middleware)
@@ -363,7 +363,7 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 	a.Server.Mount("/mcp", a.MCP.Handler(a.AuthH.TrustedProxies))
 	people := &admin.People{DB: db, Auth: a.Auth, Log: log}
 	people.Routes(r)
-	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, OrgForges: a.Policy.OrgForgesAllowed(), Events: opts.Events, Log: log}
+	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, OrgForges: a.Policy.OrgForgesAllowed(), SignupURL: cfg.Orgs.SignupURL, Events: opts.Events, Log: log}
 
 	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL, Policy: a.Policy, Events: opts.Events}

@@ -49,6 +49,7 @@ auth:
 orgs:
   mode: single                       # or multi (see 16-organizations.md)
   allow_create: admins               # multi mode: admins | anyone
+  signup_url: ""                     # an embedder's signup page, linked from sign-in and the no-org page
 policy:                              # 16-organizations.md#policy
   strict: false                      # org admins aren't the operator: git over https/ssh to public hosts, org forges and webhooks to public addresses
   no_org_forges: false               # orgs only use the instance's shared forges

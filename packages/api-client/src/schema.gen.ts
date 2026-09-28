@@ -4155,6 +4155,8 @@ export interface components {
             smtp_configured: boolean;
             smtp_from_config: boolean;
             instance_name: string;
+            /** @description Where new people create an account and an org (orgs.signup_url), if the instance offers signup */
+            signup_url?: string;
         };
         SMTPSettings: {
             host: string;
@@ -4734,6 +4736,8 @@ export interface operations {
                         mode: "single" | "multi";
                         /** @description The caller may create an organization */
                         can_create: boolean;
+                        /** @description Where people create an org through the instance's signup (orgs.signup_url); empty when none */
+                        signup_url?: string;
                         /** @description Org admins can add their own forges (policy) */
                         org_forges: boolean;
                     };

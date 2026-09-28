@@ -80,6 +80,10 @@ type Orgs struct {
 	// AllowCreate says who can create orgs in multi mode: "admins"
 	// (instance admins) or "anyone" signed in.
 	AllowCreate string `yaml:"allow_create"`
+	// SignupURL is where people create an account and an org when an
+	// embedding program provides signup (a path like /signup or a URL); the
+	// sign-in page and the no-org page link to it.
+	SignupURL string `yaml:"signup_url"`
 }
 
 // Policy is what orgs may do (docs/specs/16-organizations.md#policy).
@@ -301,6 +305,9 @@ func (c Config) Validate() error {
 	case "admins", "anyone":
 	default:
 		errs = append(errs, fmt.Errorf("orgs.allow_create %q must be admins or anyone (env %s)", c.Orgs.AllowCreate, EnvName("orgs.allow_create")))
+	}
+	if s := c.Orgs.SignupURL; s != "" && !strings.HasPrefix(s, "/") && !strings.HasPrefix(s, "https://") && !strings.HasPrefix(s, "http://") {
+		errs = append(errs, fmt.Errorf("orgs.signup_url %q must be a path (/signup) or an http(s) URL (env %s)", s, EnvName("orgs.signup_url")))
 	}
 	switch c.Telemetry.LogFormat {
 	case "json", "text":
