@@ -455,6 +455,16 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /orgs/{org}/admin/export:
+    get:
+      tags: [orgs]
+      operationId: exportOrg
+      summary: The organization's archive (.tar.gz), importable with kmdn org import (admins)
+      parameters:
+        - { $ref: "#/components/parameters/OrgSlug" }
+      responses:
+        "200": { description: The archive, content: { application/gzip: { schema: { type: string, format: binary } } } }
+        "403": { $ref: "#/components/responses/Problem" }
   /orgs/{org}/admin/settings:
     get:
       tags: [orgs]

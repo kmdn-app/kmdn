@@ -169,7 +169,15 @@ http.ListenAndServe(addr, app.Handler())          // or app.Run(ctx)
   - the name and email, replaced with "Deleted user" and an undeliverable address, so the address is free for a new account.
 
   What the person wrote stays, attributed to "Deleted user", and forge history isn't touched. The account can't be erased while it's the only owner of an org that has other members. Orgs where it was the only member are deleted.
-- The export of an org's data is the next step.
+- **Export and import:**
+  - Admins download the org's archive from `GET /orgs/{org}/admin/export`, or with `kmdn org export -org SLUG -out FILE`. It's a `.tar.gz` holding a manifest, one NDJSON file per table (the org's rows, found through each table's parent chain), the accounts and forge hosts the rows mention, and the uploads.
+  - Credentials, sign-ins, keys and derived data (search, links, summaries, consistency findings) are left out.
+  - `kmdn org import -in FILE [-slug S] [-into-default]` loads it into any kmdn at the same or a newer schema:
+    - ids are kept;
+    - accounts are matched by email and forge hosts by kind and URL, else created (hosts without credentials);
+    - a copy into the instance it came from gets fresh ids throughout;
+    - values are converted between SQLite and Postgres.
+  - Repositories come back without credentials: reconnect them, and they sync.
 
 ## Isolation
 

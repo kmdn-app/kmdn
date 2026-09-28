@@ -1213,6 +1213,9 @@
     "retried": "Queued again."
   },
   "orgs": {
+    "export": "Export",
+    "exportHint": "Download an archive of this organization: revisions, threads, comments, assistant conversations, the audit log and uploads. Another kmdn can import it (kmdn org import). Credentials aren't included.",
+    "exportAction": "Download archive",
     "deleteTitle": "Delete this organization",
     "deleteHint": "Everyone loses access at once. Its repositories stay on their forges; kmdn's revisions, threads and uploads are deleted for good after 30 days.",
     "deleteAction": "Delete organization",
