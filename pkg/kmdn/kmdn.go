@@ -23,6 +23,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/events"
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/policy"
+	"github.com/kmdn-app/kmdn/internal/provision"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/users"
 )
@@ -52,7 +53,30 @@ type (
 	Event = events.Event
 	// User is an account.
 	User = users.User
+	// SignInProvider is a way to sign in kmdn doesn't ship (SSO); it
+	// returns an Identity the core links to an account.
+	SignInProvider = auth.Provider
+	ProviderInfo   = auth.ProviderInfo
+	Identity       = auth.Identity
+	// SignInRequired is what Policy.SignIn returns to refuse a session in
+	// an org.
+	SignInRequired = policy.SignInRequired
+	// Provisioner changes org membership and groups from an outside
+	// source (directory sync) without invitations; ProvisionedMember is
+	// one person as that source sees them.
+	Provisioner       = provision.Service
+	ProvisionedMember = provision.Member
 )
+
+// ProviderMethod is the session method Policy.SignIn sees for a provider.
+func ProviderMethod(id string) string { return auth.ProviderMethod(id) }
+
+// ProviderStartURL starts a sign-in with a provider, back to redirect.
+func ProviderStartURL(id, redirect string) string { return auth.ProviderStartURL(id, redirect) }
+
+// ErrLastOwner is returned by the Provisioner when a change would leave an
+// org without an active owner.
+var ErrLastOwner = provision.ErrLastOwner
 
 // Event types.
 const (
@@ -107,6 +131,11 @@ func WithMigrations(fsys fs.FS, table string) Option {
 	return func(o *app.Options) { o.Migrations, o.MigrationsTable = fsys, table }
 }
 
+// WithSignInProvider adds a way to sign in (for example SAML for one org).
+func WithSignInProvider(p SignInProvider) Option {
+	return func(o *app.Options) { o.Providers = append(o.Providers, p) }
+}
+
 // App is a running kmdn.
 type App struct {
 	a *app.App
@@ -127,6 +156,9 @@ func New(ctx context.Context, cfg Config, log *slog.Logger, opts ...Option) (*Ap
 	}
 	return &App{a: a}, nil
 }
+
+// Provisioner changes org membership from an outside source.
+func (k *App) Provisioner() *Provisioner { return k.a.Provision }
 
 // Handler serves kmdn (the app, the API, WebSockets, MCP, webhooks).
 func (k *App) Handler() http.Handler { return k.a.Server.Handler() }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/audit"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/store"
 	"github.com/kmdn-app/kmdn/internal/telemetry"
 	"github.com/kmdn-app/kmdn/internal/users"
@@ -71,7 +72,8 @@ type HTTP struct {
 	// host on the site serves user content.
 	LegacyCookies bool
 
-	passkeys ceremonies
+	passkeys  ceremonies
+	providers map[string]Provider
 
 	requestByEmail *api.Limiter
 	requestByIP    *api.Limiter
@@ -124,6 +126,15 @@ func (h *HTTP) Middleware(next http.Handler) http.Handler {
 		}
 		telemetry.SetUser(r.Context(), u.ID)
 		ctx := context.WithValue(WithPrincipal(r.Context(), Principal{User: u, Session: sess}), tokenKey, token)
+		if pol := h.Svc.Policy; pol != nil && pol.SignIn != nil && !u.IsInstanceAdmin {
+			method := sess.Method
+			ctx = orgs.WithSignInGate(ctx, func(ctx context.Context, orgID string) error {
+				if req := pol.SignInFor(ctx, orgID, method); req != nil {
+					return req
+				}
+				return nil
+			})
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -191,9 +202,29 @@ func (h *HTTP) clearCookies(w http.ResponseWriter) {
 	}
 }
 
-// SignIn creates a session for u and writes cookies.
+// SignInErrorCode is the ?oauth_error= code for a failed SignIn in a
+// redirect flow: "method" when an org asks for another sign-in method.
+func SignInErrorCode(err error) string {
+	var p *api.Problem
+	if errors.As(err, &p) && p.Code == "sign_in_required" {
+		return "method"
+	}
+	return "session"
+}
+
+// SignIn creates a session for u and writes cookies. It returns a
+// *policy.SignInRequired (an API problem via Problem) when none of u's orgs
+// accepts method.
 func (h *HTTP) SignIn(w http.ResponseWriter, r *http.Request, u users.User, method string) error {
-	token, sess, err := h.Svc.CreateSession(r.Context(), h.Svc.DB, u.ID, h.ip(r), r.UserAgent())
+	refused, err := h.Svc.SignInAllowed(r.Context(), u, method)
+	if err != nil {
+		return err
+	}
+	if refused != nil {
+		h.Svc.audit(r.Context(), audit.Entry{ActorType: audit.ActorUser, ActorID: u.ID, IP: h.ip(r), Action: "auth.sign_in_refused", Data: map[string]any{"method": method, "org_id": refused.OrgID}})
+		return refused.Problem()
+	}
+	token, sess, err := h.Svc.CreateSessionBy(r.Context(), h.Svc.DB, u.ID, h.ip(r), r.UserAgent(), method)
 	if err != nil {
 		return err
 	}
@@ -204,6 +235,7 @@ func (h *HTTP) SignIn(w http.ResponseWriter, r *http.Request, u users.User, meth
 
 // Routes registers /auth and /me under the API router.
 func (h *HTTP) Routes(r chi.Router) {
+	h.providerRoutes(r)
 	r.Post("/auth/magic-link", h.requestLink)
 	r.Post("/auth/magic-link/verify", h.verify)
 	r.Post("/auth/logout", h.logout)

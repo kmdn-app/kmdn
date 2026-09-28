@@ -1371,6 +1371,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSignInProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/providers/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["startSignInProvider"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/providers/{id}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["signInProviderCallback"];
+        put?: never;
+        /** @description For identity providers that answer with a form POST (SAML). */
+        post: operations["signInProviderCallbackPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/oauth/{host}/start": {
         parameters: {
             query?: never;
@@ -3726,6 +3775,13 @@ export interface components {
              * @enum {string}
              */
             role: "member" | "admin" | "owner" | "";
+            /** @description Set when this session can't act in the org until the person signs in the way the org asks */
+            sign_in?: {
+                org_id: string;
+                message: string;
+                /** @description Starts a sign-in the org accepts */
+                url?: string;
+            };
         };
         OrgInput: {
             name: string;
@@ -4088,6 +4144,8 @@ export interface components {
             expires_at: string;
             ip: string;
             user_agent: string;
+            /** @description How the session was signed in (magic_link, passkey, oauth_github, provider:<id>, …); empty for older sessions */
+            method?: string;
             current: boolean;
         };
         SetupStatus: {
@@ -6764,6 +6822,94 @@ export interface operations {
                         }[];
                     };
                 };
+            };
+        };
+    };
+    listSignInProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sign-in providers added by an embedding program and listed on the sign-in page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            id: string;
+                            name: string;
+                            start_url: string;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    startSignInProvider: {
+        parameters: {
+            query?: {
+                redirect?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the identity provider */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    signInProviderCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed in (to the redirect) or back to the sign-in page with oauth_error */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    signInProviderCallbackPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed in (to the redirect) or back to the sign-in page with oauth_error */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

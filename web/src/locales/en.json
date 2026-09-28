@@ -24,12 +24,14 @@
     "comingSoon": "Coming soon",
     "withForge": "Continue with {{name}}",
     "oauthError": {
-      "no_account": "There's no kmdn account for that forge account. Sign in with email, then link it from your profile.",
+      "no_account": "There's no kmdn account for that account yet. Sign in with email, then link it from your profile.",
       "expired": "The sign-in request expired. Try again.",
       "forge": "The forge didn't complete the sign-in. Try again.",
       "unavailable": "That sign-in method isn't available.",
       "session": "Sign-in was interrupted. Try again.",
       "taken": "That forge account is linked to another kmdn user.",
+      "method": "Your organization asks you to sign in another way, such as its single sign-on.",
+      "org_full": "Your organization has no seats left. Ask one of its admins to make room.",
       "generic": "Sign-in with the forge failed. Try again."
     },
     "or": "or",
@@ -1203,6 +1205,8 @@
     "retried": "Queued again."
   },
   "orgs": {
+    "signInRequired": "Sign in again to open {{name}}",
+    "signInRequiredAction": "Continue to sign in",
     "none": "You're not in an organization yet",
     "noneHint": "Ask an admin of your organization to invite you, then open the link in the email.",
     "switch": "Organizations",

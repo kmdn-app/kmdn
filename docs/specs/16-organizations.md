@@ -70,7 +70,17 @@ The resolved org travels in the request context (`orgs.From(ctx)`). Services nev
 - Invitations belong to an org (optionally with a repo and role). Accepting one adds the org membership.
 - Auto-join by email domain is an org setting backed by `org_domains`; a domain belongs to at most one org.
 - An account without an org sees "Ask an admin for an invitation", or the embedder's signup page in `multi` mode with self-serve.
-- Sign-in methods, member provisioning and per-org sign-in policy are extension points ([Embedding](#embedding)).
+- Sign-in methods, member provisioning and per-org sign-in policy are extension points ([Sign-in](#sign-in)).
+
+## Sign-in
+
+The core ships magic links, passkeys and linked forge accounts. An embedding program adds the rest (SAML, OIDC, directory sync) through three extension points, without patching `internal/auth`:
+
+- **Providers** (`kmdn.WithSignInProvider`). A provider has an ID, a name and whether the sign-in page lists it. `Start` sends the browser to the identity provider with a state; `Callback` (GET or POST, for SAML) returns the `Identity` it vouches for (issuer, subject, email and whether it was verified, name, optionally an org) and the state. The core checks the state (a `__Host-` cookie bound to a single-use server record, ten minutes), then finds the account: a link in `identity_links` (issuer + subject), else an active account with that verified email (linked from then on), else, if the identity names an org and allows it, a new account that joins the org within its member limit. The session's method is `provider:<id>`. Unlisted providers are reached from an org's "sign in" link.
+- **Sign-in policy** (`Policy.SignIn(ctx, orgID, method)`). It returns nil to accept a session in an org, or a `SignInRequired` with a message and a start URL. Every session records how it was signed in (`magic_link`, `magic_code`, `passkey`, `oauth_github`, `oauth_gitlab`, `invite`, `setup`, `provider:<id>`; empty for sessions from before). The policy applies wherever org access is decided (`orgs.Role`), so a refused session gets no role in that org: its routes answer 403 `sign_in_required` with the message and URL, ID-addressed resources 404, and `GET /orgs` marks the org with `sign_in` so the app shows the message and a button. A sign-in is refused outright when every org the person belongs to refuses its method. Org owners and instance admins are never refused (the break-glass path), and people in no org can always sign in.
+- **Provisioning** (`app.Provisioner()`). `Upsert` adds or updates a member by email (creating the account; role; active or deactivated), `Remove` takes them out of the org and its groups, `EnsureGroup` and `SetGroupMembers` keep groups in step. No invitations are sent; member limits apply to people added, the last active owner can't be demoted or removed, and every change is audited with its source (`"via": "scim"`) and reported as an event.
+
+Agent keys and MCP tokens aren't sessions and aren't subject to the sign-in policy; an org that wants SSO only should limit who can create them.
 
 ## Settings
 
@@ -130,6 +140,7 @@ app, err := kmdn.New(ctx, cfg, logger,
     kmdn.WithAPIRoutes(func(r chi.Router) {…}),// /api/v1, kmdn.CurrentUser(r)
     kmdn.WithOrgRoutes(func(r chi.Router) {…}),// /api/v1/orgs/{org}, kmdn.CurrentOrg(r); outsiders get 404
     kmdn.WithMigrations(migrationsFS, "saas_migrations"),
+    kmdn.WithSignInProvider(samlForAcme),      // Info, Start, Callback → kmdn.Identity
 )
 org, _ := app.CreateOrg(ctx, kmdn.NewOrg{Name: "Acme", OwnerEmail: "alice@acme.dev"})
 app.SuspendOrg(ctx, org.ID, "Payment failed.")   // read-only, reason shown; ResumeOrg lifts it
@@ -138,7 +149,7 @@ app.Seats(ctx, org.ID); app.OrgSettings(ctx, org.ID); app.DB()
 http.ListenAndServe(addr, app.Handler())          // or app.Run(ctx)
 ```
 
-`pkg/kmdn/kmdn_test.go` is an embedding program that uses only this package (two orgs, its own routes, migrations, settings, limits and events), so the surface can't break unnoticed. Sign-in providers and provisioning come next ([extension points](#sign-in-and-joining)).
+`pkg/kmdn/kmdn_test.go` is an embedding program that uses only this package (two orgs, its own routes, migrations, settings, limits, events, a sign-in provider and provisioning), so the surface can't break unnoticed. Sign-in providers, the sign-in policy and the provisioner are described in [Sign-in](#sign-in).
 
 ## Isolation
 

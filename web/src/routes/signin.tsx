@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Mail, ArrowLeft, KeyRound, Loader2 } from "lucide-react";
+import { Mail, ArrowLeft, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,8 @@ function RequestForm({
   const err = send.error;
   const { redirect, oauth_error } = Route.useSearch();
   const providers = useQuery({ queryKey: ["oauth-providers"], queryFn: async () => (await unwrap(api.GET("/auth/oauth/providers"))).items });
+  const sso = useQuery({ queryKey: ["signin-providers"], queryFn: async () => (await unwrap(api.GET("/auth/providers"))).items });
+  const buttons = (providers.data?.length ?? 0) + (sso.data?.length ?? 0);
   return (
     <form onSubmit={onSubmit} noValidate>
       <h1 className="mt-3.5 text-center text-xl font-semibold tracking-tight">{t("signin.title", { instance })}</h1>
@@ -72,10 +74,18 @@ function RequestForm({
         </p>
       )}
       <PasskeySignIn redirect={redirect} />
-      {(providers.data?.length ?? 0) > 0 && (
+      {buttons > 0 && (
         <>
           <div className="grid gap-2">
-            {providers.data!.map((p) => (
+            {(sso.data ?? []).map((p) => (
+              <Button key={p.id} asChild variant="outline" className="w-full">
+                <a href={`${p.start_url}?redirect=${encodeURIComponent(redirect ?? "/")}`}>
+                  <ShieldCheck />
+                  {t("signin.withForge", { name: p.name })}
+                </a>
+              </Button>
+            ))}
+            {(providers.data ?? []).map((p) => (
               <Button key={p.id} asChild variant="outline" className="w-full">
                 <a href={`/api/v1/auth/oauth/${p.id}/start?mode=signin&redirect=${encodeURIComponent(redirect ?? "/")}`}>
                   <ForgeIcon kind={p.kind} />

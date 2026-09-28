@@ -260,7 +260,23 @@ func list(ctx context.Context, q store.Querier, query string, args ...any) ([]Or
 // In single mode every active account is a member of the default org and
 // instance admins are its owners, whether or not a membership row exists;
 // a deactivated row still removes access.
+//
+// A session the org's sign-in policy doesn't accept gets no role, except
+// owners (SignInBlocked).
 func Role(ctx context.Context, q store.Querier, orgID string, u users.User) (string, error) {
+	role, err := MemberRole(ctx, q, orgID, u)
+	if err != nil || role == "" || role == Owner {
+		return role, err
+	}
+	if signInBlocked(ctx, orgID) {
+		role = ""
+	}
+	return role, nil
+}
+
+// MemberRole is u's role in the org whatever the session: for listing orgs
+// and explaining a block, never for access.
+func MemberRole(ctx context.Context, q store.Querier, orgID string, u users.User) (string, error) {
 	if u.Status != users.Active {
 		return "", nil
 	}

@@ -30,6 +30,48 @@ type Policy struct {
 	NoOrgForges bool
 	// Limits returns an org's limits; nil means none.
 	Limits func(ctx context.Context, orgID string) Limits
+	// SignIn says whether a session signed in with method (magic_link,
+	// passkey, oauth_github, provider:<id>, …; "" for sessions from before
+	// methods were recorded) may act in an org. nil allows it. Org owners
+	// and instance admins are never blocked, so an org can't lock itself
+	// out.
+	SignIn func(ctx context.Context, orgID, method string) *SignInRequired
+}
+
+// SignInRequired is why a session may not act in an org, and where to sign
+// in instead.
+type SignInRequired struct {
+	OrgID   string `json:"org_id"`
+	Message string `json:"message"`
+	// URL starts a sign-in the org accepts (a provider's start URL).
+	URL string `json:"url,omitempty"`
+}
+
+func (e *SignInRequired) Error() string { return e.Message }
+
+// Problem is the API error for e: 403 sign_in_required.
+func (e *SignInRequired) Problem() *api.Problem {
+	msg := e.Message
+	if msg == "" {
+		msg = "This organization asks you to sign in another way."
+	}
+	p := api.Err(http.StatusForbidden, "sign_in_required", msg).WithParam("org_id", e.OrgID)
+	if e.URL != "" {
+		p = p.WithParam("sign_in_url", e.URL)
+	}
+	return p
+}
+
+// SignInFor applies the SignIn hook.
+func (p *Policy) SignInFor(ctx context.Context, orgID, method string) *SignInRequired {
+	if p == nil || p.SignIn == nil {
+		return nil
+	}
+	r := p.SignIn(ctx, orgID, method)
+	if r != nil && r.OrgID == "" {
+		r.OrgID = orgID
+	}
+	return r
 }
 
 // Limits are an org's caps; 0 means no cap.

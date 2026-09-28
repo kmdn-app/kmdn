@@ -1,5 +1,7 @@
 import { Outlet, createFileRoute, notFound, redirect } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 import { NotFoundPage } from "@/components/not-found";
+import { Button } from "@/components/ui/button";
 import { currentOrg, orgsQuery, setCurrentOrg } from "@/lib/orgs";
 
 /**
@@ -23,5 +25,23 @@ export const Route = createFileRoute("/_app/$org")({
     return { org };
   },
   notFoundComponent: NotFoundPage,
-  component: Outlet,
+  component: OrgArea,
 });
+
+/** The org, unless it asks for another sign-in than this session's. */
+function OrgArea() {
+  const { t } = useTranslation();
+  const { org } = Route.useRouteContext();
+  if (!org.sign_in) return <Outlet />;
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <h1 className="text-xl font-semibold tracking-tight">{t("orgs.signInRequired", { name: org.name })}</h1>
+      <p className="max-w-md text-muted-foreground">{org.sign_in.message}</p>
+      {org.sign_in.url && (
+        <Button asChild className="mt-2">
+          <a href={org.sign_in.url}>{t("orgs.signInRequiredAction")}</a>
+        </Button>
+      )}
+    </div>
+  );
+}

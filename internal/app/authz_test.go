@@ -20,6 +20,7 @@ var publicRoutes = map[string]bool{
 	"POST /auth/magic-link": true, "POST /auth/magic-link/verify": true, "POST /auth/logout": true,
 	"POST /auth/passkey/options": true, "POST /auth/passkey/verify": true,
 	"GET /auth/oauth/providers": true, "GET /auth/oauth/{host}/start": true, "GET /auth/oauth/{host}/callback": true, "GET /auth/oauth/callback": true,
+	"GET /auth/providers": true, "GET /auth/providers/{id}/start": true, "GET /auth/providers/{id}/callback": true, "POST /auth/providers/{id}/callback": true,
 	"GET /invites/{token}": true, "POST /invites/{token}/accept": true,
 }
 
