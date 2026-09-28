@@ -134,7 +134,10 @@ func (s *Service) Export(ctx context.Context, orgID string, w io.Writer) (Manife
 		var buf strings.Builder
 		n, err := s.dumpTable(ctx, t, orgID, &buf, func(col string, v any) {
 			if sv, ok := v.(string); ok {
-				if strings.HasPrefix(sv, "usr_") {
+				// Accounts the org's rows refer to, from reference columns
+				// only: a name or a title that looks like an id isn't one
+				// (else anyone's details would come out by naming a group).
+				if strings.HasPrefix(sv, "usr_") && (strings.HasSuffix(col, "_id") || strings.HasSuffix(col, "_by")) {
 					userIDs[sv] = true
 				}
 				if t.name == "repos" && col == "forge_host_id" {

@@ -1,7 +1,9 @@
 package app
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"io"
 	"strings"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/blobs"
 	"github.com/kmdn-app/kmdn/internal/config"
+	"github.com/kmdn-app/kmdn/internal/groups"
 	"github.com/kmdn-app/kmdn/internal/lifecycle"
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -34,6 +37,11 @@ func TestExportImportOrg(t *testing.T) {
 	if code, b := root.do("POST", "/revisions/"+revID+"/threads", map[string]any{"path": "docs/index.md", "body": "Keep this short."}); code != 201 {
 		t.Fatalf("thread: %d %v", code, b)
 	}
+	// A name that looks like someone else's id stays a name.
+	zed, _ := users.Create(ctx, a.DB, "zed@globex.dev", "Zed", false)
+	if _, err := groups.Create(ctx, a.DB, orgID, zed.ID, ""); err != nil {
+		t.Fatal(err)
+	}
 	img := pngBytes(t)
 	if code, up := root.upload("/revisions/"+revID+"/assets", "docs/welcome.md", "desk.png", img); code != 201 {
 		t.Fatalf("upload: %d %v", code, up)
@@ -53,6 +61,9 @@ func TestExportImportOrg(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode != 200 || !strings.Contains(res.Header.Get("Content-Disposition"), "acme-") || len(archive) < 100 {
 		t.Fatalf("export: %d %d bytes", res.StatusCode, len(archive))
+	}
+	if unzipped := gunzip(t, archive); strings.Contains(unzipped, "zed@globex.dev") {
+		t.Fatal("the export names an outsider")
 	}
 	var exported int
 	_ = store.QueryRow(ctx, a.DB, `SELECT COUNT(*) FROM audit_log WHERE org_id = ? AND action = 'org.exported'`, orgID).Scan(&exported)
@@ -110,6 +121,74 @@ func TestExportImportOrg(t *testing.T) {
 	if _, err := a.Lifecycle.Import(ctx, strings.NewReader("not an archive"), lifecycle.ImportOptions{}); err == nil {
 		t.Fatal("garbage imported")
 	}
+
+	// An edited archive can't reach outside itself: into another org, to an
+	// account it doesn't list, or to another org's rows.
+	c, cc := newApp(t, multiOrgs)
+	_ = cc
+	victimOrg, _ := users.Create(ctx, c.DB, "vic@victim.dev", "Vic", false)
+	for name, row := range map[string]string{
+		"another org":     `{"org_id":"` + orgs.DefaultID + `","user_id":"` + olga.ID + `","role":"owner","status":"active","joined_at":0}`,
+		"another account": `{"org_id":"` + orgID + `","user_id":"` + victimOrg.ID + `","role":"member","status":"active","joined_at":0}`,
+	} {
+		edited := editArchive(t, archive, "tables/org_members.ndjson", row)
+		if _, err := c.Lifecycle.Import(ctx, bytes.NewReader(edited), lifecycle.ImportOptions{Slug: "acme-" + strings.ReplaceAll(name, " ", "-")}); err == nil {
+			t.Fatalf("%s: imported", name)
+		}
+	}
+	edited := editArchive(t, archive, "tables/repo_members.ndjson", `{"repo_id":"rp_01m3k3s0sk0ex9xqdxfqse05dm","principal_type":"user","principal_id":"`+olga.ID+`","role":"admin","added_at":0}`)
+	if _, err := c.Lifecycle.Import(ctx, bytes.NewReader(edited), lifecycle.ImportOptions{Slug: "acme-repo"}); err == nil || !strings.Contains(err.Error(), "isn't in the archive") {
+		t.Fatalf("a grant on a repository outside the archive: %v", err)
+	}
+	var orgsThere int
+	_ = store.QueryRow(ctx, c.DB, `SELECT COUNT(*) FROM orgs WHERE slug LIKE 'acme%'`).Scan(&orgsThere)
+	if orgsThere != 0 {
+		t.Fatalf("a refused import left %d orgs", orgsThere)
+	}
+}
+
+func gunzip(t *testing.T, b []byte) string {
+	t.Helper()
+	zr, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := io.ReadAll(zr)
+	return string(out)
+}
+
+// editArchive appends line to the archive's file name.
+func editArchive(t *testing.T, archive []byte, name, line string) []byte {
+	t.Helper()
+	zr, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(zr)
+	var out bytes.Buffer
+	zw := gzip.NewWriter(&out)
+	tw := tar.NewWriter(zw)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(tr)
+		if h.Name == name {
+			b = append(b, []byte(line+"\n")...)
+			h.Size = int64(len(b))
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = tw.Write(b)
+	}
+	_ = tw.Close()
+	_ = zw.Close()
+	return out.Bytes()
 }
 
 // An archive from SQLite loads into Postgres (booleans, blobs and the
