@@ -360,6 +360,23 @@ export interface paths {
         patch: operations["updateOrgMember"];
         trace?: never;
     };
+    "/orgs/{org}/admin/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The organization's archive (.tar.gz), importable with kmdn org import (admins) */
+        get: operations["exportOrg"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/admin/settings": {
         parameters: {
             query?: never;
@@ -5018,6 +5035,30 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    exportOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's slug */
+                org: components["parameters"]["OrgSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The archive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/gzip": string;
+                };
+            };
+            403: components["responses"]["Problem"];
         };
     };
     getOrgSettings: {

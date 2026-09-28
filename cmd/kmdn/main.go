@@ -19,6 +19,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/doctor"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
+	"github.com/kmdn-app/kmdn/internal/lifecycle"
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/secrets"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -41,6 +42,11 @@ Usage:
                                      back up the database, uploads and config
                                      (safe while the server runs)
   kmdn restore -in FILE [-force]     restore a backup (stop the server first)
+  kmdn org export -org SLUG -out FILE.kmdn.tar.gz
+                                     write an organization's archive
+  kmdn org import -in FILE [-slug SLUG] [-into-default]
+                                     load an organization's archive (from this
+                                     or another kmdn); reconnect its repositories
   kmdn version                       print version information
 
 Every config key can be set with an env var, e.g. KMDN_SERVER_BASE_URL.
@@ -131,6 +137,19 @@ func run(args []string, stdout, stderr io.Writer) error {
 			return errors.New("usage: kmdn restore -in <backup.tar.zst> [-force]")
 		}
 		return runRestore(*cfgPath, *in, *force, stdout)
+	case "org":
+		if len(rest) == 0 || (rest[0] != "export" && rest[0] != "import") {
+			return errors.New("usage: kmdn org export -org SLUG -out FILE | kmdn org import -in FILE [-slug SLUG] [-into-default]")
+		}
+		slug := fs.String("org", "", "the organization's slug (export)")
+		file := fs.String("out", "", "archive to write (export)")
+		in := fs.String("in", "", "archive to read (import)")
+		newSlug := fs.String("slug", "", "the slug to give it (import)")
+		intoDefault := fs.Bool("into-default", false, "load it into the default org (single mode, import)")
+		if err := fs.Parse(rest[1:]); err != nil {
+			return err
+		}
+		return orgArchive(*cfgPath, rest[0], *slug, *file, *in, *newSlug, *intoDefault, stdout)
 	case "version", "--version", "-v":
 		v := version.Get()
 		fmt.Fprintf(stdout, "kmdn %s (%s) %s\n", v.Version, v.Commit, v.Go)
@@ -377,5 +396,63 @@ telemetry:
 		return err
 	}
 	fmt.Fprintf(out, "Wrote %s with a new secret key.\n", path)
+	return nil
+}
+
+// orgArchive exports or imports an organization's archive.
+func orgArchive(cfgPath, op, slug, out, in, newSlug string, intoDefault bool, stdout io.Writer) error {
+	cfg, err := config.Load(cfgPath, os.LookupEnv)
+	if err != nil {
+		return err
+	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("invalid configuration:\n%w", err)
+	}
+	ctx := context.Background()
+	a, err := app.New(ctx, cfg, telemetry.NewLogger(io.Discard, cfg.Telemetry.LogFormat, cfg.Telemetry.LogLevel))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = a.Close() }()
+	if op == "export" {
+		if slug == "" || out == "" {
+			return errors.New("usage: kmdn org export -org SLUG -out FILE")
+		}
+		o, err := orgs.BySlug(ctx, a.DB, slug)
+		if err != nil {
+			return fmt.Errorf("organization %q: %w", slug, err)
+		}
+		f, err := os.OpenFile(out, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err != nil {
+			return err
+		}
+		m, err := a.Lifecycle.Export(ctx, o.ID, f)
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		if err != nil {
+			_ = os.Remove(out)
+			return err
+		}
+		rows := 0
+		for _, n := range m.Rows {
+			rows += n
+		}
+		fmt.Fprintf(stdout, "Exported %s: %d rows, %d uploads → %s\n", slug, rows, m.Uploads, out)
+		return nil
+	}
+	if in == "" {
+		return errors.New("usage: kmdn org import -in FILE [-slug SLUG] [-into-default]")
+	}
+	f, err := os.Open(in)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	res, err := a.Lifecycle.Import(ctx, f, lifecycle.ImportOptions{Slug: newSlug, IntoDefault: intoDefault})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "Imported %s (%d accounts created, %d forge hosts added, %d uploads). Reconnect its repositories' credentials in the org console; they sync once connected.\n", res.Slug, res.Users, res.Hosts, res.Uploads)
 	return nil
 }

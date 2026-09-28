@@ -37,6 +37,22 @@ func (s *Service) Routes(r chi.Router, h *auth.HTTP) {
 // OrgRoutes go under /orgs/{org}.
 func (s *Service) OrgRoutes(r chi.Router) {
 	r.Delete("/", s.deleteOrg)
+	r.With(orghttp.RequireAdmin).Get("/admin/export", s.export)
+}
+
+// export streams the org's archive (admins).
+func (s *Service) export(w http.ResponseWriter, r *http.Request) {
+	c := orghttp.Current(r)
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+c.Slug+`-`+time.Now().UTC().Format("2006-01-02")+`.kmdn.tar.gz"`)
+	m, err := s.Export(r.Context(), c.ID, w)
+	if err != nil {
+		s.Log.Error("export", "org", c.ID, "err", err)
+		return // headers are gone; the truncated archive won't open
+	}
+	a := actor(r)
+	a.OrgID, a.Action, a.TargetType, a.TargetID, a.Data = c.ID, "org.exported", "org", c.ID, map[string]any{"rows": m.Rows, "uploads": m.Uploads}
+	_ = audit.Write(r.Context(), s.DB, a)
 }
 
 func actor(r *http.Request) audit.Entry {

@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -464,6 +465,12 @@ func (k *App) PurgeOrg(ctx context.Context, orgID string) error {
 // *SoleOwnerError while the person is the only owner of an org with others.
 func (k *App) EraseUser(ctx context.Context, userID, why string) error {
 	return k.a.Lifecycle.EraseUser(ctx, userID, audit.Entry{ActorType: audit.ActorSystem, Data: map[string]any{"why": why}})
+}
+
+// ExportOrg writes an org's archive (the same as GET /orgs/{org}/admin/export).
+func (k *App) ExportOrg(ctx context.Context, orgID string, w io.Writer) error {
+	_, err := k.a.Lifecycle.Export(ctx, orgID, w)
+	return err
 }
 
 // SoleOwnerError is EraseUser's refusal.

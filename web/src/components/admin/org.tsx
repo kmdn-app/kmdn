@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { CheckCircle2, Clock, Loader2, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Clock, Download, Loader2, Plus, Trash2 } from "lucide-react";
 import type { components } from "@kmdn/api-client";
 import { Card, Panel, Row } from "@/components/settings-layout";
 import { DangerZone } from "@/components/danger-zone";
@@ -190,6 +190,16 @@ export function OrganizationPanel() {
             {t("orgs.addDomain")}
           </Button>
         </form>
+      </Card>
+      <Card>
+        <Row title={t("orgs.export")} desc={t("orgs.exportHint")}>
+          <Button asChild variant="outline" size="sm">
+            <a href={`/api/v1/orgs/${encodeURIComponent(org.slug)}/admin/export`} download>
+              <Download />
+              {t("orgs.exportAction")}
+            </a>
+          </Button>
+        </Row>
       </Card>
       {owner && (
         <DangerZone
