@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -458,24 +459,26 @@ func (a *App) Run(ctx context.Context) error {
 	if _, err := a.Setup.Prepare(ctx); err != nil {
 		return err
 	}
-	go a.LLM.CheckEnv(ctx)
-	go a.periodic(ctx, time.Hour, "auth.purge")
-	go a.periodic(ctx, time.Hour, lifecycle.JobPurge)
-	go a.periodic(ctx, time.Hour, consistency.JobSchedule)
+	// Run returns only once its background work is over: nothing may write
+	// to the database or the data dir after it (the server may fail at once).
+	var wg sync.WaitGroup
+	wg.Go(func() { a.LLM.CheckEnv(ctx) })
+	wg.Go(func() { a.periodic(ctx, time.Hour, "auth.purge") })
+	wg.Go(func() { a.periodic(ctx, time.Hour, lifecycle.JobPurge) })
+	wg.Go(func() { a.periodic(ctx, time.Hour, consistency.JobSchedule) })
 	// Events recorded without a revision change (updates prepared, threads)
 	// still reach people within a minute.
-	go a.periodic(ctx, time.Minute, notify.JobDrain)
-	go a.periodic(ctx, time.Minute, publish.JobRecover)
+	wg.Go(func() { a.periodic(ctx, time.Minute, notify.JobDrain) })
+	wg.Go(func() { a.periodic(ctx, time.Minute, publish.JobRecover) })
 	a.catchUpIndexes(ctx)
-	done := make(chan struct{})
-	go func() { a.Jobs.Run(ctx); close(done) }()
+	wg.Go(func() { a.Jobs.Run(ctx) })
 	err := a.Server.Run(ctx)
 	stop()
 	a.Realtime.Close()
 	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	a.Collab.Flush(fctx)
 	cancel()
-	<-done
+	wg.Wait()
 	return err
 }
 
