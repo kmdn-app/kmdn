@@ -125,7 +125,9 @@ func (s *Service) Create(ctx context.Context, by auth.Principal, org orgs.Org, e
 			return err
 		}
 		link := strings.TrimRight(s.BaseURL, "/") + "/invite/" + token
-		if err := s.Mail.Send(ctx, mail.Invite(s.orgName(ctx, tx, org), email, by.User.Name, target, link, int(TTL/(24*time.Hour)))); err != nil {
+		msg := mail.Invite(s.orgName(ctx, tx, org), email, by.User.Name, target, link, int(TTL/(24*time.Hour)))
+		msg.OrgID = org.ID
+		if err := s.Mail.Send(ctx, msg); err != nil {
 			return api.Err(http.StatusBadGateway, "mail_failed", "The invite couldn't be emailed: "+err.Error())
 		}
 		res = Result{Status: "invited", Email: email, Invite: &inv}
