@@ -39,6 +39,10 @@ jobs:
           version: latest
       - name: Test (SQLite)
         run: go test -race ./...
+      # Run must join its background work before returning; a leak shows up
+      # as a flaky TempDir cleanup, so repeat the test that catches it.
+      - name: Test (Run shutdown, repeated)
+        run: go test -count=50 -run 'TestRunReturnsListenError$' ./internal/app/
       - name: Test (Postgres)
         run: go test -race -count=1 ./internal/...
         env:
