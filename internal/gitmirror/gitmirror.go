@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/kmdn-app/kmdn/internal/outbound"
 	"github.com/kmdn-app/kmdn/internal/telemetry"
 )
 
@@ -56,6 +58,26 @@ func RunAskpass(args []string, out io.Writer) bool {
 	return true
 }
 
+// DialEnv marks this binary's run as git's ssh ProxyCommand (RunDial).
+const DialEnv = "KMDN_GIT_DIAL"
+
+// RunDial handles this binary's run as ssh's ProxyCommand for git
+// (Git.Proxy): it connects stdin and stdout to host and port, public
+// addresses only. It reports whether it was that run.
+func RunDial(args []string, in io.Reader, out io.Writer) bool {
+	if os.Getenv(DialEnv) != "1" || len(args) != 2 {
+		return false
+	}
+	if err := outbound.DialStdio(context.Background(), outbound.Dialer(false).DialContext, net.JoinHostPort(args[0], args[1]), in, out); err != nil {
+		fmt.Fprintln(os.Stderr, "kmdn: won't connect to", args[0]+":", err)
+		os.Exit(1)
+	}
+	return true
+}
+
+// shellQuote quotes s for sh.
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
 // ErrNotFound means the path or revision does not exist.
 var ErrNotFound = errors.New("gitmirror: not found")
 
@@ -66,6 +88,10 @@ type Git struct {
 	// AllowProtocols restricts git's transports (GIT_ALLOW_PROTOCOL, e.g.
 	// "https:ssh"); empty keeps git's defaults.
 	AllowProtocols string
+	// Proxy, when set, is the outbound.Proxy git's https connections go
+	// through (without redirects), and ssh connects through this binary
+	// (RunDial): each connection is checked when it's made.
+	Proxy string
 }
 
 func (g *Git) bin() string {
@@ -147,6 +173,17 @@ func (g *Git) runEnv(ctx context.Context, dir string, cred *Credential, stdin io
 	)
 	if g.AllowProtocols != "" {
 		cmd.Env = append(cmd.Env, "GIT_ALLOW_PROTOCOL="+g.AllowProtocols)
+	}
+	if g.Proxy != "" {
+		cmd.Env = append(cmd.Env,
+			"GIT_CONFIG_COUNT=2",
+			"GIT_CONFIG_KEY_0=http.proxy", "GIT_CONFIG_VALUE_0="+g.Proxy,
+			"GIT_CONFIG_KEY_1=http.followRedirects", "GIT_CONFIG_VALUE_1=false",
+			// Nothing else decides where git connects.
+			"HTTPS_PROXY=", "https_proxy=", "HTTP_PROXY=", "http_proxy=", "ALL_PROXY=", "all_proxy=", "NO_PROXY=", "no_proxy=",
+			"GIT_SSH_COMMAND=ssh -o ProxyCommand="+shellQuote(shellQuote(g.askpass())+" %h %p"),
+			DialEnv+"=1",
+		)
 	}
 	cmd.Env = append(cmd.Env, env...)
 	if cred != nil && cred.Password != "" {

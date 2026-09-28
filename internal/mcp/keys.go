@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/auth"
-	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/orgs"
+	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
 )
 
