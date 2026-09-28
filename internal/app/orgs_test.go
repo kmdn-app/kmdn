@@ -2,13 +2,16 @@ package app
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/mail"
+	"github.com/kmdn-app/kmdn/internal/mcp"
 	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/policy"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -250,6 +253,28 @@ func TestOrgInvitesAndKeys(t *testing.T) {
 	}
 	if code, _ := bobC.do("GET", "/orgs/globex/admin/agent-keys/"+keyID+"/calls", nil); code != 404 {
 		t.Fatalf("globex reads acme's key calls: %d", code)
+	}
+
+	// Leaving an org takes the grants on its repositories with it.
+	if code, _ := root.do("DELETE", "/orgs/acme/members/"+bob.ID, nil); code != 204 && code != 200 {
+		t.Fatalf("remove bob: %d", code)
+	}
+	var grants int
+	_ = store.QueryRow(ctx, a.DB, `SELECT COUNT(*) FROM repo_members WHERE repo_id = ? AND principal_id = ?`, acmeRepo, bob.ID).Scan(&grants)
+	if grants != 0 {
+		t.Fatalf("bob's grants after leaving: %d", grants)
+	}
+	// An org being deleted is unreachable through its keys too.
+	keyToken := created["token"].(string)
+	if _, err := mcp.Authenticate(ctx, a.DB, keyToken); err != nil {
+		t.Fatalf("key before deletion: %v", err)
+	}
+	_, acme := root.do("GET", "/orgs/acme", nil)
+	if err := a.Lifecycle.RequestDeletion(ctx, acme["id"].(string), audit.Entry{ActorType: audit.ActorSystem}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mcp.Authenticate(ctx, a.DB, keyToken); !errors.Is(err, mcp.ErrBadKey) {
+		t.Fatalf("key of a deleting org: %v", err)
 	}
 }
 

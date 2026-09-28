@@ -16,6 +16,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/repos"
+	"github.com/kmdn-app/kmdn/internal/orgs"
 	"github.com/kmdn-app/kmdn/internal/store"
 )
 
@@ -292,6 +293,11 @@ func Authenticate(ctx context.Context, db *store.DB, token string) (Key, error) 
 		return k, ErrRevoked
 	case "expired":
 		return k, ErrExpired{*k.ExpiresAt}
+	}
+	// An org being deleted is unreachable at once, by its keys too.
+	var status string
+	if err := store.QueryRow(ctx, db, `SELECT status FROM orgs WHERE id = ?`, k.OrgID).Scan(&status); err != nil || status == orgs.Deleting {
+		return k, ErrBadKey
 	}
 	return k, nil
 }
