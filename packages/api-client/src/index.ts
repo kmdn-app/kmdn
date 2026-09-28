@@ -15,6 +15,11 @@ export type SetupStatus = Schemas["SetupStatus"];
 export const CSRF_COOKIE = "kmdn_csrf";
 export const CSRF_HEADER = "X-Kmdn-CSRF";
 
+/** Reads the CSRF token: `__Host-kmdn_csrf` over https, `kmdn_csrf` otherwise. */
+export function readCSRF(cookies: string): string | undefined {
+  return readCookie(cookies, `__Host-${CSRF_COOKIE}`) ?? readCookie(cookies, CSRF_COOKIE);
+}
+
 /** Reads a cookie value from a document.cookie string. */
 export function readCookie(cookies: string, name: string): string | undefined {
   for (const part of cookies.split(";")) {
@@ -26,12 +31,12 @@ export function readCookie(cookies: string, name: string): string | undefined {
 
 const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-/** Adds the CSRF header to unsafe requests, from the kmdn_csrf cookie. */
+/** Adds the CSRF header to unsafe requests, from the CSRF cookie. */
 export function csrfMiddleware(getCookies: () => string): Middleware {
   return {
     onRequest({ request }) {
       if (UNSAFE.has(request.method)) {
-        const token = readCookie(getCookies(), CSRF_COOKIE);
+        const token = readCSRF(getCookies());
         if (token) request.headers.set(CSRF_HEADER, token);
       }
       return request;

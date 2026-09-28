@@ -136,8 +136,8 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad origin", http.StatusForbidden)
 		return
 	}
-	cookie, err := r.Cookie(auth.SessionCookie)
-	if err != nil || h.Auth == nil {
+	token, ok := auth.SessionToken(r.Context())
+	if !ok || h.Auth == nil {
 		http.Error(w, "sign in first", http.StatusUnauthorized)
 		return
 	}
@@ -149,7 +149,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Outlive the HTTP request context (it ends when the handler returns).
 	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	c := &Conn{ID: ids.New("wsc"), User: p.User, hub: h, ws: ws, out: make(chan []byte, sendQueue), ctx: ctx, cancel: cancel,
-		channels: map[uint32]Channel{}, scopes: map[string]bool{}, sessionToken: cookie.Value}
+		channels: map[uint32]Channel{}, scopes: map[string]bool{}, sessionToken: token}
 	h.mu.Lock()
 	if h.conns == nil {
 		h.conns, h.scopes = map[*Conn]struct{}{}, map[string]map[*Conn]struct{}{}

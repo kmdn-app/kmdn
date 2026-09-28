@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +34,8 @@ type Server struct {
 	webFS  fs.FS
 	router chi.Router
 	api    chi.Router
+	// content serves the content origin (server.content_base_url), by Host.
+	content http.Handler
 
 	mu     sync.RWMutex
 	checks map[string]ReadyCheck
@@ -71,7 +75,7 @@ func (s *Server) AddReadyCheck(name string, c ReadyCheck) {
 
 func (s *Server) routes() chi.Router {
 	r := chi.NewRouter()
-	r.Use(requestID, observe, recoverer(s.log), accessLog(s.log), securityHeaders)
+	r.Use(requestID, observe, recoverer(s.log), accessLog(s.log), securityHeaders(s.cfg.Server.ContentBaseURL))
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -125,8 +129,31 @@ func metricsAuth(token string, next http.Handler) http.Handler {
 	})
 }
 
-// Handler returns the root handler (useful for tests).
-func (s *Server) Handler() http.Handler { return s.router }
+// SetContentHandler serves requests for the content origin's host with h;
+// that host reaches nothing else.
+func (s *Server) SetContentHandler(h http.Handler) {
+	u, err := url.Parse(s.cfg.Server.ContentBaseURL)
+	if err != nil || u.Host == "" {
+		return
+	}
+	host, app := u.Host, s.router
+	h = requestID(recoverer(s.log)(accessLog(s.log)(h)))
+	s.content = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.EqualFold(r.Host, host) {
+			h.ServeHTTP(w, r)
+			return
+		}
+		app.ServeHTTP(w, r)
+	})
+}
+
+// Handler returns the root handler.
+func (s *Server) Handler() http.Handler {
+	if s.content != nil {
+		return s.content
+	}
+	return s.router
+}
 
 // Run listens until ctx is cancelled, then shuts down gracefully.
 func (s *Server) Run(ctx context.Context) error {

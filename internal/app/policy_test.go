@@ -19,6 +19,7 @@ func TestStrictPolicy(t *testing.T) {
 	a, root := newApp(t, func(c *config.Config) {
 		multiOrgs(c)
 		c.Policy.Strict, c.Policy.NoOrgForges = true, true
+		c.Server.ContentBaseURL = "http://content.localhost"
 	})
 	ctx := context.Background()
 	alice, _ := users.Create(ctx, a.DB, "alice@acme.dev", "Alice", false)

@@ -196,7 +196,7 @@ func (s *Service) authorize(w http.ResponseWriter, r *http.Request, h repos.Host
 		api.Error(w, r, err)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: stateCookie, Value: state, Path: "/api/v1/auth/oauth/", HttpOnly: true, Secure: s.AuthH.Secure, SameSite: http.SameSiteLaxMode, MaxAge: 600})
+	http.SetCookie(w, &http.Cookie{Name: s.AuthH.CookieName(stateCookie), Value: state, Path: "/", HttpOnly: true, Secure: s.AuthH.Secure, SameSite: http.SameSiteLaxMode, MaxAge: 600})
 	var authURL string
 	q := url.Values{"client_id": {h.ClientID}, "redirect_uri": {s.redirectURI(h)}, "state": {state}}
 	switch h.Kind {
@@ -239,8 +239,8 @@ func fail(w http.ResponseWriter, r *http.Request, st pending, code string) {
 func (s *Service) callback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	state := r.URL.Query().Get("state")
-	ck, err := r.Cookie(stateCookie)
-	http.SetCookie(w, &http.Cookie{Name: stateCookie, Value: "", Path: "/api/v1/auth/oauth/", MaxAge: -1})
+	ck, err := r.Cookie(s.AuthH.CookieName(stateCookie))
+	http.SetCookie(w, &http.Cookie{Name: s.AuthH.CookieName(stateCookie), Value: "", Path: "/", MaxAge: -1, Secure: s.AuthH.Secure})
 	var st pending
 	key := "oauth_state:" + auth.Hash(state)
 	if err != nil || state == "" || subtle.ConstantTimeCompare([]byte(ck.Value), []byte(state)) != 1 || settings.Get(ctx, s.DB, key, &st) != nil || time.Since(st.Created) > 10*time.Minute {

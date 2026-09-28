@@ -15,6 +15,7 @@ import (
 
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/blobs"
+	"github.com/kmdn-app/kmdn/internal/content"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/policy"
@@ -40,6 +41,8 @@ type Service struct {
 	Log   *slog.Logger
 	// Blobs holds uploads, keyed per org (blobs.Key).
 	Blobs blobs.Store
+	// Content, when enabled, serves uploads from the content origin.
+	Content *content.Origin
 	// DataDir is the data directory.
 	DataDir string
 	// UploadMaxMB caps uploads; repo settings, .kmdn.yml and the org's

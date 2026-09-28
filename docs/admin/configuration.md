@@ -65,6 +65,7 @@ hooks:
 | Key | Default | Description |
 |---|---|---|
 | `server.base_url` | `http://localhost:8080` | Where people reach kmdn. Used in sign-in links, webhooks, OAuth callbacks and the GitHub App. Passkeys are tied to its host, so changing the host invalidates them. |
+| `server.content_base_url` | none | A second host, such as `https://content.docs.example.com`, that serves raw files and uploads through short-lived signed links, so files people add never come from the app's own origin. Point it at the same kmdn process (kmdn tells the two apart by `Host`); it must not share the app's host. Required with `policy.strict`. |
 | `server.listen` | `:8080` | Address and port to listen on. |
 | `server.trusted_proxies` | none | Proxies whose `X-Forwarded-For` header kmdn trusts for client IPs, as CIDR ranges. |
 | `data_dir` | `./data` | Git mirrors, uploads, the SQLite database and local backups. |

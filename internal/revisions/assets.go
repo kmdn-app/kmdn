@@ -9,13 +9,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"maps"
 	"net/http"
+	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/kmdn-app/kmdn/internal/blobs"
+	"github.com/kmdn-app/kmdn/internal/content"
 	"github.com/kmdn-app/kmdn/internal/ids"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -344,12 +349,34 @@ func Assets(ctx context.Context, q store.Querier, revisionID string) ([]Asset, e
 // ReadAsset returns the bytes of a revision's image, or nil when the revision
 // didn't add one at p.
 func (s *Service) ReadAsset(ctx context.Context, rev Revision, p string) ([]byte, string, error) {
-	var sha, mime, orgID string
-	err := store.QueryRow(ctx, s.DB, `SELECT a.sha256, a.mime, COALESCE(u.org_id, '') FROM revision_assets a LEFT JOIN uploads u ON u.id = a.upload_id
-		WHERE a.revision_id = ? AND a.path = ?`, rev.ID, cleanPath(p)).Scan(&sha, &mime, &orgID)
+	sha, mime, orgID, err := s.assetRef(ctx, rev, p)
 	if err != nil {
-		return nil, "", store.NotFound(err)
+		return nil, "", err
 	}
 	b, err := s.Blobs.Get(ctx, blobs.Key(orgID, sha))
 	return b, mime, err
+}
+
+// assetRef names the upload a revision has at p.
+func (s *Service) assetRef(ctx context.Context, rev Revision, p string) (sha, mime, orgID string, err error) {
+	err = store.QueryRow(ctx, s.DB, `SELECT a.sha256, a.mime, COALESCE(u.org_id, '') FROM revision_assets a LEFT JOIN uploads u ON u.id = a.upload_id
+		WHERE a.revision_id = ? AND a.path = ?`, rev.ID, cleanPath(p)).Scan(&sha, &mime, &orgID)
+	return sha, mime, orgID, store.NotFound(err)
+}
+
+// ContentResolver serves a signed upload URL on the content origin. Uploads
+// are addressed by hash, so the URL names fixed bytes.
+func (s *Service) ContentResolver(ctx context.Context, q url.Values) (content.Blob, error) {
+	sha, ct := q.Get("sha"), q.Get("type")
+	if len(sha) != 64 || !slices.Contains(slices.Collect(maps.Values(assetTypes)), ct) {
+		return content.Blob{}, content.ErrNotFound
+	}
+	b, err := s.Blobs.Get(ctx, blobs.Key(q.Get("org"), sha))
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, store.ErrNotFound) {
+		return content.Blob{}, content.ErrNotFound
+	}
+	if err != nil {
+		return content.Blob{}, err
+	}
+	return content.Blob{Type: ct, Bytes: b, Immutable: true}, nil
 }

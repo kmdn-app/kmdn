@@ -30,6 +30,7 @@ func TestEmbedding(t *testing.T) {
 	cfg.DataDir, cfg.DB.URL = dir, "sqlite://"+filepath.Join(dir, "kmdn.db")
 	cfg.SecretKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
 	cfg.Orgs.Mode = "multi"
+	cfg.Server.ContentBaseURL = "http://content.localhost"
 
 	var mu sync.Mutex
 	var seen []kmdn.Event

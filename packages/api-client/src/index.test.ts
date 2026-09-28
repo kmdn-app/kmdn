@@ -1,8 +1,14 @@
-import { createApi, readCookie, unwrap, ApiError } from "./index";
+import { createApi, readCookie, readCSRF, unwrap, ApiError } from "./index";
 
 test("readCookie", () => {
   expect(readCookie("a=1; kmdn_csrf=abc%3D; b=2", "kmdn_csrf")).toBe("abc=");
   expect(readCookie("", "x")).toBeUndefined();
+});
+
+test("readCSRF prefers the __Host- cookie", () => {
+  expect(readCSRF("kmdn_csrf=old; __Host-kmdn_csrf=new")).toBe("new");
+  expect(readCSRF("kmdn_csrf=plain")).toBe("plain");
+  expect(readCSRF("")).toBeUndefined();
 });
 
 test("adds CSRF header to unsafe methods only and unwraps problems", async () => {
