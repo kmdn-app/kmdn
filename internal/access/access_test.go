@@ -19,7 +19,7 @@ func seedRepo(t *testing.T, db *store.DB, id string) {
 	if _, err := store.Exec(ctx, db, `INSERT INTO forge_hosts (id, kind, display_name, created_at) VALUES ('fh_1', 'git', 'Git', ?) ON CONFLICT (id) DO NOTHING`, store.Millis(time.Now())); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Exec(ctx, db, `INSERT INTO repos (id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES (?, 'fh_1', 'northwind', ?, ?, 'main', ?)`, id, id, id, store.Millis(time.Now())); err != nil {
+	if _, err := store.Exec(ctx, db, `INSERT INTO repos (org_id, id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('org_default', ?, 'fh_1', 'northwind', ?, ?, 'main', ?)`, id, id, id, store.Millis(time.Now())); err != nil {
 		t.Fatal(err)
 	}
 }

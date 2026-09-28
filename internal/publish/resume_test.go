@@ -72,7 +72,7 @@ func claimFixture(t *testing.T) (*Service, repos.Repo, revisions.Revision, claim
 	for _, query := range []string{
 		`INSERT INTO users (id, email, name, created_at) VALUES ('user_claim', 'claim@example.org', 'Publisher', 1)`,
 		`INSERT INTO forge_hosts (id, kind, display_name, created_at) VALUES ('host_claim', 'git', 'Git', 1)`,
-		`INSERT INTO repos (id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('repo_claim', 'host_claim', 'owner', 'repo', 'Repo', 'main', 1)`,
+		`INSERT INTO repos (org_id, id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('org_default', 'repo_claim', 'host_claim', 'owner', 'repo', 'Repo', 'main', 1)`,
 	} {
 		if _, err := store.Exec(ctx, db, query); err != nil {
 			t.Fatal(err)

@@ -26,7 +26,7 @@ func seedRepo(t *testing.T, a *App, name string) repos.Repo {
 		t.Fatal(err)
 	}
 	id := "rep_" + name
-	if _, err := store.Exec(ctx, a.DB, `INSERT INTO repos (id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES (?, ?, 'northwind', ?, ?, 'main', ?)`,
+	if _, err := store.Exec(ctx, a.DB, `INSERT INTO repos (org_id, id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('org_default', ?, ?, 'northwind', ?, ?, 'main', ?)`,
 		id, h.ID, name, "Northwind "+name, store.Millis(time.Now())); err != nil {
 		t.Fatal(err)
 	}

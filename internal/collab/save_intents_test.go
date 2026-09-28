@@ -20,7 +20,7 @@ func TestSaveIntentFinalizationIsAtomic(t *testing.T) {
 	for _, query := range []string{
 		`INSERT INTO users (id, email, name, created_at) VALUES ('usr_save', 'save@example.org', 'Saver', 1)`,
 		`INSERT INTO forge_hosts (id, kind, display_name, created_at) VALUES ('host_save', 'git', 'Git', 1)`,
-		`INSERT INTO repos (id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('repo_save', 'host_save', 'owner', 'repo', 'Repo', 'main', 1)`,
+		`INSERT INTO repos (org_id, id, forge_host_id, owner, name, display_name, target_branch, created_at) VALUES ('org_default', 'repo_save', 'host_save', 'owner', 'repo', 'Repo', 'main', 1)`,
 		`INSERT INTO revisions (id, repo_id, number, title, base_sha, created_at, updated_at, branch, branch_sha, branch_base_sha) VALUES ('rev_save', 'repo_save', 1, 'Save', 'base', 1, 1, 'kmdn/save', 'prior', 'base')`,
 	} {
 		if _, err := store.Exec(ctx, db, query); err != nil {
