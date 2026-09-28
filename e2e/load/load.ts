@@ -9,14 +9,11 @@
 // don't).
 import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
-import WebSocket from "ws";
-import * as Y from "yjs";
-import * as syncProtocol from "y-protocols/sync";
-import * as encoding from "lib0/encoding";
-import * as decoding from "lib0/decoding";
+import type * as Y from "yjs";
 import setup from "../global-setup.ts";
 import teardown from "../global-teardown.ts";
-import { KMDN_URL, STATE_FILE, type State } from "../env.ts";
+import { STATE_FILE, type State } from "../env.ts";
+import { Editor, api, metric, ms, pct, summary, timeGet } from "./lib.ts";
 import { readFileSync } from "node:fs";
 
 const { values: opts } = parseArgs({
@@ -31,119 +28,6 @@ const EDITORS = Number(opts.editors);
 const SECONDS = Number(opts.seconds);
 const INTERVAL = Number(opts.interval);
 const REVISIONS = Number(opts.revisions);
-
-const CONTROL = 0;
-const SYNC = 1;
-
-function pct(xs: number[], p: number): number {
-  if (!xs.length) return NaN;
-  const s = [...xs].sort((a, b) => a - b);
-  return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))]!;
-}
-const ms = (x: number) => `${x.toFixed(0)} ms`;
-
-async function api(st: State, method: string, path: string, body?: unknown) {
-  const res = await fetch(KMDN_URL + "/api/v1" + path, {
-    method,
-    headers: { "Content-Type": "application/json", Cookie: st.admin.cookie, "X-Kmdn-CSRF": st.admin.csrf },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${text}`);
-  return text ? JSON.parse(text) : null;
-}
-
-async function metric(name: string): Promise<number> {
-  const text = await (await fetch(KMDN_URL + "/metrics")).text();
-  const line = text.split("\n").find((l) => l.startsWith(name + " "));
-  return line ? Number(line.split(" ")[1]) : NaN;
-}
-
-/** One editor: a Yjs doc synced with the page's room over its own socket. */
-class Editor {
-  doc = new Y.Doc();
-  ws: WebSocket;
-  synced: Promise<void>;
-  errors = 0;
-  private ready!: () => void;
-
-  constructor(st: State, revision: string, path: string, onUpdate?: (doc: Y.Doc) => void) {
-    this.synced = new Promise((r) => (this.ready = r));
-    this.ws = new WebSocket(KMDN_URL.replace("http", "ws") + "/ws", { headers: { Cookie: st.admin.cookie, Origin: KMDN_URL } });
-    this.ws.binaryType = "arraybuffer";
-    this.doc.on("update", (u: Uint8Array, origin: unknown) => {
-      if (origin !== this) {
-        const e = encoding.createEncoder();
-        syncProtocol.writeUpdate(e, u);
-        this.send(SYNC, encoding.toUint8Array(e));
-      }
-      onUpdate?.(this.doc);
-    });
-    this.ws.on("open", () => this.control({ op: "subscribe", channel: 1, room: { revision, path } }));
-    this.ws.on("error", () => this.errors++);
-    this.ws.on("message", (data: ArrayBuffer) => {
-      const msg = new Uint8Array(data);
-      const kind = msg[0]!;
-      const payload = msg.subarray(5);
-      if (kind === CONTROL) {
-        const c = JSON.parse(new TextDecoder().decode(payload));
-        if (c.op === "subscribed") {
-          const e = encoding.createEncoder();
-          syncProtocol.writeSyncStep1(e, this.doc);
-          this.send(SYNC, encoding.toUint8Array(e));
-        } else if (c.op === "error") this.errors++;
-        return;
-      }
-      if (kind !== SYNC) return;
-      const d = decoding.createDecoder(payload);
-      const e = encoding.createEncoder();
-      const type = syncProtocol.readSyncMessage(d, e, this.doc, this);
-      if (encoding.length(e) > 0) this.send(SYNC, encoding.toUint8Array(e));
-      if (type === syncProtocol.messageYjsSyncStep2) this.ready();
-    });
-  }
-
-  send(kind: number, payload: Uint8Array) {
-    if (this.ws.readyState !== WebSocket.OPEN) return;
-    const msg = new Uint8Array(5 + payload.length);
-    msg[0] = kind;
-    new DataView(msg.buffer).setUint32(1, 1);
-    msg.set(payload, 5);
-    this.ws.send(msg);
-  }
-
-  control(v: unknown) {
-    const p = new TextEncoder().encode(JSON.stringify(v));
-    const msg = new Uint8Array(5 + p.length);
-    msg[0] = CONTROL;
-    msg.set(p, 5);
-    this.ws.send(msg);
-  }
-
-  /** Appends text to the page's first paragraph. */
-  type(text: string) {
-    const frag = this.doc.getXmlFragment("content");
-    for (const n of frag.toArray()) {
-      if (n instanceof Y.XmlElement && n.nodeName === "paragraph") {
-        const t = n.toArray().find((c) => c instanceof Y.XmlText) as Y.XmlText | undefined;
-        if (t) {
-          t.insert(t.length, text);
-          return;
-        }
-      }
-    }
-    throw new Error("no paragraph to type in");
-  }
-
-  text(): string {
-    return this.doc.getXmlFragment("content").toString();
-  }
-
-  close() {
-    this.ws.close();
-    this.doc.destroy();
-  }
-}
 
 async function editorsPhase(st: State) {
   const rev = await api(st, "POST", `/repos/${st.repoID}/revisions`, { title: "Load: many editors", path: "docs/index.md" });
@@ -213,16 +97,6 @@ async function editorsPhase(st: State) {
   };
 }
 
-async function timeGet(st: State, path: string, samples = 20) {
-  const xs: number[] = [];
-  for (let i = 0; i < samples; i++) {
-    const t = performance.now();
-    await api(st, "GET", path);
-    xs.push(performance.now() - t);
-  }
-  return `p50 ${ms(pct(xs, 50))}, p95 ${ms(pct(xs, 95))}`;
-}
-
 async function revisionsPhase(st: State) {
   const t0 = performance.now();
   let first = "";
@@ -234,12 +108,12 @@ async function revisionsPhase(st: State) {
   return {
     created: REVISIONS,
     createPerSecond: (REVISIONS / (createMs / 1000)).toFixed(0),
-    "GET revisions (open)": await timeGet(st, `/repos/${st.repoID}/revisions?state=open`),
-    "GET revisions (mine, the picker)": await timeGet(st, `/repos/${st.repoID}/revisions?mine=true`),
-    "GET a revision": await timeGet(st, `/revisions/${first}`),
-    "GET repo tree": await timeGet(st, `/repos/${st.repoID}/tree`),
-    "GET inbox": await timeGet(st, `/notifications`),
-    "GET search": await timeGet(st, `/repos/${st.repoID}/search?q=travel`),
+    "GET revisions (open)": summary(await timeGet(st, `/repos/${st.repoID}/revisions?state=open`)),
+    "GET revisions (mine, the picker)": summary(await timeGet(st, `/repos/${st.repoID}/revisions?mine=true`)),
+    "GET a revision": summary(await timeGet(st, `/revisions/${first}`)),
+    "GET repo tree": summary(await timeGet(st, `/repos/${st.repoID}/tree`)),
+    "GET inbox": summary(await timeGet(st, `/notifications`)),
+    "GET search": summary(await timeGet(st, `/repos/${st.repoID}/search?q=travel`)),
   };
 }
 

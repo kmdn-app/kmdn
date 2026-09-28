@@ -111,7 +111,7 @@ func (f *forge) seed(p string, files map[string]string, protected bool) (*projec
 	if err := os.MkdirAll(filepath.Dir(bare), 0o755); err != nil {
 		return nil, err
 	}
-	if _, err := f.git(work, "clone", "-q", "--bare", work, bare); err != nil {
+	if _, err := f.git(work, "clone", "-q", "--bare", "--no-local", work, bare); err != nil {
 		return nil, err
 	}
 	for _, kv := range [][2]string{{"http.receivepack", "true"}, {"uploadpack.allowFilter", "true"}, {"uploadpack.allowAnySHA1InWant", "true"}} {

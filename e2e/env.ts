@@ -24,4 +24,8 @@ export type State = {
   pids: number[];
   /** The admin's session from setup (load scripts use it). */
   admin: { cookie: string; csrf: string };
+  /** How kmdn was started, so load scripts can restart it. */
+  kmdn: { bin: string; env: Record<string, string> };
+  /** The instance's forge host (the fake GitLab). */
+  forgeHost: string;
 };

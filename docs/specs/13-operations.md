@@ -170,3 +170,17 @@ Append-only table ([10](10-data-model.md)). Recorded actions include: sign-in (m
 | 500 open revisions (created at ~126/s through the API) | Revisions list and picker p50 11 ms; a revision 2 ms; repo tree 7 ms; inbox 2 ms; search 2 ms |
 
 The limits that bound a file (50 concurrent editors, 1 MiB updates) are enforced by the room; beyond one node, see [03](03-architecture.md).
+
+### Many organizations
+
+`pnpm --filter @kmdn/e2e load:orgs` (`e2e/load/orgs.ts`) runs the same stack in `orgs.mode: multi`: 200 orgs, 20 of them with a repo and 20 editors each typing at once, a noisy org importing a large repo meanwhile (`--big`, `--scan` for a consistency scan), an optional restart halfway (`--restart`, SIGTERM as a deploy does; editors reconnect and resend), then 5,000 open revisions across the orgs. `KMDN_E2E_DB_URL=postgres://…` points it at a fresh Postgres database (connect as an ordinary role so row-level security is on). It reports p50/p95/p99 and checks that every typed edit reached the stored markdown. First results, on a laptop (Apple Silicon, one process, load generator on the same machine), before sizing the production host:
+
+| Scenario | SQLite | Postgres 17 (RLS on) |
+|----------|--------|----------------------|
+| 4 orgs × 5 editors, 10 s | p50 4 ms, p95 9 ms, p99 14 ms | p50 5 ms, p95 313 ms, p99 620 ms |
+| Same, with a 200-file import in another org | p50 16 s, p99 21 s: edits everywhere wait behind the import's writes | p50 4 ms, p95 203 ms, p99 742 ms |
+| 20 orgs × 20 editors (~300 edits/s), 30 s | fails: concurrent writes return `SQLITE_BUSY` (500s) | nothing lost, but p50 0.2–1.2 s, p95 ~3 s; kmdn uses ~2.7 cores |
+| Same, a 2,000-file import and a restart halfway | not run | 8,414 edits typed, 8,414 stored, all copies converged; restart 1.1 s; p50 2.5 s, p99 13 s |
+| 5,000 open revisions in 20 orgs | not run | created at ~91/s; revision list p50 78 ms, p99 98 ms; a revision, org repos, search and inbox p99 ≤ 5 ms |
+
+Findings to fix before sizing: on SQLite, a big import in one org stalls editing in every org and concurrent writes can fail with `SQLITE_BUSY` instead of waiting; on Postgres, collaborative editing costs ~10 ms of server CPU per edit with many busy rooms (versus ~1.5 ms for one busy page), which makes the tail seconds long at 20 busy orgs.
