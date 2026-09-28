@@ -40,6 +40,9 @@ var DefaultModels = map[string]map[string]string{
 	ProviderOpenAI:    {},
 }
 
+// DefaultBackgroundShare is Service.BackgroundShare's default.
+const DefaultBackgroundShare = 0.8
+
 // DefaultUserDailyTokens is the per-user daily budget.
 const DefaultUserDailyTokens = 500_000
 
@@ -100,6 +103,11 @@ type Service struct {
 	// OrgAllows reports whether an org has AI features on (its settings, its
 	// plan); nil allows every org.
 	OrgAllows func(ctx context.Context, orgID string) bool
+	// BackgroundShare is the part of an org's monthly budget that work
+	// nobody asked for right now (runs without a user: consistency checks,
+	// change summaries, embeddings) may use; the rest is kept for people's
+	// own requests. 0 means DefaultBackgroundShare.
+	BackgroundShare float64
 	// OrgBudget is an org's monthly token budget (0: none of its own).
 	OrgBudget func(ctx context.Context, orgID string) int
 	// Events receives the tokens each run used, per org.
@@ -253,7 +261,9 @@ func (s *Service) usedBy(ctx context.Context, since time.Time, userID, orgID str
 }
 
 // CheckBudget refuses a run when the user's daily budget, the monthly budget
-// of the repo's org, or the instance's monthly budget is used up.
+// of the repo's org, or the instance's monthly budget is used up. Runs
+// without a user (background work) stop earlier, at BackgroundShare of the
+// org's budget, so the assistant stays available to people until the end.
 func (s *Service) CheckBudget(ctx context.Context, userID, repoID string) error {
 	st, err := s.Settings(ctx)
 	if err != nil {
@@ -289,10 +299,20 @@ func (s *Service) CheckBudget(ctx context.Context, userID, repoID string) error 
 				if n >= limit {
 					return &ErrBudget{"This organization has used its AI budget for the month. It resets on the 1st (UTC)."}
 				}
+				if userID == "" && float64(n) >= float64(limit)*s.backgroundShare() {
+					return &ErrBudget{"Background AI work (consistency checks, change summaries) is paused: this organization has used most of its AI budget for the month. It resumes on the 1st (UTC)."}
+				}
 			}
 		}
 	}
 	return nil
+}
+
+func (s *Service) backgroundShare() float64 {
+	if s.BackgroundShare > 0 && s.BackgroundShare <= 1 {
+		return s.BackgroundShare
+	}
+	return DefaultBackgroundShare
 }
 
 // Run is a metered use of a model.
@@ -342,7 +362,8 @@ func (s *Service) FinishRun(ctx context.Context, id string, u Usage, tools []str
 		return err
 	}
 	if orgID != "" && u.Total() > 0 {
-		s.Events.Emit(ctx, events.Event{Type: events.AIUsage, OrgID: orgID, UserID: userID, Data: map[string]any{"tokens": u.Total(), "task": task, "model": model, "run_id": id}})
+		s.Events.Emit(ctx, events.Event{Type: events.AIUsage, OrgID: orgID, UserID: userID, Data: map[string]any{"tokens": u.Total(), "task": task, "model": model, "run_id": id,
+			"input_tokens": u.InputTokens, "output_tokens": u.OutputTokens, "cache_read_tokens": u.CacheReadTokens, "cache_write_tokens": u.CacheWriteTokens, "background": userID == ""}})
 	}
 	if task != TaskChat {
 		return nil

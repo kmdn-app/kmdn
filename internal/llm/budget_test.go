@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,14 +32,21 @@ func TestOrgBudgets(t *testing.T) {
 	}
 	budgets := map[string]int{"org_a": 1000, "org_b": 1000}
 	s := &Service{DB: db, OrgBudget: func(_ context.Context, org string) int { return budgets[org] }}
-	if err := s.CheckBudget(ctx, "", "rep_a"); err != nil {
+	if err := s.CheckBudget(ctx, "usr_1", "rep_a"); err != nil {
 		t.Fatalf("under budget: %v", err)
+	}
+	// Past 80%, background work (no user) stops; people can still ask.
+	var be *ErrBudget
+	if err := s.CheckBudget(ctx, "", "rep_a"); !errors.As(err, &be) || !strings.Contains(be.Msg, "Background") {
+		t.Fatalf("background at 90%%: %v", err)
+	}
+	if err := s.CheckBudget(ctx, "", "rep_b"); err != nil {
+		t.Fatalf("background in another org: %v", err)
 	}
 	if _, err := store.Exec(ctx, db, `UPDATE assistant_runs SET input_tokens = 1000 WHERE id = 'run_1'`); err != nil {
 		t.Fatal(err)
 	}
-	var be *ErrBudget
-	if err := s.CheckBudget(ctx, "", "rep_a"); !errors.As(err, &be) {
+	if err := s.CheckBudget(ctx, "usr_1", "rep_a"); !errors.As(err, &be) || strings.Contains(be.Msg, "Background") {
 		t.Fatalf("org a over budget: %v", err)
 	}
 	if err := s.CheckBudget(ctx, "", "rep_b"); err != nil {
