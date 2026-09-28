@@ -132,6 +132,13 @@ func TestEmbedding(t *testing.T) {
 	if _, err := app.UserByEmail(ctx, "nobody@acme.dev"); !errors.Is(err, kmdn.ErrNotFound) {
 		t.Fatalf("missing user: %v", err)
 	}
+	if owners, err := app.OrgOwners(ctx, acme.ID); err != nil || len(owners) != 1 || owners[0].Email != "alice@acme.dev" {
+		t.Fatalf("owners: %v %v", owners, err)
+	}
+	alice, _ := app.UserByEmail(ctx, "alice@acme.dev")
+	if role, err := app.OrgRole(ctx, acme.ID, alice); err != nil || role != kmdn.RoleOwner {
+		t.Fatalf("role: %q %v", role, err)
+	}
 	if err := kmdn.ValidSlug("signup"); err == nil || kmdn.ValidSlug(kmdn.Slugify("Acme Corp")) != nil {
 		t.Fatalf("slugs: %v", err)
 	}

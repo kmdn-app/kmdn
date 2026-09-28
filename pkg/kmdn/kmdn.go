@@ -171,6 +171,34 @@ func (k *App) UserByEmail(ctx context.Context, email string) (User, error) {
 	return u, err
 }
 
+// OrgRole is u's role in the org ("" when u isn't an active member), for
+// the program's own routes (WithOrgRoutes routes get it from CurrentOrg).
+func (k *App) OrgRole(ctx context.Context, orgID string, u User) (string, error) {
+	return orgs.Role(ctx, k.a.DB, orgID, u)
+}
+
+// OrgOwners are the org's active owners (for billing notices).
+func (k *App) OrgOwners(ctx context.Context, orgID string) ([]User, error) {
+	list, err := orgs.Members(ctx, k.a.DB, orgID)
+	if err != nil {
+		return nil, err
+	}
+	var out []User
+	for _, m := range list {
+		if m.Role != orgs.Owner || m.Status != orgs.Active {
+			continue
+		}
+		u, err := users.ByID(ctx, k.a.DB, m.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if u.Status == users.Active {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
 // ErrNotFound means what was looked up doesn't exist.
 var ErrNotFound = store.ErrNotFound
 
