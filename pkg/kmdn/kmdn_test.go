@@ -37,7 +37,8 @@ func TestEmbedding(t *testing.T) {
 	var mu sync.Mutex
 	var seen []kmdn.Event
 	var app *kmdn.App
-	app, err := kmdn.New(ctx, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)),
+	logs := &lockedBuffer{}
+	app, err := kmdn.New(ctx, cfg, slog.New(slog.NewTextHandler(logs, nil)),
 		kmdn.WithPolicy(&kmdn.Policy{Strict: true, Limits: func(context.Context, string) kmdn.Limits { return kmdn.Limits{Members: 3} }}),
 		kmdn.WithManagedSettings(func(_ context.Context, o kmdn.Org) map[string]any {
 			if o.Slug == "globex" {
@@ -182,6 +183,10 @@ func TestEmbedding(t *testing.T) {
 	if code, _ := get("/api/v1/orgs/globex/billing"); code != 404 {
 		t.Fatalf("another org's route: %d", code)
 	}
+	// The org's requests are logged with its id, for support.
+	if l := logs.line("path=/api/v1/orgs/acme/billing"); !strings.Contains(l, "org_id="+acme.ID) {
+		t.Fatalf("access log: %q", l)
+	}
 
 	if err := app.SuspendOrg(ctx, acme.ID, "Payment failed."); err != nil {
 		t.Fatal(err)
@@ -240,4 +245,27 @@ func (sso) Start(w http.ResponseWriter, r *http.Request, state string) error {
 }
 func (sso) Callback(r *http.Request) (kmdn.Identity, string, error) {
 	return kmdn.Identity{Issuer: "https://idp.example.com", Subject: r.FormValue("sub")}, r.FormValue("state"), nil
+}
+
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+// line is the first logged line containing s.
+func (l *lockedBuffer) line(s string) string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, ln := range strings.Split(l.b.String(), "\n") {
+		if strings.Contains(ln, s) {
+			return ln
+		}
+	}
+	return ""
 }

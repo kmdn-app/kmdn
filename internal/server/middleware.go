@@ -90,6 +90,9 @@ func accessLog(log *slog.Logger) func(http.Handler) http.Handler {
 			if info.UserID != "" {
 				attrs = append(attrs, slog.String("user_id", info.UserID))
 			}
+			if info.OrgID != "" {
+				attrs = append(attrs, slog.String("org_id", info.OrgID))
+			}
 			if rc := chi.RouteContext(r.Context()); rc != nil {
 				for _, p := range []string{"repo", "revision"} {
 					if v := rc.URLParam(p); v != "" {
