@@ -45,7 +45,7 @@ Budgets count input, output and cached tokens. Below the form, the page shows us
 
 ## What leaves your server
 
-The assistant sends the provider only what it needs for the current request: the question, the system prompt, and what its tools return, such as the pages it searched and read. kmdn doesn't send the whole repository in the background.
+The assistant sends the provider only what it needs for the current request: the question, the system prompt, and what its tools return, such as the pages it searched and read. The system prompt includes the repository's `AGENTS.md` files, its style guide and the list of its skills, if it has them (see [instructions for the assistant](repositories.md#instructions-for-the-assistant)). kmdn doesn't send the whole repository in the background.
 
 The consistency check sends passages of published pages to the embeddings endpoint, and pairs of similar passages to the short-text model.
 

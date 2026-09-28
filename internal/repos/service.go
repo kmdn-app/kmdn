@@ -497,6 +497,45 @@ func (s *Service) ReadConfigFile(ctx context.Context, r Repo, p string) ([]byte,
 	return s.Mirror(r).ReadFile(ctx, cred, r.HeadSHA, strings.TrimPrefix(path.Clean("/"+p), "/"))
 }
 
+// ConfigFiles lists the files under dir at the published head, wherever
+// dir is (skills, .kmdn files): repo-relative paths, sorted.
+func (s *Service) ConfigFiles(ctx context.Context, r Repo, dir string) ([]string, error) {
+	dir = strings.Trim(path.Clean("/"+dir), "/")
+	if r.HeadSHA == "" || dir == "" {
+		return nil, nil
+	}
+	entries, err := s.Mirror(r).Tree(ctx, r.HeadSHA, dir)
+	if err != nil {
+		if errors.Is(err, gitmirror.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []string
+	for _, e := range entries {
+		if e.Type == "blob" {
+			out = append(out, e.Path)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// StyleGuide returns the repository's style guide (.kmdn/style.md, STYLE.md
+// or STYLE.md in the content root) and its path, if there is one.
+func (s *Service) StyleGuide(ctx context.Context, r Repo) (string, []byte) {
+	candidates := []string{".kmdn/style.md", "STYLE.md"}
+	if root := r.Scope().Root; root != "" {
+		candidates = append(candidates, root+"/STYLE.md")
+	}
+	for _, p := range candidates {
+		if b, err := s.ReadConfigFile(ctx, r, p); err == nil && len(b) > 0 {
+			return p, b
+		}
+	}
+	return "", nil
+}
+
 // TemplatesDir holds page templates, outside the content root.
 const TemplatesDir = ".kmdn/templates"
 

@@ -102,7 +102,43 @@ templates: .kmdn/templates/            # page templates offered by Add page
 
 The target branch can't be set from `.kmdn.yml`. A push to the repository shouldn't be able to change where kmdn writes.
 
-A `STYLE.md` or `.kmdn/style.md` file, if present, gives the review assistant a style guide to check changes against.
+### Instructions for the assistant
+
+The assistant reads these files from the target branch on every run, so the repository decides how it writes. They don't have to be inside the content root. A change takes effect once kmdn has synced the push.
+
+| File | What the assistant does with it |
+|---|---|
+| `AGENTS.md` | Follows it as the repository's instructions: conventions, words to use, what not to touch. kmdn reads the one at the repository root and the one at the content root. When both exist, the content root's file takes precedence. |
+| `.kmdn/style.md`, `STYLE.md`, or `STYLE.md` in the content root | Uses it as the style guide when it writes, and the review summary checks changes against it. kmdn uses the first one it finds. |
+| `.skills/` | Lists each skill by name and description. When a request matches one, the assistant reads the whole skill before it starts. |
+
+A skill is a folder with a `SKILL.md` and any files it refers to, such as a template or examples. A single markdown file directly in `.skills/` also counts:
+
+```text
+.skills/
+  release-notes/
+    SKILL.md
+    template.md
+  glossary.md
+```
+
+`SKILL.md` starts with YAML frontmatter that names the skill and says when to use it:
+
+```markdown
+---
+name: release-notes
+description: How we write the monthly release notes page. Use when asked for release notes.
+---
+# Release notes
+
+Start from template.md. One section per team, newest change first.
+```
+
+Without `name`, the skill takes the folder's (or file's) name. `.skills/` works at the repository root and in the content root. When both have a skill with the same name, the content root's wins.
+
+These are the same files coding agents look for, so one `AGENTS.md` can serve people's own agents and kmdn's assistant. The assistant still follows kmdn's rules first: whatever these files say, it only suggests changes, and it never publishes, approves or changes settings. Anyone who can push to the target branch can change what the assistant is told, so review changes to these files like code.
+
+Limits: 16,000 characters per `AGENTS.md`, 8,000 for the style guide, 50 skills, and 300 characters per skill description. kmdn cuts anything longer.
 
 ### Members and groups
 

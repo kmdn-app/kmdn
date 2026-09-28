@@ -73,6 +73,11 @@ func toolLabel(name string, input json.RawMessage) string {
 		return "Proposing to delete " + str("path")
 	case "reply_to_thread":
 		return "Replying in a comment thread"
+	case "load_skill":
+		if f := str("file"); f != "" {
+			return "Reading " + f + " from the skill " + str("name")
+		}
+		return "Using the skill " + str("name")
 	}
 	return name
 }
@@ -84,6 +89,7 @@ type env struct {
 	repo   repos.Repo
 	rev    *revisions.Revision
 	caller revisions.Caller
+	guide  *guidance // the repository's AGENTS.md, style guide and skills
 }
 
 var errTool = errors.New("tool failed")
@@ -101,6 +107,8 @@ func (e env) run(ctx context.Context, name string, input json.RawMessage) (strin
 		Path        string `json:"path"`
 		FromHeading string `json:"from_heading"`
 		MaxChars    int    `json:"max_chars"`
+		Name        string `json:"name"`
+		File        string `json:"file"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("%w: bad input: %w", errTool, err)
@@ -140,6 +148,8 @@ func (e env) run(ctx context.Context, name string, input json.RawMessage) (strin
 			return e.revisionComments(ctx, in.Path)
 		}
 		return e.comments(ctx, in.Path)
+	case "load_skill":
+		return e.loadSkill(ctx, in.Name, in.File)
 	case "propose_revision":
 		return "Proposed. The person sees a card to start the revision; stop here and wait for them.", nil
 	}

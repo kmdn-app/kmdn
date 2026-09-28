@@ -37,6 +37,16 @@ Good requests are specific and point at a page or a passage:
 - "Explain this conflict and propose a merged version"
 - "Write the description for this revision"
 
+## How the repository guides it
+
+The repository can tell the assistant how to write. Maintainers put these files on the target branch:
+
+- `AGENTS.md`: the team's instructions, such as the words to use or the pages to leave alone.
+- A style guide, `STYLE.md` or `.kmdn/style.md`.
+- Skills in `.skills/`, for tasks with a set way of working, like release notes or a runbook.
+
+When your request matches a skill, the assistant reads it first. The conversation shows **Using the skill release-notes**. To change how the assistant behaves for everyone, change these files in a revision, or ask a maintainer. [Instructions for the assistant](../admin/repositories.md#instructions-for-the-assistant) describes the format.
+
 ## Consistency findings
 
 If your admin turned on consistency checks, kmdn compares passages across the repository to find ones that contradict each other or repeat each other.
