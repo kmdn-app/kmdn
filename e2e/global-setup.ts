@@ -39,6 +39,32 @@ class Client {
   }
 }
 
+/** Starts kmdn serve in its own process group, logging to LOG_FILE. */
+export function spawnKmdn(bin: string, env: Record<string, string>): number {
+  const log = openSync(LOG_FILE, "a");
+  const kmdn = spawn(bin, ["serve"], { env: { ...process.env, ...env }, stdio: ["ignore", log, log], detached: true });
+  return kmdn.pid!;
+}
+
+/** Stops kmdn (SIGTERM, as a deploy does) and starts it again on the same data. */
+export async function restartKmdn(st: State): Promise<State> {
+  const pid = st.pids[st.pids.length - 1]!;
+  process.kill(-pid, "SIGTERM");
+  for (let i = 0; i < 150; i++) {
+    try {
+      process.kill(pid, 0);
+      await new Promise((r) => setTimeout(r, 100));
+    } catch {
+      break; // exited
+    }
+  }
+  const pids = [...st.pids.slice(0, -1), spawnKmdn(st.kmdn.bin, st.kmdn.env)];
+  const next = { ...st, pids };
+  writeFileSync(STATE_FILE, JSON.stringify(next));
+  await waitFor(KMDN_URL + "/healthz", "kmdn");
+  return next;
+}
+
 export default async function setup() {
   rmSync(RUN_DIR, { recursive: true, force: true });
   mkdirSync(RUN_DIR, { recursive: true });
@@ -66,23 +92,18 @@ export default async function setup() {
   });
   if (!seed.ok) throw new Error("seed the fake forge: " + (await seed.text()));
 
-  const log = openSync(LOG_FILE, "a");
-  const kmdn = spawn(bin, ["serve"], {
-    env: {
-      ...process.env,
-      KMDN_DATA_DIR: join(RUN_DIR, "data"),
-      KMDN_DB_URL: "sqlite://" + join(RUN_DIR, "data/kmdn.db"),
-      KMDN_SECRET_KEY: randomBytes(32).toString("base64"),
-      KMDN_SERVER_LISTEN: `127.0.0.1:${KMDN_PORT}`,
-      KMDN_SERVER_BASE_URL: KMDN_URL,
-      KMDN_SMTP_HOST: "log",
-      KMDN_SMTP_FROM: "kmdn@acme.test",
-      KMDN_TELEMETRY_LOG_FORMAT: "json",
-    },
-    stdio: ["ignore", log, log],
-    detached: true,
-  });
-  pids.push(kmdn.pid!);
+  const env: Record<string, string> = {
+    KMDN_DATA_DIR: join(RUN_DIR, "data"),
+    // KMDN_E2E_DB_URL runs against another database (a fresh Postgres, for load tests).
+    KMDN_DB_URL: process.env.KMDN_E2E_DB_URL ?? "sqlite://" + join(RUN_DIR, "data/kmdn.db"),
+    KMDN_SECRET_KEY: randomBytes(32).toString("base64"),
+    KMDN_SERVER_LISTEN: `127.0.0.1:${KMDN_PORT}`,
+    KMDN_SERVER_BASE_URL: KMDN_URL,
+    KMDN_SMTP_HOST: "log",
+    KMDN_SMTP_FROM: "kmdn@acme.test",
+    KMDN_TELEMETRY_LOG_FORMAT: "json",
+  };
+  pids.push(spawnKmdn(bin, env));
   writeFileSync(STATE_FILE, JSON.stringify({ pids }));
   await waitFor(KMDN_URL + "/healthz", "kmdn");
 
@@ -108,6 +129,6 @@ export default async function setup() {
   }
   const csrf = admin.cookies.get("kmdn_csrf") ?? "";
   const cookie = [...admin.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
-  const state: State = { repoID, org, owner: connected.repo.owner, name: connected.repo.name, pids, admin: { cookie, csrf } };
+  const state: State = { repoID, org, owner: connected.repo.owner, name: connected.repo.name, pids, admin: { cookie, csrf }, kmdn: { bin, env }, forgeHost: host.id };
   writeFileSync(STATE_FILE, JSON.stringify(state));
 }

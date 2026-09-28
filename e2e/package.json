@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit",
     "load": "node load/load.ts",
     "screenshots": "node docs/screenshots.ts",
-    "docs-demo": "node docs/serve.ts"
+    "docs-demo": "node docs/serve.ts",
+    "load:orgs": "node load/orgs.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
