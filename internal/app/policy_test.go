@@ -2,6 +2,10 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -91,5 +95,45 @@ func TestSuspendedOrgIsReadOnly(t *testing.T) {
 	}
 	if _, r := tomC.do("GET", "/repos/"+repoID, nil); r["role"] != "maintainer" {
 		t.Fatalf("after resuming: %v", r)
+	}
+}
+
+// A repository over its org's file or size cap stops syncing, with a
+// message; one over the size cap loses its mirror.
+func TestRepoCaps(t *testing.T) {
+	a, root := newApp(t, multiOrgs)
+	ctx := context.Background()
+	olga, _ := users.Create(ctx, a.DB, "olga@acme.dev", "Olga", false)
+	signIn(t, a, root, olga)
+	root.do("POST", "/orgs", map[string]any{"name": "Acme", "slug": "acme"})
+	var big strings.Builder
+	for i := 0; big.Len() < 3<<20; i++ {
+		fmt.Fprintf(&big, "%x ", sha256.Sum256([]byte(strconv.Itoa(i))))
+	}
+	repoID, _ := connectLocalIn(t, a, root, "acme", map[string]string{"docs/index.md": "# Acme\n", "docs/a.md": "# A\n", "docs/big.md": big.String()})
+	runJobs(t, a) // indexing reads every page, so the mirror holds big.md
+	repo, _ := repos.Get(ctx, a.DB, repoID)
+	health := func() repos.Repo {
+		r, _ := repos.Get(ctx, a.DB, repoID)
+		return r
+	}
+	a.Policy.Limits = func(context.Context, string) policy.Limits { return policy.Limits{RepoFiles: 2} }
+	if err := a.Repos.Sync(ctx, repoID); err != nil {
+		t.Fatal(err)
+	}
+	if r := health(); r.Health != repos.HealthDegraded || !strings.Contains(r.HealthDetail, "3 files") {
+		t.Fatalf("file cap: %s %q", r.Health, r.HealthDetail)
+	}
+	a.Policy.Limits = func(context.Context, string) policy.Limits { return policy.Limits{RepoMB: 1} }
+	_ = a.Repos.Sync(ctx, repoID)
+	if r := health(); r.Health != repos.HealthDegraded || !strings.Contains(r.HealthDetail, "1 MB") {
+		t.Fatalf("size cap: %s %q", r.Health, r.HealthDetail)
+	}
+	if _, err := os.Stat(a.Repos.Mirror(repo).Path); !os.IsNotExist(err) {
+		t.Fatalf("mirror kept: %v", err)
+	}
+	a.Policy.Limits = nil
+	if err := a.Repos.Sync(ctx, repoID); err != nil || health().Health != repos.HealthOK {
+		t.Fatalf("under the caps again: %v %s", err, health().Health)
 	}
 }

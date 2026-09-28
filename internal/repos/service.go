@@ -306,6 +306,9 @@ func (s *Service) sync(ctx context.Context, repoID string, force bool) error {
 	if err != nil {
 		return s.setHealth(ctx, r, HealthDegraded, fmt.Sprintf("Branch %q was not found in the repository.", r.TargetBranch))
 	}
+	if msg := s.overLimits(ctx, r, m, head); msg != "" {
+		return s.setHealth(ctx, r, HealthDegraded, msg)
+	}
 	kyml := KmdnYML{}
 	if b, err := m.ReadFile(ctx, cred, head, ".kmdn.yml"); err == nil {
 		kyml = ParseKmdnYML(b)
@@ -335,6 +338,33 @@ func (s *Service) sync(ctx context.Context, repoID string, force bool) error {
 		}
 	}
 	return nil
+}
+
+// overLimits says why r is over its org's repository limits ("" if it
+// isn't). A mirror over the size cap is removed: it takes no more disk until
+// the scope is narrowed or the limit raised.
+func (s *Service) overLimits(ctx context.Context, r Repo, m *gitmirror.Mirror, head string) string {
+	lim := s.Policy.For(ctx, r.OrgID)
+	if lim.RepoMB > 0 && m.Size() > int64(lim.RepoMB)<<20 {
+		_ = removeAll(m.Path)
+		return fmt.Sprintf("This repository takes more than this organization's limit of %d MB. Narrow its content root or ask for a higher limit, then refresh.", lim.RepoMB)
+	}
+	if lim.RepoFiles > 0 {
+		entries, err := m.Tree(ctx, head, r.ContentRoot)
+		if err != nil {
+			return ""
+		}
+		sc, n := r.Scope(), 0
+		for _, e := range entries {
+			if e.Type == "blob" && sc.Contains(e.Path) {
+				n++
+			}
+		}
+		if n > lim.RepoFiles {
+			return fmt.Sprintf("This repository has %d files in its content root, more than this organization's limit of %d. Narrow the content root or its filters, then refresh.", n, lim.RepoFiles)
+		}
+	}
+	return ""
 }
 
 func (s *Service) setHealth(ctx context.Context, r Repo, health, detail string) error {
