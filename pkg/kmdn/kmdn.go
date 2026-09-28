@@ -23,6 +23,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/auth"
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/events"
+	"github.com/kmdn-app/kmdn/internal/groups"
 	"github.com/kmdn-app/kmdn/internal/lifecycle"
 	"github.com/kmdn-app/kmdn/internal/mail"
 	"github.com/kmdn-app/kmdn/internal/orgs"
@@ -259,6 +260,55 @@ func (k *App) Orgs(ctx context.Context, query string, limit int) ([]Org, error) 
 		if q == "" || strings.Contains(o.Slug, q) || strings.Contains(strings.ToLower(o.Name), q) {
 			out = append(out, o)
 		}
+	}
+	return out, nil
+}
+
+// Member is someone in an org: their account, role and whether the
+// membership is active.
+type Member struct {
+	User   User   `json:"user"`
+	Role   string `json:"role"`
+	Active bool   `json:"active"`
+}
+
+// OrgMembers lists the org's memberships (for a directory sync).
+func (k *App) OrgMembers(ctx context.Context, orgID string) ([]Member, error) {
+	list, err := orgs.Members(ctx, k.a.DB, orgID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Member, 0, len(list))
+	for _, m := range list {
+		u, err := users.ByID(ctx, k.a.DB, m.UserID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, Member{User: u, Role: m.Role, Active: m.Status == orgs.Active})
+	}
+	return out, nil
+}
+
+// Group is an org's group and who's in it.
+type Group struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Members []string `json:"members"` // user ids
+}
+
+// Groups lists the org's groups with their members.
+func (k *App) Groups(ctx context.Context, orgID string) ([]Group, error) {
+	list, err := groups.List(ctx, k.a.DB, orgID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Group, 0, len(list))
+	for _, g := range list {
+		ids, err := groups.MemberIDs(ctx, k.a.DB, g.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, Group{ID: g.ID, Name: g.Name, Members: ids})
 	}
 	return out, nil
 }

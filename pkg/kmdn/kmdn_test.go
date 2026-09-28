@@ -151,6 +151,22 @@ func TestEmbedding(t *testing.T) {
 	if err := app.Audit(ctx, acme.ID, "staff.viewed", map[string]any{"staff": "ana"}); err != nil {
 		t.Fatal(err)
 	}
+	if ms, err := app.OrgMembers(ctx, acme.ID); err != nil || len(ms) != 1 || !ms[0].Active || ms[0].Role != kmdn.RoleOwner {
+		t.Fatalf("members: %+v %v", ms, err)
+	}
+	g, err := app.Provisioner().EnsureGroup(ctx, acme.ID, "scim", "Writers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Provisioner().RenameGroup(ctx, acme.ID, "scim", g.ID, "Editors"); err != nil {
+		t.Fatal(err)
+	}
+	if gs, err := app.Groups(ctx, acme.ID); err != nil || len(gs) != 1 || gs[0].Name != "Editors" {
+		t.Fatalf("groups: %+v %v", gs, err)
+	}
+	if err := app.Provisioner().DeleteGroup(ctx, acme.ID, "scim", g.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := kmdn.ValidSlug("signup"); err == nil || kmdn.ValidSlug(kmdn.Slugify("Acme Corp")) != nil {
 		t.Fatalf("slugs: %v", err)
 	}
