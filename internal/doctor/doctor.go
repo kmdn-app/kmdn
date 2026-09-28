@@ -48,6 +48,9 @@ type Doctor struct {
 	Git    *gitmirror.Git
 	// Network skips forge, SMTP and AI reachability when false.
 	Network bool
+	// OrgHTTP reaches the forge hosts orgs added (the strict policy's
+	// guarded client); nil uses HTTP, as for the instance's own hosts.
+	OrgHTTP *http.Client
 }
 
 // Failed reports whether any check failed.
@@ -254,12 +257,12 @@ func (d *Doctor) smtp(ctx context.Context, db *store.DB, sec *secrets.Store) Che
 	return Check{"smtp", OK, addr + " is reachable"}
 }
 
-func (d *Doctor) reach(ctx context.Context, u string) error {
+func (d *Doctor) reach(ctx context.Context, c *http.Client, u string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return err
 	}
-	res, err := d.HTTP.Do(req)
+	res, err := c.Do(req)
 	if err != nil {
 		return err
 	}
@@ -273,15 +276,15 @@ func (d *Doctor) reach(ctx context.Context, u string) error {
 }
 
 func (d *Doctor) forges(ctx context.Context, db *store.DB) []Check {
-	rows, err := store.Query(ctx, db, `SELECT kind, display_name, base_url, api_url FROM forge_hosts ORDER BY display_name`)
+	rows, err := store.Query(ctx, db, `SELECT kind, display_name, base_url, api_url, COALESCE(org_id, '') FROM forge_hosts ORDER BY display_name`)
 	if err != nil {
 		return []Check{{"forges", Fail, err.Error()}}
 	}
-	type host struct{ kind, name, base, api string }
+	type host struct{ kind, name, base, api, org string }
 	var hosts []host
 	for rows.Next() {
 		var h host
-		if err := rows.Scan(&h.kind, &h.name, &h.base, &h.api); err != nil {
+		if err := rows.Scan(&h.kind, &h.name, &h.base, &h.api, &h.org); err != nil {
 			rows.Close()
 			return []Check{{"forges", Fail, err.Error()}}
 		}
@@ -301,7 +304,11 @@ func (d *Doctor) forges(ctx context.Context, db *store.DB) []Check {
 			continue // plain git remotes are checked by their fetches
 		}
 		name := "forge: " + h.name
-		if err := d.reach(ctx, target); err != nil {
+		c := d.HTTP
+		if h.org != "" && d.OrgHTTP != nil {
+			c = d.OrgHTTP // an org chose this URL: only where its repositories may go
+		}
+		if err := d.reach(ctx, c, target); err != nil {
 			out = append(out, Check{name, Fail, fmt.Sprintf("%s isn't reachable: %v", target, err)})
 		} else {
 			out = append(out, Check{name, OK, target + " is reachable"})
@@ -334,7 +341,7 @@ func (d *Doctor) ai(ctx context.Context, db *store.DB, sec *secrets.Store) Check
 	if target == "" && st.Provider == llm.ProviderAnthropic {
 		target = "https://api.anthropic.com"
 	}
-	if err := d.reach(ctx, target); err != nil {
+	if err := d.reach(ctx, d.HTTP, target); err != nil {
 		return Check{"ai", Fail, fmt.Sprintf("%s (%s): %s isn't reachable: %v", st.Provider, from, target, err)}
 	}
 	switch {

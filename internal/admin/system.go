@@ -23,6 +23,8 @@ type System struct {
 	DB      *store.DB
 	Config  config.Config
 	Started time.Time
+	// OrgHTTP is the client for forge hosts orgs added (strict policy).
+	OrgHTTP *http.Client
 }
 
 func (s *System) Routes(r chi.Router) {
@@ -97,7 +99,7 @@ func (s *System) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *System) doctor(w http.ResponseWriter, r *http.Request) {
-	checks := (&doctor.Doctor{Config: s.Config, DB: s.DB, Network: true}).Run(r.Context())
+	checks := (&doctor.Doctor{Config: s.Config, DB: s.DB, Network: true, OrgHTTP: s.OrgHTTP}).Run(r.Context())
 	api.JSON(w, http.StatusOK, map[string]any{"checks": checks})
 }
 

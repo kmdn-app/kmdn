@@ -371,7 +371,7 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 	people.Routes(r)
 	a.Orgs = &orghttp.Service{DB: db, Settings: orgSettings, AllowCreate: cfg.Orgs.AllowCreate, OrgForges: a.Policy.OrgForgesAllowed(), SignupURL: cfg.Orgs.SignupURL, Policy: a.Policy, Events: opts.Events, Log: log}
 
-	(&admin.System{DB: db, Config: cfg, Started: time.Now()}).Routes(r)
+	(&admin.System{DB: db, Config: cfg, Started: time.Now(), OrgHTTP: a.Repos.Adapters.OrgHTTP}).Routes(r)
 	a.Invites = &invites.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: a.Repos.BaseURL, Policy: a.Policy, Events: opts.Events}
 	a.Lifecycle = &lifecycle.Service{DB: db, Repos: a.Repos, Blobs: uploads, Secrets: sec, Events: opts.Events, Log: log}
 	a.Lifecycle.Routes(r, a.AuthH)

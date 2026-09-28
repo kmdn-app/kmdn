@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -79,3 +80,47 @@ func TestAIProviderFromConfig(t *testing.T) {
 		t.Fatalf("disabled: %+v", c)
 	}
 }
+
+// A forge host an org added is reached through the org client (the strict
+// policy's guarded one), the instance's own through the plain one.
+func TestForgeChecksUseTheOrgClient(t *testing.T) {
+	forge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer forge.Close()
+	ctx := context.Background()
+	dir := t.TempDir()
+	cfg := config.Defaults()
+	cfg.DataDir = dir
+	cfg.DB.URL = "sqlite://" + filepath.Join(dir, "kmdn.db")
+	cfg.SecretKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
+	db, err := store.Open(ctx, cfg.DB.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO orgs (id, slug, name, status, created_at) VALUES ('org_a', 'a', 'A', 'active', 0)`,
+		`INSERT INTO forge_hosts (id, kind, base_url, api_url, display_name, org_id, created_at) VALUES ('fh_org', 'gitlab', ?, ?, 'Org GitLab', 'org_a', 0)`,
+		`INSERT INTO forge_hosts (id, kind, base_url, api_url, display_name, created_at) VALUES ('fh_inst', 'gitlab', ?, ?, 'Instance GitLab', 0)`,
+	} {
+		if _, err := store.Exec(ctx, db, q, forge.URL, forge.URL+"/api/v4"); err != nil && !strings.Contains(q, "orgs") {
+			t.Fatal(err)
+		}
+	}
+	refuse := &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) { return nil, errRefused })}
+	got := map[string]string{}
+	for _, c := range (&Doctor{Config: cfg, DB: db, Network: true, OrgHTTP: refuse}).Run(ctx) {
+		got[c.Name] = c.Status
+	}
+	if got["forge: Org GitLab"] != Fail || got["forge: Instance GitLab"] != OK {
+		t.Fatalf("forge checks: %v", got)
+	}
+}
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+var errRefused = errors.New("not a public address")
