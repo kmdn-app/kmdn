@@ -95,7 +95,7 @@ Org secrets (`secrets.org_id` set) include the org ID in the additional authenti
 
 ## Uploads
 
-Stored as `<org>/<sha[:2]>/<sha>` behind a blob store (`blobs.Store`: Put, Get, Delete, Stat) with a filesystem implementation (default) and an S3-compatible one. When `server.content_base_url` is set, raw files and uploads are served only there through short-lived signed URLs, and the app origin redirects to them; app cookies then use the `__Host-` prefix.
+Stored as `<org>/<sha[:2]>/<sha>` behind a blob store (`blobs.Store`: Put, Get, Delete, Stat) with a filesystem implementation (default) and an S3-compatible one. When `server.content_base_url` is set, raw files and uploads are served only there through short-lived signed URLs, and the app origin checks access and redirects to them. A signed URL names fixed bytes (a commit sha or an upload hash), is stable for one five-minute window and valid for at most two, and the content origin reads and sets no cookies. Over https, app cookies use the `__Host-` prefix so no other host on the site can set or overwrite them; cookies set before the prefix are moved to it, except next to a content origin, where only prefixed cookies count. Strict mode requires a content origin.
 
 ## Jobs and fairness
 

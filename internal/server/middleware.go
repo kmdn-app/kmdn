@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -121,19 +122,25 @@ func recoverer(log *slog.Logger) func(http.Handler) http.Handler {
 // securityHeaders applies the baseline from docs/specs/09-auth-permissions.md.
 // form-action allows https: because the GitHub App manifest flow POSTs a form
 // to github.com (or a GitHub Enterprise Server host).
-func securityHeaders(next http.Handler) http.Handler {
-	const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-		"img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; " +
+func securityHeaders(contentOrigin string) func(http.Handler) http.Handler {
+	img := "'self' data: blob:"
+	if contentOrigin != "" {
+		img += " " + strings.TrimRight(contentOrigin, "/")
+	}
+	csp := "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+		"img-src " + img + "; font-src 'self' data:; connect-src 'self' ws: wss:; " +
 		"worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https:"
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := w.Header()
-		h.Set("Content-Security-Policy", csp)
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		h.Set("X-Frame-Options", "DENY")
-		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		next.ServeHTTP(w, r)
-	})
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h := w.Header()
+			h.Set("Content-Security-Policy", csp)
+			h.Set("X-Content-Type-Options", "nosniff")
+			h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			h.Set("X-Frame-Options", "DENY")
+			h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // observe records a server span and request metrics, labelled by route

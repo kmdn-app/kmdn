@@ -19,16 +19,28 @@ import (
 	"github.com/kmdn-app/kmdn/internal/users"
 )
 
-// Cookie names.
+// Cookie names. Over https they take the __Host- prefix (SecurePrefix), so
+// no other host on the site, such as a content origin, can set or overwrite
+// them.
 const (
 	SessionCookie = "kmdn_session"
 	CSRFCookie    = "kmdn_csrf"
 	CSRFHeader    = "X-Kmdn-CSRF"
+	SecurePrefix  = "__Host-"
 )
 
 type ctxKey int
 
-const principalKey ctxKey = iota
+const (
+	principalKey ctxKey = iota
+	tokenKey
+)
+
+// SessionToken returns the session token the request was signed in with.
+func SessionToken(ctx context.Context) (string, bool) {
+	t, ok := ctx.Value(tokenKey).(string)
+	return t, ok && t != ""
+}
 
 // Principal is the authenticated caller.
 type Principal struct {
@@ -54,6 +66,10 @@ type HTTP struct {
 	TrustedProxies []*net.IPNet
 	// BaseURL is the relying party for passkeys.
 	BaseURL string
+	// LegacyCookies accepts cookies without the __Host- prefix (set before
+	// it existed) and moves them to the prefixed names. Off when another
+	// host on the site serves user content.
+	LegacyCookies bool
 
 	passkeys ceremonies
 
@@ -78,12 +94,12 @@ func (h *HTTP) ip(r *http.Request) string { return api.ClientIP(r, h.TrustedProx
 // and enforces CSRF on unsafe methods for cookie-authenticated requests.
 func (h *HTTP) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := r.Cookie(SessionCookie)
-		if err != nil || c.Value == "" {
+		token, legacy := h.sessionCookie(r)
+		if token == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		sess, u, err := h.Svc.Lookup(r.Context(), c.Value)
+		sess, u, err := h.Svc.Lookup(r.Context(), token)
 		if err != nil {
 			if !errors.Is(err, store.ErrNotFound) && !errors.Is(err, ErrDeactivated) {
 				api.Error(w, r, err)
@@ -102,9 +118,37 @@ func (h *HTTP) Middleware(next http.Handler) http.Handler {
 				return
 			}
 		}
+		if legacy {
+			h.clearCookies(w)
+			h.SetSessionCookies(w, token, sess)
+		}
 		telemetry.SetUser(r.Context(), u.ID)
-		next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), Principal{User: u, Session: sess})))
+		ctx := context.WithValue(WithPrincipal(r.Context(), Principal{User: u, Session: sess}), tokenKey, token)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// CookieName is name as this instance sets it: prefixed with __Host- over
+// https, which needs Path=/ and no Domain.
+func (h *HTTP) CookieName(name string) string {
+	if h.Secure {
+		return SecurePrefix + name
+	}
+	return name
+}
+
+// sessionCookie reads the session token, and whether it came from a cookie
+// name that should be moved.
+func (h *HTTP) sessionCookie(r *http.Request) (string, bool) {
+	if c, err := r.Cookie(h.CookieName(SessionCookie)); err == nil && c.Value != "" {
+		return c.Value, false
+	}
+	if h.Secure && h.LegacyCookies {
+		if c, err := r.Cookie(SessionCookie); err == nil && c.Value != "" {
+			return c.Value, true
+		}
+	}
+	return "", false
 }
 
 // Require rejects anonymous requests.
@@ -133,13 +177,17 @@ func RequireAdmin(next http.Handler) http.Handler {
 // SetSessionCookies writes the session and CSRF cookies.
 func (h *HTTP) SetSessionCookies(w http.ResponseWriter, token string, sess Session) {
 	maxAge := int(time.Until(sess.ExpiresAt).Seconds())
-	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: h.Secure, SameSite: http.SameSiteLaxMode, MaxAge: maxAge})
-	http.SetCookie(w, &http.Cookie{Name: CSRFCookie, Value: sess.CSRF, Path: "/", HttpOnly: false, Secure: h.Secure, SameSite: http.SameSiteLaxMode, MaxAge: maxAge})
+	http.SetCookie(w, &http.Cookie{Name: h.CookieName(SessionCookie), Value: token, Path: "/", HttpOnly: true, Secure: h.Secure, SameSite: http.SameSiteLaxMode, MaxAge: maxAge})
+	http.SetCookie(w, &http.Cookie{Name: h.CookieName(CSRFCookie), Value: sess.CSRF, Path: "/", HttpOnly: false, Secure: h.Secure, SameSite: http.SameSiteLaxMode, MaxAge: maxAge})
 }
 
 func (h *HTTP) clearCookies(w http.ResponseWriter) {
-	for _, n := range []string{SessionCookie, CSRFCookie} {
-		http.SetCookie(w, &http.Cookie{Name: n, Value: "", Path: "/", MaxAge: -1, HttpOnly: n == SessionCookie, Secure: h.Secure, SameSite: http.SameSiteLaxMode})
+	names := []string{SessionCookie, CSRFCookie}
+	if h.Secure {
+		names = append(names, SecurePrefix+SessionCookie, SecurePrefix+CSRFCookie)
+	}
+	for _, n := range names {
+		http.SetCookie(w, &http.Cookie{Name: n, Value: "", Path: "/", MaxAge: -1, HttpOnly: strings.HasSuffix(n, SessionCookie), Secure: h.Secure, SameSite: http.SameSiteLaxMode})
 	}
 }
 

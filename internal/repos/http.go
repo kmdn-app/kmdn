@@ -1,6 +1,7 @@
 package repos
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/content"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/groups"
 	"github.com/kmdn-app/kmdn/internal/orghttp"
@@ -263,7 +265,9 @@ var rawTypes = map[string]string{
 }
 
 // raw serves file bytes (images in pages). Content is untrusted: types are
-// fixed by extension, sniffing is off, and SVG/PDF run in a CSP sandbox.
+// fixed by extension, sniffing is off, and SVG/PDF run in a CSP sandbox. With
+// a content origin the bytes come from there instead, through a signed URL
+// pinned to a commit.
 func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 	repo, _, ok := s.load(w, r, access.Viewer)
 	if !ok {
@@ -275,17 +279,26 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, api.Err(http.StatusUnsupportedMediaType, "unsupported_type", "Only images, PDFs and markdown can be served."))
 		return
 	}
-	f, err := s.ReadFile(r.Context(), repo, p, r.URL.Query().Get("sha"))
+	sha := r.URL.Query().Get("sha")
+	if s.Content.Enabled() {
+		if sha == "" {
+			sha = repo.HeadSHA
+		}
+		if _, err := s.ReadFile(r.Context(), repo, p, sha); err != nil {
+			readErr(w, r, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		http.Redirect(w, r, s.Content.URL("repo", url.Values{"repo": {repo.ID}, "path": {p}, "sha": {sha}}, p), http.StatusFound)
+		return
+	}
+	f, err := s.ReadFile(r.Context(), repo, p, sha)
 	if err != nil {
 		readErr(w, r, err)
 		return
 	}
 	h := w.Header()
-	h.Set("Content-Type", ct)
-	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
-	h.Set("Content-Disposition", "inline")
-	if r.URL.Query().Get("sha") != "" {
+	if sha != "" {
 		h.Set("Cache-Control", "private, max-age=31536000, immutable")
 	} else {
 		h.Set("Cache-Control", "private, no-cache")
@@ -295,7 +308,31 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	_, _ = w.Write([]byte(f.Content))
+	content.Write(w, ct, []byte(f.Content))
+}
+
+// ContentResolver serves a signed raw URL on the content origin.
+func (s *Service) ContentResolver(ctx context.Context, q url.Values) (content.Blob, error) {
+	p := q.Get("path")
+	ct, known := rawTypes[strings.ToLower(path.Ext(p))]
+	if !known || q.Get("sha") == "" {
+		return content.Blob{}, content.ErrNotFound
+	}
+	repo, err := Get(ctx, s.DB, q.Get("repo"))
+	if errors.Is(err, store.ErrNotFound) {
+		return content.Blob{}, content.ErrNotFound
+	}
+	if err != nil {
+		return content.Blob{}, err
+	}
+	f, err := s.ReadFile(ctx, repo, p, q.Get("sha"))
+	if errors.Is(err, gitmirror.ErrNotFound) || errors.Is(err, ErrOutOfScope) {
+		return content.Blob{}, content.ErrNotFound
+	}
+	if err != nil {
+		return content.Blob{}, err
+	}
+	return content.Blob{Type: ct, Bytes: []byte(f.Content), Immutable: true}, nil
 }
 
 func (s *Service) activity(w http.ResponseWriter, r *http.Request) {

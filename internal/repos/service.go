@@ -19,6 +19,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/audit"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/content"
 	"github.com/kmdn-app/kmdn/internal/events"
 	"github.com/kmdn-app/kmdn/internal/forge"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
@@ -45,8 +46,10 @@ type Service struct {
 	Git      *gitmirror.Git
 	Adapters *Adapters
 	// Policy says which clone URLs and how many repos an org may have.
-	Policy  *policy.Policy
-	Events  events.Sink
+	Policy *policy.Policy
+	Events events.Sink
+	// Content, when enabled, serves raw bytes from the content origin.
+	Content *content.Origin
 	DataDir string
 	BaseURL string
 	Log     *slog.Logger

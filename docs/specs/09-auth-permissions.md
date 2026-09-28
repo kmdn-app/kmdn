@@ -19,7 +19,7 @@ No passwords.
 
 ## Sessions
 
-- Server-side sessions in DB, cookie `kmdn_session` (HttpOnly, Secure, SameSite=Lax), 30-day rolling expiry, 12 h idle re-validation for admins.
+- Server-side sessions in DB, cookie `kmdn_session` (`__Host-kmdn_session` over https; HttpOnly, Secure, SameSite=Lax), 30-day rolling expiry, 12 h idle re-validation for admins.
 - CSRF: SameSite=Lax + double-submit token header `X-Kmdn-CSRF` on unsafe methods.
 - Users can list and revoke their sessions in Profile. Admins can revoke all sessions of a user.
 - WebSocket upgrade authenticates via the same cookie and checks `Origin`.

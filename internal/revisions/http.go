@@ -13,6 +13,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/access"
 	"github.com/kmdn-app/kmdn/internal/api"
 	"github.com/kmdn-app/kmdn/internal/auth"
+	"github.com/kmdn-app/kmdn/internal/content"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
 	"github.com/kmdn-app/kmdn/internal/repos"
 	"github.com/kmdn-app/kmdn/internal/store"
@@ -499,6 +500,10 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 		api.Error(w, r, api.Err(http.StatusUnsupportedMediaType, "unsupported_type", "Only images can be served here."))
 		return
 	}
+	if s.Content.Enabled() {
+		s.redirectRaw(w, r, rev, repo, p, ct)
+		return
+	}
 	b, _, err := s.ReadAsset(r.Context(), rev, p)
 	if errors.Is(err, store.ErrNotFound) {
 		var f repos.File
@@ -510,12 +515,30 @@ func (s *Service) raw(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, err)
 		return
 	}
-	h := w.Header()
-	h.Set("Content-Type", ct)
-	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
-	h.Set("Cache-Control", "private, no-cache")
-	_, _ = w.Write(b)
+	w.Header().Set("Cache-Control", "private, no-cache")
+	content.Write(w, ct, b)
+}
+
+// redirectRaw sends the browser to the content origin: the revision's upload
+// at p, or the base commit's file.
+func (s *Service) redirectRaw(w http.ResponseWriter, r *http.Request, rev Revision, repo repos.Repo, p, ct string) {
+	var to string
+	sha, _, orgID, err := s.assetRef(r.Context(), rev, p)
+	switch {
+	case err == nil:
+		to = s.Content.URL("upload", url.Values{"org": {orgID}, "sha": {sha}, "type": {ct}}, p)
+	case errors.Is(err, store.ErrNotFound):
+		if _, err = s.Repos.ReadFile(r.Context(), repo, p, rev.BaseSHA); err != nil {
+			writeErr(w, r, err)
+			return
+		}
+		to = s.Content.URL("repo", url.Values{"repo": {repo.ID}, "path": {p}, "sha": {rev.BaseSHA}}, p)
+	default:
+		writeErr(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, to, http.StatusFound)
 }
 
 func (s *Service) submit(w http.ResponseWriter, r *http.Request) {

@@ -44,7 +44,11 @@ type Hooks struct {
 }
 
 type Server struct {
-	BaseURL        string   `yaml:"base_url"`
+	BaseURL string `yaml:"base_url"`
+	// ContentBaseURL, when set, is a separate origin that serves raw files
+	// and uploads through short-lived signed URLs (15-security.md T4), so
+	// user bytes never come from the app origin.
+	ContentBaseURL string   `yaml:"content_base_url"`
 	Listen         string   `yaml:"listen"`
 	TrustedProxies []string `yaml:"trusted_proxies"`
 }
@@ -250,6 +254,17 @@ func (c Config) Validate() error {
 	u, err := url.Parse(c.Server.BaseURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		errs = append(errs, fmt.Errorf("server.base_url %q must be an absolute http(s) URL, e.g. https://kmdn.example.com (env %s)", c.Server.BaseURL, EnvName("server.base_url")))
+	}
+	if c.Server.ContentBaseURL != "" {
+		cu, err := url.Parse(c.Server.ContentBaseURL)
+		if err != nil || (cu.Scheme != "http" && cu.Scheme != "https") || cu.Host == "" || cu.Path != "" && cu.Path != "/" {
+			errs = append(errs, fmt.Errorf("server.content_base_url %q must be an absolute http(s) origin, e.g. https://content.kmdn.example.com (env %s)", c.Server.ContentBaseURL, EnvName("server.content_base_url")))
+		} else if u != nil && strings.EqualFold(cu.Host, u.Host) {
+			errs = append(errs, fmt.Errorf("server.content_base_url must be a different host from server.base_url"))
+		}
+	}
+	if c.Policy.Strict && c.Server.ContentBaseURL == "" {
+		errs = append(errs, fmt.Errorf("policy.strict needs server.content_base_url, so user files aren't served from the app origin (env %s)", EnvName("server.content_base_url")))
 	}
 	if c.Server.Listen == "" {
 		errs = append(errs, fmt.Errorf("server.listen is empty; set it to an address like :8080"))

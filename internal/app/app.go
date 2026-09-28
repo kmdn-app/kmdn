@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -26,6 +27,7 @@ import (
 	"github.com/kmdn-app/kmdn/internal/collab"
 	"github.com/kmdn-app/kmdn/internal/config"
 	"github.com/kmdn-app/kmdn/internal/consistency"
+	"github.com/kmdn-app/kmdn/internal/content"
 	"github.com/kmdn-app/kmdn/internal/docengine"
 	"github.com/kmdn-app/kmdn/internal/events"
 	"github.com/kmdn-app/kmdn/internal/gitmirror"
@@ -95,6 +97,8 @@ type App struct {
 	OrgSettings *orgs.SettingsStore
 	// Events receives what happens in orgs (Options.Events).
 	Events events.Sink
+	// Content serves user bytes from server.content_base_url, when set.
+	Content *content.Origin
 
 	stopTracing func(context.Context) error
 	Invites     *invites.Service
@@ -177,10 +181,19 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 	if opts.Policy != nil {
 		a.Policy = opts.Policy
 	}
+	if a.Policy.Strict && cfg.Server.ContentBaseURL == "" {
+		db.Close()
+		return nil, errors.New("strict policy needs server.content_base_url, so user files aren't served from the app origin")
+	}
+	if a.Content, err = content.New(cfg.Server.ContentBaseURL, kek); err != nil {
+		db.Close()
+		return nil, err
+	}
 	a.Mail = mail.NewService(cfg, db, sec, log)
 	a.Auth = &auth.Service{DB: db, Mail: a.Mail, BaseURL: cfg.Server.BaseURL, SessionTTL: cfg.Auth.SessionTTL, AutoJoinDomains: cfg.Auth.AutoJoinDomains, Policy: a.Policy, Events: opts.Events, Log: log}
 	a.AuthH = auth.NewHTTP(a.Auth, strings.HasPrefix(cfg.Server.BaseURL, "https://"), trusted)
 	a.AuthH.BaseURL = cfg.Server.BaseURL
+	a.AuthH.LegacyCookies = !a.Content.Enabled()
 	a.Setup = &setup.Service{DB: db, Mail: a.Mail, Auth: a.AuthH, BaseURL: cfg.Server.BaseURL, Log: log}
 
 	r := a.Server.API()
@@ -194,6 +207,7 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 		Adapters: &repos.Adapters{DB: db, Secrets: sec, HTTP: &http.Client{Timeout: 30 * time.Second, Transport: telemetry.Transport(nil)}},
 		Policy:   a.Policy,
 		Events:   opts.Events,
+		Content:  a.Content,
 	}
 	if a.Policy.Strict {
 		// Hosts an org added only reach public addresses.
@@ -206,8 +220,13 @@ func NewWith(ctx context.Context, cfg config.Config, log *slog.Logger, opts Opti
 	a.Repos.Routes(r)
 	a.Repos.ForgeRoutes(r)
 	uploads := blobs.FS{Root: filepath.Join(cfg.DataDir, "uploads")}
-	a.Revisions = &revisions.Service{DB: db, Repos: a.Repos, Log: log, DataDir: cfg.DataDir, Blobs: uploads, UploadMaxMB: cfg.Limits.UploadMaxMB, Policy: a.Policy}
+	a.Revisions = &revisions.Service{DB: db, Repos: a.Repos, Log: log, DataDir: cfg.DataDir, Blobs: uploads, UploadMaxMB: cfg.Limits.UploadMaxMB, Policy: a.Policy, Content: a.Content}
 	a.Revisions.Routes(r)
+	if a.Content.Enabled() {
+		a.Content.Register("repo", a.Repos.ContentResolver)
+		a.Content.Register("upload", a.Revisions.ContentResolver)
+		a.Server.SetContentHandler(a.Content.Handler())
+	}
 	eng, err := docengine.New(docengine.Options{})
 	if err != nil {
 		db.Close()

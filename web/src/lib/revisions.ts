@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, CSRF_COOKIE, CSRF_HEADER, readCookie, type components } from "@kmdn/api-client";
+import { ApiError, CSRF_HEADER, readCSRF, type components } from "@kmdn/api-client";
 import { api, unwrap } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
 import type { RepoView } from "@/lib/repos";
@@ -136,7 +136,7 @@ export async function uploadAsset(revisionID: string, page: string, file: File):
     method: "POST",
     body: form,
     credentials: "same-origin",
-    headers: { [CSRF_HEADER]: readCookie(document.cookie, CSRF_COOKIE) ?? "" },
+    headers: { [CSRF_HEADER]: readCSRF(document.cookie) ?? "" },
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError({ status: res.status, title: res.statusText, code: "upload_failed", ...body });
