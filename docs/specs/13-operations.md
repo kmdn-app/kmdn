@@ -153,6 +153,12 @@ Append-only table ([10](10-data-model.md)). Recorded actions include: sign-in (m
 ## Upgrades
 
 - Semver. DB migrations forward-only, run on start with a lock; `kmdn migrate status` before upgrading.
+- **Rolling back is changing the version back.** A release runs against the schema of the next one: kmdn ignores migrations it doesn't know, and every migration is written so the previous release keeps working on the migrated schema (expand, then contract):
+  - add columns nullable or with a default, add tables and indexes; never rename or drop in the same release that stops using something;
+  - drop or narrow (a column, a table, a NOT NULL on existing data) one release after the code stopped relying on it;
+  - long backfills run as jobs after start, not inside a migration, so a start stays short;
+  - CI enforces it: "Rollback compatibility" migrates a fresh Postgres with a pull request's migrations, then runs the base branch's build and end-to-end suite against it.
+- A restart is short: rooms flush on SIGTERM and editors reconnect and resync on their own (the multi-org load test restarts mid-editing and loses nothing).
 - Doc engine version recorded on Y.Docs; engine upgrades that change schema ship with migrations applied lazily when a room loads.
 
 ## License and project

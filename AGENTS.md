@@ -5,3 +5,8 @@ Conventions for coding agents working on kmdn. The design lives in [`docs/specs/
 ## Git
 
 - Git always stores the full history of validated changes. Every saved step of a revision is a commit on its branch, and publishing merges that branch with a merge commit: never squash, rebase away, or force-push over validated work. This applies to kmdn's own behaviour (revision branches and publish) and to how this repository is developed (stacked PRs merged with merge commits).
+
+## Migrations
+
+- Expand, then contract: a migration must work with the previous release's code, so rolling back is always going back to the previous version (docs/specs/13-operations.md#upgrades). Add nullable columns, tables and indexes freely; rename or drop only one release after the code stopped using the old shape; run long backfills as jobs.
+- CI's "Rollback compatibility" job runs the base branch's end-to-end suite on a database migrated by the pull request.
