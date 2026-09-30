@@ -243,3 +243,54 @@ func TestModelRouting(t *testing.T) {
 		t.Fatalf("fallback to the chat model: %s", oa.Model(TaskShortText))
 	}
 }
+
+func TestUnforcedToolChoice(t *testing.T) {
+	var forced, calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &body)
+		if body["tool_choice"] != nil {
+			forced++
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"type":"error","error":{"type":"invalid_request_error","message":"tool_choice: type \"tool\" and \"any\" are not supported for this model."}}`))
+			return
+		}
+		sys := body["system"].([]any)
+		if last := sys[len(sys)-1].(map[string]any)["text"]; last != "Answer by calling the report tool." {
+			t.Errorf("system: %v", sys)
+		}
+		calls++
+		start := `event: message_start` + "\n" + `data: {"type":"message_start","message":{"usage":{"input_tokens":10,"output_tokens":1}}}`
+		stop := `event: message_delta` + "\n" + `data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}`
+		if calls == 1 { // answers in text first: retried
+			sseWrite(w, start,
+				`event: content_block_start`+"\n"+`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+				`event: content_block_delta`+"\n"+`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}`,
+				`event: content_block_stop`+"\n"+`data: {"type":"content_block_stop","index":0}`, stop)
+			return
+		}
+		sseWrite(w, start,
+			`event: content_block_start`+"\n"+`data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"report","input":{}}}`,
+			`event: content_block_delta`+"\n"+`data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"ok\":true}"}}`,
+			`event: content_block_stop`+"\n"+`data: {"type":"content_block_stop","index":0}`, stop)
+	}))
+	defer srv.Close()
+	p := &Anthropic{BaseURL: srv.URL, Key: "sk-test"}
+	req := ChatRequest{Model: "claude-opus-5-5-test", System: []System{{Text: "Be brief.", Cache: true}}, Messages: []Message{Text(RoleUser, "Report.")},
+		Tools: []Tool{{Name: "report", Schema: json.RawMessage(`{"type":"object"}`)}}, ToolChoice: "report"}
+	res, err := Collect(context.Background(), p, req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Content) != 1 || res.Content[0].Name != "report" || res.Usage.InputTokens != 20 || forced != 1 || calls != 2 {
+		t.Fatalf("result: %+v forced=%d calls=%d", res, forced, calls)
+	}
+	if len(req.System) != 1 {
+		t.Fatalf("the caller's system prompt changed: %v", req.System)
+	}
+	// The model is remembered: no more forced attempts.
+	if _, err := Collect(context.Background(), p, req, nil); err != nil || forced != 1 || calls != 3 {
+		t.Fatalf("second call: %v forced=%d calls=%d", err, forced, calls)
+	}
+}
